@@ -3,6 +3,7 @@
  * Container: selector de cenários + sub-tabs + form + resume.
  */
 import { useState } from 'react'
+import { BarChart3, Zap, Activity, ListChecks, Handshake, Pencil, Eye } from 'lucide-react'
 import { useAnalise } from './useAnalise.js'
 import { CalculadoraForm } from './CalculadoraForm.jsx'
 import { AnaliseResume } from './AnaliseResume.jsx'
@@ -24,7 +25,7 @@ function RenameInput({ nome, onRename }) {
         className="rounded-lg border border-dashed border-line px-3 py-2 text-sm font-medium text-ink-muted hover:border-ink/30 hover:bg-surface-raised transition-colors"
         title="Clica para renomear"
       >
-        ✏️ {nome || 'Sem nome'}
+        <Pencil className="w-3.5 h-3.5 inline-block mr-1.5 align-[-2px]" />{nome || 'Sem nome'}
       </button>
     )
   }
@@ -44,11 +45,11 @@ function RenameInput({ nome, onRename }) {
 }
 
 const SUB_TABS = [
-  { key: 'Calculadora', icon: '📊' },
-  { key: 'Quick Check', icon: '⚡' },
-  { key: 'Stress Tests', icon: '🎯' },
-  { key: 'Comparáveis', icon: '📋' },
-  { key: 'CAEP', icon: '🤝' },
+  { key: 'Calculadora', icon: BarChart3 },
+  { key: 'Quick Check', icon: Zap },
+  { key: 'Stress Tests', icon: Activity },
+  { key: 'Comparáveis', icon: ListChecks },
+  { key: 'CAEP', icon: Handshake },
 ]
 
 const GOLD = '#C9A84C'
@@ -94,8 +95,8 @@ export function AnaliseTab({ imovelId, imovelNome, imovel, readOnly = false, emP
   if (analises.length === 0) {
     return (
       <div className="py-8 flex flex-col items-center gap-5">
-        <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl" style={{ backgroundColor: GOLD + '15' }}>
-          📊
+        <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ backgroundColor: GOLD + '15' }}>
+          <BarChart3 className="w-7 h-7" style={{ color: GOLD }} />
         </div>
         <div className="text-center max-w-sm">
           <h3 className="text-base font-semibold text-ink mb-1">Análise de Rentabilidade</h3>
@@ -193,7 +194,7 @@ export function AnaliseTab({ imovelId, imovelNome, imovel, readOnly = false, emP
 
         {readOnly ? (
           <span className="px-3 py-1 rounded-full text-xs font-bold bg-warning/15 text-warning">
-            👁 SÓ CONSULTA
+            <Eye className="w-3.5 h-3.5 inline-block mr-1 align-[-2px]" />SÓ CONSULTA
           </span>
         ) : saving && (
           <span className="flex items-center gap-1.5 text-xs text-ink-muted">
@@ -228,7 +229,7 @@ export function AnaliseTab({ imovelId, imovelNome, imovel, readOnly = false, emP
               }`}
               style={effectiveSubTab === t.key ? { backgroundColor: BLACK } : undefined}
             >
-              <span className="mr-1">{t.icon}</span> {t.key}
+              <t.icon className="w-3.5 h-3.5 inline-block mr-1.5 align-[-2px]" />{t.key}
             </button>
           ))}
         </div>

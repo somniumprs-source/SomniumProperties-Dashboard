@@ -300,14 +300,14 @@ export function Metricas() {
               <div className="flex flex-col gap-4">
                 <Diagnostico label="Bottleneck: Imóveis vs Capital" value={tr?.ratioDealFlowCapital}
                   renderMsg={v => v == null ? 'Sem dados suficientes' : v < 0.5
-                    ? '🔴 Excesso de capital — precisas de mais deal flow.'
-                    : v > 3 ? '🔴 Excesso de deal flow — precisas de mais capital.'
-                    : '🟢 Equilíbrio saudável entre deal flow e capital.'} />
+                    ? 'Excesso de capital — precisas de mais deal flow.'
+                    : v > 3 ? 'Excesso de deal flow — precisas de mais capital.'
+                    : 'Equilíbrio saudável entre deal flow e capital.'} />
                 <Diagnostico label="Qualidade do Pipeline" value={tr?.cumpreProjeccao}
                   renderMsg={v => v == null ? 'Sem deals fechados suficientes'
-                    : v >= 80 ? '🟢 Projecções fiáveis — estimativas alinhadas.' : v >= 60
-                    ? '🟡 Desvio moderado — revê critérios.'
-                    : '🔴 Projecções pouco fiáveis.'} />
+                    : v >= 80 ? 'Projecções fiáveis — estimativas alinhadas.' : v >= 60
+                    ? 'Desvio moderado — revê critérios.'
+                    : 'Projecções pouco fiáveis.'} />
               </div>
             </Card>
           </>

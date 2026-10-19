@@ -3,7 +3,7 @@
  * Extraídos do ProjectoDetalhe.jsx para reduzir o tamanho do mega-componente.
  */
 import { useState, useEffect } from 'react'
-import { Sparkles, RefreshCw } from 'lucide-react'
+import { Sparkles, RefreshCw, Flag, CheckCircle2, Camera, FileText, Euro, UserRound, Home, ClipboardList, Circle } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 
 // ════════════════════════════════════════════════════════════════
@@ -219,8 +219,8 @@ export function GanttFases({ fases, negocio }) {
 // Tab Histórico (audit log)
 // ════════════════════════════════════════════════════════════════
 const AUDIT_ICONS = {
-  fase: '🎯', tarefa: '✓', foto: '📷', documento: '📄', despesa: '💰',
-  investidor: '👤', fracao: '🏠', negocio: '📋',
+  fase: Flag, tarefa: CheckCircle2, foto: Camera, documento: FileText, despesa: Euro,
+  investidor: UserRound, fracao: Home, negocio: ClipboardList,
 }
 const AUDIT_ACAO_LABEL = {
   create: 'Criou', update: 'Atualizou', delete: 'Apagou', status_change: 'Mudou estado',
@@ -243,7 +243,7 @@ export function TabHistorico({ negocioId }) {
     <div className="space-y-2">
       {eventos.map(e => (
         <div key={e.id} className="flex items-start gap-3 p-3 bg-surface-raised  rounded-lg border border-line ">
-          <span className="text-base flex-shrink-0">{AUDIT_ICONS[e.entidade] || '•'}</span>
+          {(() => { const I = AUDIT_ICONS[e.entidade] || Circle; return <I className="w-4 h-4 mt-0.5 text-ink-muted flex-shrink-0" /> })()}
           <div className="flex-1 min-w-0">
             <p className="text-sm text-ink ">
               <span className="font-semibold">{AUDIT_ACAO_LABEL[e.acao] || e.acao}</span>

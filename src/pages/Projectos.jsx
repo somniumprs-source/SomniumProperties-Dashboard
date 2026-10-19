@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useNavigate, Link } from 'react-router-dom'
-import { Plus, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle, TrendingUp, Briefcase, Calendar as CalendarIcon, Search, Sparkles, Hammer, Handshake, Home, Zap, FileText } from 'lucide-react'
+import { Plus, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle, TrendingUp, Briefcase, Calendar as CalendarIcon, Search, Sparkles, Hammer, Handshake, Home, Zap, FileText, MapPin } from 'lucide-react'
 import { FASE_ICONS, FASE_ICON_DEFAULT } from '../lib/faseIcons.js'
 import { motion } from 'framer-motion'
 import { staggerItemVariants } from '../lib/motion.js'
@@ -734,7 +734,7 @@ function KanbanCard({ negocio: n, info, onClick, onDragStart, onDragEnd, isDragg
       </div>
       {n.imovelNome && (
         <p className="text-caption text-ink-muted  truncate mb-2 flex items-center gap-1">
-          <span className="opacity-60">📍</span> {n.imovelNome}
+          <MapPin className="w-3 h-3 opacity-60 shrink-0" /> {n.imovelNome}
         </p>
       )}
 
@@ -907,7 +907,7 @@ export function ProjectoForm({ item, onSave, onCancel }) {
       </div>
       {f.categoria === 'Fix and Flip' && isNew && (
         <div className="mt-4 px-4 py-3 rounded-xl bg-brand-dark text-brand-gold text-caption flex items-start gap-2">
-          <span className="text-base">✨</span>
+          <Sparkles className="w-4 h-4 shrink-0 mt-px" />
           <p>{f.tipo_projeto === 'predio'
             ? 'Ao criar este prédio, serão geradas as 8 fases-base. Depois adicionas as frações e áreas comuns — cada uma com o seu próprio cronograma.'
             : 'Ao criar este projeto, serão geradas automaticamente as 8 fases de obra com tarefas-template profissionais.'}</p>

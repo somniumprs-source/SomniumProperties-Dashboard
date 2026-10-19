@@ -348,7 +348,7 @@ export function GravacaoCard({ g, busy, onAnalisar, onRetomar, onApagar, onRegis
               )}
             </div>
           ) : g.estado === 'transcrito' ? (
-            <p className="text-xs text-ink-muted">Transcricao pronta. Carrega no icone ✨ para gerar a analise comercial.</p>
+            <p className="text-xs text-ink-muted">Transcrição pronta. Carrega em Analisar para gerar a análise comercial.</p>
           ) : ['pendente', 'a_transcrever', 'a_analisar'].includes(g.estado) ? (
             <p className="text-xs text-ink-muted flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> A processar… isto pode demorar alguns minutos.</p>
           ) : null}

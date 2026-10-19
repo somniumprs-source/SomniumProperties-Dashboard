@@ -103,7 +103,7 @@ export function Relatorio({ imovelId, analises, flags, inconsistencias, resumoEs
               const sev = SEVERIDADE[f.severity] || SEVERIDADE.info
               return (
                 <div key={i} className="flex gap-2.5 rounded-lg border border-line px-3 py-2.5 bg-surface-raised">
-                  <span className="shrink-0">{sev.icone}</span>
+                  <sev.icone className={`w-3.5 h-3.5 shrink-0 mt-px ${TOM[sev.tom].text}`} />
                   <div className="min-w-0">
                     <p className={`text-xs font-semibold ${TOM[sev.tom].text}`}>
                       {f.titulo} <span className="font-normal text-ink-muted">· {f.origem}</span>

@@ -1,3 +1,4 @@
+import { AppWindow, Axe, BrickWall, Building2, CheckCircle2, ClipboardList, Construction, CookingPot, DoorOpen, Droplets, Fence, Grid3x3, Hammer, Home, Layers, PaintRoller, Recycle, ShowerHead, Snowflake, Square, Sun, Truck, Wind, Wrench, Zap } from 'lucide-react'
 /**
  * Configuração declarativa das secções do orçamento de obra (v4 — simplificada).
  *
@@ -28,7 +29,7 @@ const MO_FIELDS = {
 export const SECCOES = [
   // ── 1. ESTALEIRO ─────────────────────────────────────────
   {
-    key: 'estaleiro', label: 'Estaleiro de obra', icon: '🚧',
+    key: 'estaleiro', label: 'Estaleiro de obra', icon: Construction,
     tipo: 'fixed', grupo: 'obra', ...MO_FIELDS,
     nota: 'Vedação, contentor WC, sinalização, placa de obra, ligações provisórias. ~1.5–3% do total.',
     campos: [
@@ -43,7 +44,7 @@ export const SECCOES = [
 
   // ── 2. DEMOLIÇÕES ────────────────────────────────────────
   {
-    key: 'demolicoes', label: 'Demolições e limpeza', icon: '🔨',
+    key: 'demolicoes', label: 'Demolições e limpeza', icon: Hammer,
     tipo: 'fixed', grupo: 'obra',
     campos: [
       { key: 'entulhos',         label: 'Entrega de entulhos',          sufixo: '€' },
@@ -61,7 +62,7 @@ export const SECCOES = [
 
   // ── 3. RCD ───────────────────────────────────────────────
   {
-    key: 'rcd', label: 'RCD — Resíduos (DL 102-D/2020)', icon: '♻️',
+    key: 'rcd', label: 'RCD — Resíduos (DL 102-D/2020)', icon: Recycle,
     tipo: 'fixed', grupo: 'obra',
     nota: 'Plano de prevenção e gestão de RCD obrigatório. Transporte por operador licenciado.',
     campos: [
@@ -77,7 +78,7 @@ export const SECCOES = [
 
   // ── 4. ESTRUTURA ─────────────────────────────────────────
   {
-    key: 'estrutura', label: 'Estrutura (lajes, vigas, pilares)', icon: '🏗️',
+    key: 'estrutura', label: 'Estrutura (lajes, vigas, pilares)', icon: Building2,
     tipo: 'fixed', grupo: 'obra', ...MO_FIELDS,
     campos: [
       { key: 'lajes_material',          label: 'Lajes — material',         sufixo: '€', tipo_fiscal: 'material' },
@@ -91,7 +92,7 @@ export const SECCOES = [
 
   // ── 5. ELETRICIDADE E CANALIZAÇÃO ────────────────────────
   {
-    key: 'eletricidade', label: 'Eletricidade e canalização', icon: '⚡',
+    key: 'eletricidade', label: 'Eletricidade e canalização', icon: Zap,
     tipo: 'mixto', grupo: 'obra', ...MO_FIELDS,
     nota: 'Modo simples (€/m² material por piso) ou detalhado (sub-linhas).',
     campos_piso: [
@@ -113,7 +114,7 @@ export const SECCOES = [
 
   // ── 6. AVAC ──────────────────────────────────────────────
   {
-    key: 'avac', label: 'AVAC / Solar / AQS', icon: '🔆',
+    key: 'avac', label: 'AVAC / Solar / AQS', icon: Sun,
     tipo: 'fixed', grupo: 'obra', ...MO_FIELDS,
     nota: 'Equipamentos = material. MO instalação no bloco em cima.',
     campos: [
@@ -130,7 +131,7 @@ export const SECCOES = [
 
   // ── 7. PAVIMENTO ─────────────────────────────────────────
   {
-    key: 'pavimento', label: 'Pavimento', icon: '⬜',
+    key: 'pavimento', label: 'Pavimento', icon: Grid3x3,
     tipo: 'por_piso', grupo: 'obra', ...MO_FIELDS,
     nota: 'Betonilha de regularização separada do revestimento.',
     campos_piso: [
@@ -142,7 +143,7 @@ export const SECCOES = [
 
   // ── 8. PLADUR ────────────────────────────────────────────
   {
-    key: 'pladur', label: 'Pladur tetos', icon: '◾',
+    key: 'pladur', label: 'Pladur tetos', icon: Square,
     tipo: 'por_piso', grupo: 'obra', ...MO_FIELDS,
     campos_piso: [
       { key: 'eur_m2_material', label: '€/m² material', sufixo: '€/m²', tipo_fiscal: 'material' },
@@ -151,7 +152,7 @@ export const SECCOES = [
 
   // ── 9. ISOLAMENTO ────────────────────────────────────────
   {
-    key: 'isolamento', label: 'Isolamento térmico/acústico (REH)', icon: '🧊',
+    key: 'isolamento', label: 'Isolamento térmico/acústico (REH)', icon: Snowflake,
     tipo: 'fixed', grupo: 'obra', ...MO_FIELDS,
     campos: [
       { key: 'fachada_m2',                  label: 'Fachada — m²',                 sufixo: 'm²' },
@@ -167,7 +168,7 @@ export const SECCOES = [
 
   // ── 10. IMPERMEABILIZAÇÕES ───────────────────────────────
   {
-    key: 'impermeabilizacoes', label: 'Impermeabilizações', icon: '💧',
+    key: 'impermeabilizacoes', label: 'Impermeabilizações', icon: Droplets,
     tipo: 'fixed', grupo: 'obra', ...MO_FIELDS,
     nota: 'Telas, primários, juntas em terraços, banheiras WC, muros enterrados.',
     campos: [
@@ -181,7 +182,7 @@ export const SECCOES = [
 
   // ── 11. REBOCOS E ESTUQUES ───────────────────────────────
   {
-    key: 'rebocos', label: 'Rebocos e estuques', icon: '🏛️',
+    key: 'rebocos', label: 'Rebocos e estuques', icon: Layers,
     tipo: 'fixed', grupo: 'obra', ...MO_FIELDS,
     campos: [
       { key: 'chapisco_material',         label: 'Chapisco',                 sufixo: '€', tipo_fiscal: 'material' },
@@ -193,7 +194,7 @@ export const SECCOES = [
 
   // ── 12. CAIXILHARIAS ─────────────────────────────────────
   {
-    key: 'caixilharias', label: 'Caixilharias', icon: '🪟',
+    key: 'caixilharias', label: 'Caixilharias', icon: AppWindow,
     tipo: 'mixto', grupo: 'obra', ...MO_FIELDS,
     campos_piso: [
       { key: 'n_janelas',      label: 'Nº janelas',                  sufixo: 'un' },
@@ -210,7 +211,7 @@ export const SECCOES = [
 
   // ── 13. VMC ──────────────────────────────────────────────
   {
-    key: 'vmc', label: 'Sistema VMC', icon: '💨',
+    key: 'vmc', label: 'Sistema VMC', icon: Wind,
     tipo: 'por_piso', grupo: 'obra', ...MO_FIELDS,
     campos_piso: [
       { key: 'material', label: 'Material — €', sufixo: '€', tipo_fiscal: 'material' },
@@ -219,7 +220,7 @@ export const SECCOES = [
 
   // ── 14. PINTURA ──────────────────────────────────────────
   {
-    key: 'pintura', label: 'Pintura (interior + exterior)', icon: '🎨',
+    key: 'pintura', label: 'Pintura (interior + exterior)', icon: PaintRoller,
     tipo: 'mixto', grupo: 'obra', ...MO_FIELDS,
     nota: 'Preparação separada do acabamento.',
     campos_piso: [
@@ -236,7 +237,7 @@ export const SECCOES = [
 
   // ── 15. CASAS DE BANHO E PICHELARIA ──────────────────────
   {
-    key: 'casas_banho', label: 'Casas de banho e pichelaria', icon: '🚿',
+    key: 'casas_banho', label: 'Casas de banho e pichelaria', icon: ShowerHead,
     tipo: 'fixed', grupo: 'obra', ...MO_FIELDS,
     campos: [
       { key: 'un',                 label: 'Nº casas de banho',                  sufixo: 'un' },
@@ -252,7 +253,7 @@ export const SECCOES = [
 
   // ── 16. PORTAS ───────────────────────────────────────────
   {
-    key: 'portas', label: 'Portas', icon: '🚪',
+    key: 'portas', label: 'Portas', icon: DoorOpen,
     tipo: 'unitario', grupo: 'obra', ...MO_FIELDS,
     campos: [
       { key: 'un',              label: 'Nº portas',                  sufixo: 'un' },
@@ -262,7 +263,7 @@ export const SECCOES = [
 
   // ── 17. CARPINTARIAS ─────────────────────────────────────
   {
-    key: 'carpintarias', label: 'Carpintarias interiores', icon: '🪵',
+    key: 'carpintarias', label: 'Carpintarias interiores', icon: Axe,
     tipo: 'fixed', grupo: 'obra', ...MO_FIELDS,
     nota: 'Rodapés, aros, guarnições, roupeiros embutidos, escadas, tectos.',
     campos: [
@@ -277,7 +278,7 @@ export const SECCOES = [
 
   // ── 18. SERRALHARIAS ─────────────────────────────────────
   {
-    key: 'serralharias', label: 'Serralharias', icon: '⚙️',
+    key: 'serralharias', label: 'Serralharias', icon: Wrench,
     tipo: 'fixed', grupo: 'obra', ...MO_FIELDS,
     nota: 'Gradeamentos, guardas, portões, corrimãos, portas corta-fogo.',
     campos: [
@@ -292,7 +293,7 @@ export const SECCOES = [
 
   // ── 19. COZINHAS ─────────────────────────────────────────
   {
-    key: 'cozinhas', label: 'Cozinhas', icon: '🍳',
+    key: 'cozinhas', label: 'Cozinhas', icon: CookingPot,
     tipo: 'fixed', grupo: 'obra', ...MO_FIELDS,
     campos: [
       { key: 'un',                label: 'Nº cozinhas',                       sufixo: 'un' },
@@ -304,7 +305,7 @@ export const SECCOES = [
 
   // ── 20. ANDAIMES ─────────────────────────────────────────
   {
-    key: 'andaimes', label: 'Andaimes', icon: '🪜',
+    key: 'andaimes', label: 'Andaimes', icon: Fence,
     tipo: 'fixed', grupo: 'obra', ...MO_FIELDS,
     nota: 'Aluguer mensal por m² × meses. Montagem/desmontagem como MO.',
     campos: [
@@ -316,7 +317,7 @@ export const SECCOES = [
 
   // ── 21. CAPOTO ───────────────────────────────────────────
   {
-    key: 'capoto', label: 'Capoto / ETICS exterior', icon: '🧱',
+    key: 'capoto', label: 'Capoto / ETICS exterior', icon: BrickWall,
     tipo: 'fixed', grupo: 'obra', ...MO_FIELDS,
     nota: 'Calcular m² fachada já líquido de vãos.',
     campos: [
@@ -329,7 +330,7 @@ export const SECCOES = [
 
   // ── 22. COBERTURA ────────────────────────────────────────
   {
-    key: 'cobertura', label: 'Cobertura', icon: '🏠',
+    key: 'cobertura', label: 'Cobertura', icon: Home,
     tipo: 'fixed', grupo: 'obra', ...MO_FIELDS,
     nota: 'Estrutura, revestimento e remates separados.',
     campos: [
@@ -342,7 +343,7 @@ export const SECCOES = [
 
   // ── 23. EQUIPAMENTO E LOGÍSTICA ──────────────────────────
   {
-    key: 'equipamento', label: 'Equipamento e logística', icon: '🚚',
+    key: 'equipamento', label: 'Equipamento e logística', icon: Truck,
     tipo: 'fixed', grupo: 'obra',
     nota: 'Aluguer, consumos provisórios e transportes.',
     campos: [
@@ -359,7 +360,7 @@ export const SECCOES = [
 
   // ── 24. LICENCIAMENTO ────────────────────────────────────
   {
-    key: 'licenciamento', label: 'Licenciamento, fiscalização e seguros', icon: '📋',
+    key: 'licenciamento', label: 'Licenciamento, fiscalização e seguros', icon: ClipboardList,
     tipo: 'licenciamento_completo', grupo: 'extra', isLicenciamento: true,
     nota: 'Honorários sempre 23% (com retenção 25% se singular). Taxas/seguros sem IVA.',
     campos: [
@@ -379,7 +380,7 @@ export const SECCOES = [
 
   // ── 25. FECHO DE OBRA ────────────────────────────────────
   {
-    key: 'fecho_obra', label: 'Fecho de obra e ensaios', icon: '✅',
+    key: 'fecho_obra', label: 'Fecho de obra e ensaios', icon: CheckCircle2,
     tipo: 'fixed', grupo: 'extra',
     nota: 'Telas finais, FTH, ensaios, vistoria final, limpeza pós-obra.',
     campos: [

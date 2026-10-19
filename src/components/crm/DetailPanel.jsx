@@ -4,7 +4,7 @@
  * (Tarefas, Auditoria, aba Reuniões): a ficha não os repete.
  */
 import { useState, useEffect, useCallback, useMemo, useRef, memo, lazy, Suspense } from 'react'
-import { FileDown, ChevronDown, ChevronUp, Phone, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users, MapPin, Eye, Trash2, ThumbsUp, TrendingDown, Shield, Building2, UserRound, FolderOpen, Calculator, Hammer, Scale, DoorOpen, FileBarChart, ListChecks, Building, CalendarCheck, Star, Gauge, History, Briefcase, ShieldCheck, Timer } from 'lucide-react'
+import { FileDown, ChevronDown, ChevronUp, ClipboardList, Home, Euro, Repeat, BarChart3, Lightbulb, Phone, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users, MapPin, Eye, Trash2, ThumbsUp, TrendingDown, Shield, Building2, UserRound, FolderOpen, Calculator, Hammer, Scale, DoorOpen, FileBarChart, ListChecks, Building, CalendarCheck, Star, Gauge, History, Briefcase, ShieldCheck, Timer } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { BrandLoader } from '../ui/BrandLoader.jsx'
 import { TabTransition, useTabDirection } from '../ui/PageTransition.jsx'
@@ -296,10 +296,10 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
   }
 
   const MODES = [
-    { v: 'driving', l: '🚗 Carro' },
-    { v: 'walking', l: '🚶 A pé' },
-    { v: 'bicycling', l: '🚴 Bicicleta' },
-    { v: 'transit', l: '🚌 Transp. público' },
+    { v: 'driving', l: 'Carro' },
+    { v: 'walking', l: 'A pé' },
+    { v: 'bicycling', l: 'Bicicleta' },
+    { v: 'transit', l: 'Transp. público' },
   ]
 
   return (
@@ -308,7 +308,7 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
       {imagemUrl ? (
         <div className="rounded-xl border border-line bg-surface-raised overflow-hidden">
           <div className="px-4 py-2.5 border-b border-line bg-gradient-to-r from-yellow-50 to-white flex items-center justify-between">
-            <span className="text-xs font-semibold text-ink">🗺️ Estudo de Localização</span>
+            <span className="text-xs font-semibold text-ink">Estudo de Localização</span>
             <div className="flex gap-1.5">
               <a href={imagemUrl} target="_blank" rel="noreferrer"
                 className="text-[11px] px-2.5 py-1 rounded-md bg-surface-raised border border-line text-ink hover:bg-surface">
@@ -331,7 +331,7 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
         </div>
       ) : (
         <div className="rounded-xl border-2 border-dashed border-line p-6 bg-surface-raised text-center">
-          <p className="text-sm text-ink-muted">🗺️ Sem imagem de localização ainda. Preenche os destinos e clica em <strong>"🎨 Gerar imagem do estudo"</strong> em baixo.</p>
+          <p className="text-sm text-ink-muted">Sem imagem de localização ainda. Preenche os destinos e clica em <strong>"Gerar imagem do estudo"</strong> em baixo.</p>
         </div>
       )}
 
@@ -345,7 +345,7 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
       {/* Origem + modo */}
       <div className="rounded-xl border border-line p-4 bg-surface-raised space-y-3">
         <div>
-          <label className="text-xs font-semibold text-ink block mb-1">📍 Morada do imóvel (origem)</label>
+          <label className="text-xs font-semibold text-ink block mb-1">Morada do imóvel (origem)</label>
           <input type="text" value={origem} onChange={e => setOrigem(e.target.value)}
             placeholder={imovel?.regiao === 'AMP' ? 'Ex: Rua de Santa Catarina 200, Porto' : 'Ex: Rua das Flores 12, Coimbra'}
             className="w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
@@ -398,7 +398,7 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
           </button>
           <button type="button" onClick={gerarImagem} disabled={calculando || gerando}
             className="px-4 py-2 text-sm font-semibold rounded-lg bg-accent text-accent-foreground hover:brightness-[1.04] disabled:opacity-50">
-            {gerando ? 'A gerar imagem…' : '🎨 Gerar imagem do estudo'}
+            {gerando ? 'A gerar imagem…' : 'Gerar imagem do estudo'}
           </button>
         </div>
       </div>
@@ -406,7 +406,7 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
       {/* Opções da imagem (destaque + highlights) */}
       <details className="rounded-xl border border-line bg-surface-raised">
         <summary className="px-4 py-3 text-xs font-semibold text-ink cursor-pointer select-none">
-          ✨ Opções da imagem (destaque + highlights)
+          Opções da imagem (destaque + highlights)
         </summary>
         <div className="p-4 pt-0 space-y-4">
           <div>
@@ -448,7 +448,7 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
       {resultado?.resultados?.length > 0 && (
         <div className="rounded-xl border border-line overflow-hidden bg-surface-raised">
           <div className="px-4 py-2.5 border-b border-line bg-surface flex items-center justify-between">
-            <span className="text-xs font-semibold text-ink">Resultados — 🚗 Carro e 🚶 A pé</span>
+            <span className="text-xs font-semibold text-ink">Resultados — carro e a pé</span>
             <span className="text-[10px] text-ink-muted">
               {resultado.atualizado_em ? new Date(resultado.atualizado_em).toLocaleString('pt-PT') : ''}
             </span>
@@ -458,8 +458,8 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
               <tr className="border-b border-line">
                 <th className="text-left px-4 py-2">Ponto</th>
                 <th className="text-left px-4 py-2">Endereço</th>
-                <th className="text-right px-4 py-2">🚗 Carro</th>
-                <th className="text-right px-4 py-2">🚶 A pé</th>
+                <th className="text-right px-4 py-2">Carro</th>
+                <th className="text-right px-4 py-2">A pé</th>
               </tr>
             </thead>
             <tbody>
@@ -1156,7 +1156,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
                   <div className="col-span-2 md:col-span-3 mt-2">
                     <div className="rounded-xl border border-line bg-surface p-4">
                       <div className="flex items-center gap-2 mb-3">
-                        <span className="text-sm">📊</span>
+                        <BarChart3 className="w-4 h-4 text-ink-muted" />
                         <h4 className="text-sm font-bold text-ink">Análise de Rentabilidade</h4>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/15 text-success font-medium">Ativa</span>
                       </div>
@@ -1615,7 +1615,7 @@ function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onC
                         <div className="space-y-1.5">
                           {ana.sugestoes_melhoria.map((s, i) => (
                             <div key={i} className="flex gap-2 text-xs">
-                              <span className="text-warning shrink-0">💡</span>
+                              <Lightbulb className="w-3.5 h-3.5 text-warning shrink-0 mt-px" />
                               <span className="text-ink-muted">{s}</span>
                             </div>
                           ))}
@@ -1730,7 +1730,7 @@ function countFilled(obj, fields) {
 
 // Secção colapsável reutilizável dentro do separador Imóvel.
 // Ocupa toda a largura do grid pai (col-span-2 md:col-span-3) e oferece grid interno próprio.
-function Section({ icon, title, fields, form, defaultOpen = false, accent, children }) {
+function Section({ icon: Icon, title, fields, form, defaultOpen = false, accent, children }) {
   const [open, setOpen] = useState(defaultOpen)
   const filled = fields ? countFilled(form, fields) : null
   const total = fields?.length ?? 0
@@ -1745,7 +1745,7 @@ function Section({ icon, title, fields, form, defaultOpen = false, accent, child
         className={`w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-ink hover:bg-surface ${open ? 'rounded-t-xl' : 'rounded-xl'}`}>
 
         <span className="flex items-center gap-2">
-          {icon && <span>{icon}</span>}
+          {Icon && <Icon className="w-4 h-4 text-ink-muted shrink-0" />}
           <span>{title}</span>
           {accent && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-warning/15 text-warning font-medium">{accent}</span>}
         </span>
@@ -2004,7 +2004,7 @@ function ImovelEditSections({ data, form, setField }) {
 
   return <>
     {/* 1. Identificação */}
-    <Section icon="📋" title="Identificação" fields={sec.identificacao} form={form} defaultOpen>
+    <Section icon={ClipboardList} title="Identificação" fields={sec.identificacao} form={form} defaultOpen>
       <EF label="Nome" field="nome" form={form} set={setField} />
       <EF label="Estado" field="estado" form={form} set={setField} type="select" options={ESTADOS_PIPELINE} />
       {(() => {
@@ -2076,7 +2076,7 @@ function ImovelEditSections({ data, form, setField }) {
     </Section>
 
     {/* 2. Localização */}
-    <Section icon="📍" title="Localização" fields={sec.localizacao} form={form}>
+    <Section icon={MapPin} title="Localização" fields={sec.localizacao} form={form}>
       <div>
         <p className="text-xs text-ink-muted mb-1">Região</p>
         <select value={form.regiao || 'Coimbra'} onChange={e => setField('regiao', e.target.value)}
@@ -2149,7 +2149,7 @@ function ImovelEditSections({ data, form, setField }) {
     </Section>
 
     {/* 3. Caracterização Física */}
-    <Section icon="🏠" title="Caracterização Física" fields={sec.fisica} form={form}>
+    <Section icon={Home} title="Caracterização Física" fields={sec.fisica} form={form}>
       {form.predio_tipo === 'Apartamento' && (
         <EF label="Tipologia" field="tipologia" form={form} set={setField} />
       )}
@@ -2203,7 +2203,7 @@ function ImovelEditSections({ data, form, setField }) {
     </Section>
 
     {/* 4. Valores */}
-    <Section icon="💰" title="Valores" fields={sec.valores} form={form} defaultOpen>
+    <Section icon={Euro} title="Valores" fields={sec.valores} form={form} defaultOpen>
       <EF label="Ask Price (€)" field="ask_price" form={form} set={setField} type="number" />
       <EF label="Valor Proposta (€)" field="valor_proposta" form={form} set={setField} type="number" />
       {isWholesaling(form) && (
@@ -2220,7 +2220,7 @@ function ImovelEditSections({ data, form, setField }) {
     </Section>
 
     {/* 5. Situação Legal e Fiscal */}
-    <Section icon="📜" title="Situação Legal e Fiscal" fields={sec.legal} form={form}>
+    <Section icon={Scale} title="Situação Legal e Fiscal" fields={sec.legal} form={form}>
       <EF label="Artigo Matricial" field="artigo_matricial" form={form} set={setField} />
       <EF label="Descrição Predial" field="descricao_predial" form={form} set={setField} />
       <EF label="Fração" field="fracao" form={form} set={setField} />
@@ -2257,7 +2257,7 @@ function ImovelEditSections({ data, form, setField }) {
     </Section>
 
     {/* 6. Proprietário & Pipeline */}
-    <Section icon="👤" title="Proprietário & Pipeline" fields={sec.pipeline} form={form}>
+    <Section icon={UserRound} title="Proprietário & Pipeline" fields={sec.pipeline} form={form}>
       <EF label="Proprietário" field="proprietario_nome" form={form} set={setField} />
       <EF label="NIF" field="proprietario_nif" form={form} set={setField} />
       <EF label="Contacto" field="proprietario_contacto" form={form} set={setField} />
@@ -2323,7 +2323,7 @@ function ImovelReadSections({ data, onNavigate }) {
   }
 
   return <>
-    <Section icon="📋" title="Identificação" fields={sec.identificacao} form={data} defaultOpen>
+    <Section icon={ClipboardList} title="Identificação" fields={sec.identificacao} form={data} defaultOpen>
       <Field label="Nome" value={data.nome} />
       <Field label="Estado" value={data.estado?.replace(/^\d+-/, '')} />
       <Field label="REF Interna" value={data.ref_interna} />
@@ -2350,7 +2350,7 @@ function ImovelReadSections({ data, onNavigate }) {
       } />
     </Section>
 
-    <Section icon="📍" title="Localização" fields={sec.localizacao} form={data}>
+    <Section icon={MapPin} title="Localização" fields={sec.localizacao} form={data}>
       <Field label="Distrito" value={data.distrito} />
       <Field label="Concelho" value={data.concelho} />
       <Field label="Freguesia" value={data.freguesia} />
@@ -2365,7 +2365,7 @@ function ImovelReadSections({ data, onNavigate }) {
       )}
     </Section>
 
-    <Section icon="🏠" title="Caracterização Física" fields={sec.fisica} form={data}>
+    <Section icon={Home} title="Caracterização Física" fields={sec.fisica} form={data}>
       {data.predio_tipo === 'Apartamento' && <Field label="Tipologia" value={data.tipologia} />}
       <Field label="Tipo de Prédio" value={data.predio_tipo} />
       <Field label="Área Útil" value={fmtArea(data.area_util)} />
@@ -2383,7 +2383,7 @@ function ImovelReadSections({ data, onNavigate }) {
       <Field label="Licença Utilização" value={data.licenca_utilizacao} />
     </Section>
 
-    <Section icon="💰" title="Valores" fields={sec.valores} form={data} defaultOpen>
+    <Section icon={Euro} title="Valores" fields={sec.valores} form={data} defaultOpen>
       <Field label="Ask Price" value={fmtEur(data.ask_price)} />
       <Field label="Valor Proposta" value={fmtEur(data.valor_proposta)} />
       {isWholesaling(data) && (
@@ -2399,7 +2399,7 @@ function ImovelReadSections({ data, onNavigate }) {
       <Field label="Condomínio Mensal" value={fmtEur(data.condominio_mensal_anunciado)} />
     </Section>
 
-    <Section icon="📜" title="Situação Legal e Fiscal" fields={sec.legal} form={data}>
+    <Section icon={Scale} title="Situação Legal e Fiscal" fields={sec.legal} form={data}>
       <Field label="Artigo Matricial" value={data.artigo_matricial} />
       <Field label="Descrição Predial" value={data.descricao_predial} />
       <Field label="Fração" value={data.fracao} />
@@ -2412,7 +2412,7 @@ function ImovelReadSections({ data, onNavigate }) {
       </div>
     </Section>
 
-    <Section icon="👤" title="Proprietário & Pipeline" fields={sec.pipeline} form={data}>
+    <Section icon={UserRound} title="Proprietário & Pipeline" fields={sec.pipeline} form={data}>
       <Field label="Proprietário" value={data.proprietario_nome} />
       <Field label="NIF" value={data.proprietario_nif} />
       <Field label="Contacto" value={data.proprietario_contacto} />
@@ -2769,7 +2769,7 @@ function InvestidorEditSections({ data, form, setField }) {
   const temBloqueios = !!(data.motivo_nao_aprovacao || data.motivo_inatividade)
   return <>
     {/* 1. Identificação & Status */}
-    <Section icon="📋" title="Identificação & Status" fields={sec.identificacao} form={form} defaultOpen>
+    <Section icon={ClipboardList} title="Identificação & Status" fields={sec.identificacao} form={form} defaultOpen>
       <EF label="Nome" field="nome" form={form} set={setField} />
       <EF label="REF Investidor" field="ref_investidor" form={form} set={setField} />
       <MultiChips label="Tipo" field="tipo_principal" form={form} set={setField} options={['Ativo','Passivo']} />
@@ -2786,7 +2786,7 @@ function InvestidorEditSections({ data, form, setField }) {
     </Section>
 
     {/* 2. Capital & Estratégia */}
-    <Section icon="💼" title="Capital & Estratégia" fields={sec.capital} form={form} defaultOpen>
+    <Section icon={Briefcase} title="Capital & Estratégia" fields={sec.capital} form={form} defaultOpen>
       <EF label="Capital Min (€)" field="capital_min" form={form} set={setField} type="number" />
       <EF label="Capital Max (€)" field="capital_max" form={form} set={setField} type="number" />
       <EF label="Perfil Risco" field="perfil_risco" form={form} set={setField} type="select" options={INV_PERFIL_RISCO_OPTS} />
@@ -2804,7 +2804,7 @@ function InvestidorEditSections({ data, form, setField }) {
     </Section>
 
     {/* 3. Preferências de Investimento */}
-    <Section icon="🏠" title="Preferências de Investimento" fields={sec.preferencias} form={form} defaultOpen>
+    <Section icon={Home} title="Preferências de Investimento" fields={sec.preferencias} form={form} defaultOpen>
       <MultiChips label="Tipo de Imóvel" field="tipo_imovel_preferido" form={form} set={setField} options={INV_TIPO_IMOVEL_OPTS} />
       <MultiChips label={isAtivo ? 'Área de Atuação (Distritos)' : 'Localização Preferida'} field="localizacao_preferida" form={form} set={setField} options={INV_DISTRITOS_OPTS} />
       <MultiChips label={isAtivo ? 'Área de Atuação (Regiões)' : 'Regiões Preferidas'} field="regioes_preferidas" form={form} set={setField} options={INV_REGIOES_OPTS} />
@@ -2813,7 +2813,7 @@ function InvestidorEditSections({ data, form, setField }) {
     </Section>
 
     {/* 4. Contacto & NDA */}
-    <Section icon="📞" title="Contacto & NDA" fields={sec.contacto} form={form}>
+    <Section icon={Phone} title="Contacto & NDA" fields={sec.contacto} form={form}>
       <EF label="Telemóvel" field="telemovel" form={form} set={setField} />
       <EF label="Email" field="email" form={form} set={setField} />
       <EF label="Preferência de Contacto" field="preferencia_contacto" form={form} set={setField} type="select" options={INV_PREF_CONTACTO_OPTS} />
@@ -2821,14 +2821,14 @@ function InvestidorEditSections({ data, form, setField }) {
     </Section>
 
     {/* 5. Timeline */}
-    <Section icon="🕐" title="Datas" fields={sec.timeline} form={form} defaultOpen>
+    <Section icon={Calendar} title="Datas" fields={sec.timeline} form={form} defaultOpen>
       <EF label="1º Contacto" field="data_primeiro_contacto" form={form} set={setField} type="date" />
       <EF label="Data Reunião" field="data_reuniao" form={form} set={setField} type="date" />
       <EF label="Último Contacto" field="data_ultimo_contacto" form={form} set={setField} type="date" />
     </Section>
 
     {/* 7. Reinvestimento / Churn — declaração explícita de saída */}
-    <Section icon="🔁" title="Reinvestimento" fields={['nao_reinveste','data_nao_reinveste']} form={form} defaultOpen>
+    <Section icon={Repeat} title="Reinvestimento" fields={['nao_reinveste','data_nao_reinveste']} form={form} defaultOpen>
       <label className="flex items-center gap-2 col-span-2 md:col-span-3 cursor-pointer">
         <input type="checkbox" checked={!!form.nao_reinveste}
           onChange={e => {
@@ -2847,7 +2847,7 @@ function InvestidorEditSections({ data, form, setField }) {
 
     {/* 8. Bloqueios — só se já tem dados ou se status sugere */}
     {(temBloqueios || form.motivo_nao_aprovacao || form.motivo_inatividade) && (
-      <Section icon="⚠" title="Bloqueios / Excepções" fields={sec.bloqueios} form={form} defaultOpen>
+      <Section icon={AlertTriangle} title="Bloqueios / Excepções" fields={sec.bloqueios} form={form} defaultOpen>
         <EF label="Motivo Não Aprovação" field="motivo_nao_aprovacao" form={form} set={setField} />
         <EF label="Motivo Inatividade" field="motivo_inatividade" form={form} set={setField} />
       </Section>
@@ -2873,7 +2873,7 @@ function InvestidorReadSections({ data }) {
   }
   return <>
     {/* 1. Identificação */}
-    <Section icon="📋" title="Identificação & Status" fields={sec.identificacao} form={data} defaultOpen>
+    <Section icon={ClipboardList} title="Identificação & Status" fields={sec.identificacao} form={data} defaultOpen>
       <Field label="REF Investidor" value={data.ref_investidor || '—'} />
       <Field label="Status" value={data.status} />
       <div>
@@ -2888,7 +2888,7 @@ function InvestidorReadSections({ data }) {
     </Section>
 
     {/* 2. Capital & Estratégia */}
-    <Section icon="💼" title="Capital & Estratégia" fields={sec.capital} form={data} defaultOpen>
+    <Section icon={Briefcase} title="Capital & Estratégia" fields={sec.capital} form={data} defaultOpen>
       <Field label="Capital Min" value={data.capital_min > 0 ? `€${Number(data.capital_min).toLocaleString('pt-PT')}` : '—'} />
       <Field label="Capital Max" value={data.capital_max > 0 ? `€${Number(data.capital_max).toLocaleString('pt-PT')}` : '—'} />
       <Field label="Perfil Risco" value={data.perfil_risco} />
@@ -2907,7 +2907,7 @@ function InvestidorReadSections({ data }) {
     </Section>
 
     {/* 3. Preferências */}
-    <Section icon="🏠" title="Preferências de Investimento" fields={sec.preferencias} form={data} defaultOpen>
+    <Section icon={Home} title="Preferências de Investimento" fields={sec.preferencias} form={data} defaultOpen>
       <div className="col-span-2 md:col-span-3">
         <p className="text-xs text-ink-muted mb-1">Tipo de Imóvel</p>
         {tipoImovel.length > 0 ? (
@@ -2939,7 +2939,7 @@ function InvestidorReadSections({ data }) {
     </Section>
 
     {/* 4. Contacto */}
-    <Section icon="📞" title="Contacto & NDA" fields={sec.contacto} form={data}>
+    <Section icon={Phone} title="Contacto & NDA" fields={sec.contacto} form={data}>
       <Field label="Telemóvel" value={data.telemovel} />
       <Field label="Email" value={data.email} />
       <Field label="Pref. Contacto" value={data.preferencia_contacto} />
@@ -2947,13 +2947,13 @@ function InvestidorReadSections({ data }) {
     </Section>
 
     {/* 5. Timeline */}
-    <Section icon="🕐" title="Datas" fields={sec.timeline} form={data} defaultOpen>
+    <Section icon={Calendar} title="Datas" fields={sec.timeline} form={data} defaultOpen>
       <InvestidorTimeline data={data} />
     </Section>
 
     {/* 7. Bloqueios — só se preenchido */}
     {(data.motivo_nao_aprovacao || data.motivo_inatividade) && (
-      <Section icon="⚠" title="Bloqueios / Excepções" fields={sec.bloqueios} form={data} defaultOpen>
+      <Section icon={AlertTriangle} title="Bloqueios / Excepções" fields={sec.bloqueios} form={data} defaultOpen>
         {data.motivo_nao_aprovacao && <Field label="Motivo Não Aprovação" value={data.motivo_nao_aprovacao} />}
         {data.motivo_inatividade && <Field label="Motivo Inatividade" value={data.motivo_inatividade} />}
       </Section>
@@ -3502,7 +3502,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
         </div>
       ) : !creating && (
         <div className="rounded-xl border border-dashed border-line p-8 text-center">
-          <p className="text-2xl mb-2">🎯</p>
+          <Target className="w-6 h-6 mx-auto mb-2 text-ink-muted" />
           <p className="text-sm text-ink-muted">Sem scorecards registados</p>
           <p className="text-xs text-ink-muted mt-1">Cria um scorecard após a Discovery Call ou analisa uma transcrição de reunião</p>
         </div>

@@ -179,7 +179,7 @@ export function ObraTab({ imovelId, imovelNome }) {
                   tem ? 'bg-ink text-surface' : 'bg-surface-muted text-ink-muted hover:bg-line'
                 }`}
               >
-                <span>{s.icon}</span>
+                <s.icon className="w-3.5 h-3.5" />
                 <span>{s.label.split(' ')[0]}</span>
                 {tem && <span className="text-[9px] opacity-70">●</span>}
               </button>

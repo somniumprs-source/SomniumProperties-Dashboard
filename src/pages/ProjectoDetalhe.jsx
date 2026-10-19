@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { CheckCircle2, Circle, Plus, Trash2, Upload, FileText, BarChart3, ChevronRight, FileDown, AlertTriangle, RefreshCw, Home, Layers, History, FileSpreadsheet, Pencil, Eye, CalendarClock, ClipboardCheck, Calculator, Receipt, Hammer, FolderOpen, HandCoins, CalendarCheck, Building, Trees, Footprints, ArrowUpDown, Zap, Car, MoreHorizontal } from 'lucide-react'
+import { CheckCircle2, Circle, Plus, Trash2, Upload, FileText, BarChart3, ChevronRight, FileDown, AlertTriangle, RefreshCw, Home, Layers, History, FileSpreadsheet, Pencil, Eye, CalendarClock, ClipboardCheck, Calculator, Receipt, Hammer, FolderOpen, HandCoins, CalendarCheck, Building, Trees, Footprints, ArrowUpDown, Zap, Car, MoreHorizontal, Camera } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { BrandLoader, useMinLoading } from '../components/ui/BrandLoader.jsx'
 import { TabTransition, useTabDirection } from '../components/ui/PageTransition.jsx'
@@ -695,7 +695,7 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId, imovelId, fotosImo
               </div>
               <span className="text-xs text-ink  num font-semibold">{fase.perc_execucao || 0}%</span>
               <span className="text-caption text-ink-muted ">{fase.tarefas_concluidas}/{fase.tarefas_total} tarefas</span>
-              {fase.fotos_count > 0 && <span className="text-caption text-ink-muted ">📷 {fase.fotos_count}</span>}
+              {fase.fotos_count > 0 && <span className="text-caption text-ink-muted inline-flex items-center gap-1"><Camera className="w-3 h-3" />{fase.fotos_count}</span>}
             </div>
           </div>
         </div>
@@ -2649,7 +2649,7 @@ function TabFracoes({ negocioId, fracoes, onChange, readOnly, fasesComuns }) {
             return (
               <div className="space-y-2">
                 <h4 className="text-[10px] uppercase tracking-widest text-ink-muted font-semibold flex items-center gap-1.5">
-                  🏛️ Áreas comuns ({areas.length})
+                  <Building className="w-3 h-3" />Áreas comuns ({areas.length})
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {areas.map(fr => (
@@ -2864,7 +2864,7 @@ function FracaoForm({ fracao, onSave, onCancel, fasesComunsCount }) {
 
       {isNew && fasesComunsCount > 0 && (
         <p className="text-[11px] text-brand-gold mt-3 bg-brand-dark px-3 py-2 rounded-lg">
-          ✨ Ao criar esta fração, serão duplicadas as {fasesComunsCount} fases existentes do prédio (com tarefas-template) para esta fração.
+          Ao criar esta fração, serão duplicadas as {fasesComunsCount} fases existentes do prédio (com tarefas-template) para esta fração.
         </p>
       )}
 

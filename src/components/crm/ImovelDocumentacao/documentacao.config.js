@@ -1,3 +1,4 @@
+import { XOctagon, AlertTriangle, Info } from 'lucide-react'
 /**
  * Configuração visual e utilitários do módulo de documentação (importação livre).
  * A análise é por documento; o cruzamento de divergências faz-se por código
@@ -29,9 +30,9 @@ export function estadoFromValido(valido) {
 }
 
 export const SEVERIDADE = {
-  critical: { label: 'Crítico', icone: '⛔', cor: '#c0392b', rank: 0, tom: 'perigo' },
-  warning: { label: 'Alerta', icone: '⚠️', cor: '#e67e22', rank: 1, tom: 'aviso' },
-  info: { label: 'Info', icone: 'ℹ️', cor: '#6b7280', rank: 2, tom: 'neutro' },
+  critical: { label: 'Crítico', icone: XOctagon, cor: '#c0392b', rank: 0, tom: 'perigo' },
+  warning: { label: 'Alerta', icone: AlertTriangle, cor: '#e67e22', rank: 1, tom: 'aviso' },
+  info: { label: 'Info', icone: Info, cor: '#6b7280', rank: 2, tom: 'neutro' },
 }
 
 // Chaves comparáveis entre documentos (extraídas pela IA em dados_chave).
