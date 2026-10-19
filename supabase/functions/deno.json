@@ -13,7 +13,6 @@
     "docx": "npm:docx@9.6.1",
     "@resvg/resvg-wasm": "npm:@resvg/resvg-wasm@2.6.2",
     "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@0.88.0",
-    "@notionhq/client": "npm:@notionhq/client@2.2.15",
     "google-auth-library": "npm:google-auth-library@10.6.2",
     "@googleapis/calendar": "npm:@googleapis/calendar@14.3.0",
     "@googleapis/drive": "npm:@googleapis/drive@20.2.0",

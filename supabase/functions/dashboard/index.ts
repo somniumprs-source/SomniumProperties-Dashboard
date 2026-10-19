@@ -884,7 +884,7 @@ app.get("/comercial/empreiteiros", async (c: any) => {
 
 app.get("/comercial/consultores", async (c: any) => {
   try {
-    const [imoveis, consultoresNotion, negocios] = await Promise.all([
+    const [imoveis, consultoresBase, negocios] = await Promise.all([
       getImóveis(),
       getConsultores(),
       getNegócios(),
@@ -1003,8 +1003,8 @@ app.get("/comercial/consultores", async (c: any) => {
       };
     }
 
-    // Merge: Notion consultores + pipeline metrics + faturação KPIs (por ID)
-    const consultores: any[] = consultoresNotion.map((c2) => {
+    // Merge: consultores + pipeline metrics + faturação KPIs (por ID)
+    const consultores: any[] = consultoresBase.map((c2) => {
       const leads = byNome[c2.nome] ?? [];
       const metrics = calcMetrics(c2.nome, leads);
       const fat = calcFatMetrics(c2.id);
@@ -1012,9 +1012,9 @@ app.get("/comercial/consultores", async (c: any) => {
       return { ...c2, ...metrics, ...fat, cumpreMeta };
     });
 
-    // Consultores no pipeline que não estão na lista Notion
+    // Consultores no pipeline que não estão na lista de consultores
     for (const [nome, leads] of Object.entries(byNome)) {
-      if (!consultoresNotion.find((c2) => c2.nome === nome)) {
+      if (!consultoresBase.find((c2) => c2.nome === nome)) {
         consultores.push({
           ...calcMetrics(nome, leads),
           dealsTotal: 0,

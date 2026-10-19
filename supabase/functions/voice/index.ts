@@ -1,7 +1,7 @@
 // Edge Function "voice" — port do handler app.post('/api/voice/process') de server.js.
 // Interpreta comandos de voz em PT via Claude e executa a accao correspondente
 // no CRM. Lógica movida para ../_shared/voiceProcess.ts para poder ser chamada
-// directamente por outros pontos de entrada (ex: webhook-slack), que não têm
+// directamente por outros pontos de entrada (ex.: outros serviços), que não têm
 // um utilizador Supabase autenticado para passar pelo requireAuth abaixo.
 import { createApp } from "../_shared/hono.ts";
 import { requireAuth } from "../_shared/auth.ts";

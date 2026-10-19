@@ -1,6 +1,6 @@
 // Interpretação de comandos de linguagem natural PT-PT para o CRM (Claude).
 // Extraído de POST /voice/process (voice/index.ts) para poder ser chamado
-// directamente por outros pontos de entrada (ex: webhook Slack) sem um
+// directamente por outros pontos de entrada (ex.: outros serviços) sem um
 // pedido HTTP interno — o Edge Function "voice" exige um utilizador Supabase
 // autenticado (requireAuth), que um webhook servidor-a-servidor não tem.
 // Lógica preservada verbatim, só ganhou o parâmetro `funcionario` (antes
@@ -13,7 +13,7 @@ const pgQuery = (text: string, params?: any[]) => pool.query(text, params);
 
 export async function processVoiceCommand(text: string, opts: { funcionario?: string | null } = {}) {
   // `|| 'default'` em vez de default param — cobre tanto undefined como null
-  // (ex: resolveSlackUserName devolve null quando não consegue mapear o autor).
+  // (ex.: quando não se consegue identificar o autor).
   const funcionario = opts.funcionario || "Alexandre Mendes";
   const client = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") });
   const now = new Date().toISOString();

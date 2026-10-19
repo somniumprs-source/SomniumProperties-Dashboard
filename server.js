@@ -13,10 +13,7 @@ app.use(cors())
 // gzip dos payloads JSON e dos chunks estáticos (~70-80% redução em
 // respostas grandes como /api/crm/investidores que devolve 70KB → ~15KB).
 app.use(compression({ threshold: 1024 }))
-// Captura o corpo em bruto (req.rawBody) para poder validar a assinatura
-// HMAC do webhook Slack — a verificação tem de correr sobre os bytes
-// exactos recebidos, não sobre um JSON re-serializado.
-app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf } }))
+app.use(express.json())
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500, standardHeaders: true, legacyHeaders: false }))
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads'), {
   maxAge: '7d',
@@ -372,74 +369,6 @@ try {
     console.log('[crm] Webhook landing-lead montado em POST /api/webhook/landing-lead')
   }
 
-  // ── Slack Webhook · TAREFA-... cria tarefa na agenda + log p/ relatório diário ─
-  {
-    const { default: pgPool } = await import('./src/db/pg.js')
-    const { randomUUID } = await import('crypto')
-    const { verifySlackSignature, resolveSlackUserName } = await import('./src/db/slackVerify.js')
-
-    const TRIGGER_RE = /^TAREFA[\s:\-]+(.+)$/is
-
-    app.post('/api/webhook/slack', async (req, res) => {
-      try {
-        const body = req.body || {}
-
-        // Passo de configuração do Slack: responder o challenge de imediato.
-        if (body.type === 'url_verification') {
-          return res.json({ challenge: body.challenge })
-        }
-
-        const signature = req.headers['x-slack-signature']
-        const timestamp = req.headers['x-slack-request-timestamp']
-        const ok = verifySlackSignature({
-          signingSecret: process.env.SLACK_SIGNING_SECRET,
-          signature, timestamp,
-          rawBody: req.rawBody ? req.rawBody.toString('utf8') : '',
-        })
-        if (!ok) return res.status(401).json({ ok: false, error: 'Assinatura inválida' })
-
-        const event = body.event || {}
-        // Ignora tudo o que não seja mensagem nova de uma pessoa (edições,
-        // apagados, e mensagens do próprio bot — evita eco/loop).
-        if (event.type !== 'message' || event.subtype || event.bot_id) {
-          return res.json({ ok: true, action: 'ignored' })
-        }
-        if (process.env.SLACK_CHANNEL_ID && event.channel !== process.env.SLACK_CHANNEL_ID) {
-          return res.json({ ok: true, action: 'ignored_channel' })
-        }
-
-        const texto = (event.text || '').trim()
-        const userName = await resolveSlackUserName(event.user)
-
-        // Idempotência: Slack reenvia o evento se não responder a tempo.
-        const { rows: [inserted] } = await pgPool.query(
-          `INSERT INTO slack_mensagens (id, slack_event_id, channel_id, user_id, user_name, texto, ts, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-           ON CONFLICT (slack_event_id) DO NOTHING
-           RETURNING id`,
-          [randomUUID(), body.event_id || null, event.channel, event.user, userName, texto, event.ts, new Date().toISOString()]
-        )
-        if (!inserted) return res.json({ ok: true, action: 'duplicate' })
-
-        const match = texto.match(TRIGGER_RE)
-        if (match) {
-          const { processVoiceCommand } = await import('./src/db/voiceProcess.js')
-          const result = await processVoiceCommand(match[1].trim(), { funcionario: userName })
-          await pgPool.query(
-            'UPDATE slack_mensagens SET is_trigger_tarefa = true, tarefa_id = $1 WHERE id = $2',
-            [result?.tarefa_id || null, inserted.id]
-          )
-        }
-
-        res.json({ ok: true })
-      } catch (e) {
-        console.error('[webhook-slack] erro:', e.message)
-        res.status(500).json({ ok: false, error: 'Erro ao processar evento' })
-      }
-    })
-    console.log('[crm] Webhook Slack montado em POST /api/webhook/slack')
-  }
-
   try {
     const { runFollowUp, runRelatorioDiario, runRelatorioSemanal, runProcuraImoveis } = await import('./src/db/cronJobs.js')
     const { startCronJobs } = await import('./src/db/cronJobs.js')
@@ -464,12 +393,6 @@ try {
     })
     app.post('/api/cron/relatorio-semanal', async (_req, res) => {
       try { await runRelatorioSemanal(); res.json({ ok: true }) } catch (e) { res.status(500).json({ error: e.message }) }
-    })
-    app.post('/api/cron/relatorio-diario-slack', async (_req, res) => {
-      try {
-        const { runRelatorioDiarioSlack } = await import('./src/db/slackRelatorioDiario.js')
-        res.json({ ok: true, ...(await runRelatorioDiarioSlack()) })
-      } catch (e) { res.status(500).json({ ok: false, error: e.message }) }
     })
     // Pesquisa diária de imóveis (Idealista via Apify) — trigger manual para
     // testar em dev; não registada em node-cron (ver nota em cronJobs.js).
@@ -1504,7 +1427,7 @@ app.get('/api/comercial/empreiteiros', async (req, res) => {
 
 app.get('/api/comercial/consultores', async (_req, res) => {
   try {
-    const [imoveis, consultoresNotion, negocios] = await Promise.all([getImóveis(), getConsultores(), getNegócios()])
+    const [imoveis, consultoresBase, negocios] = await Promise.all([getImóveis(), getConsultores(), getNegócios()])
     const now = new Date()
     const year = now.getFullYear(), month = now.getMonth() + 1
     const prevMonth = month === 1 ? 12 : month - 1
@@ -1586,8 +1509,8 @@ app.get('/api/comercial/consultores', async (_req, res) => {
         dealsEsteMes, lucroRealizado, lucroPotencial, lucroTotal, taxaConversaoFat }
     }
 
-    // Merge: Notion consultores + pipeline metrics + faturação KPIs (por ID)
-    const consultores = consultoresNotion.map(c => {
+    // Merge: consultores + pipeline metrics + faturação KPIs (por ID)
+    const consultores = consultoresBase.map(c => {
       const leads = byNome[c.nome] ?? []
       const metrics = calcMetrics(c.nome, leads)
       const fat = calcFatMetrics(c.id)
@@ -1596,9 +1519,9 @@ app.get('/api/comercial/consultores', async (_req, res) => {
       return { ...c, ...metrics, ...fat, cumpreMeta }
     })
 
-    // Consultores no pipeline que não estão na lista Notion
+    // Consultores no pipeline que não estão na lista de consultores
     for (const [nome, leads] of Object.entries(byNome)) {
-      if (!consultoresNotion.find(c => c.nome === nome)) {
+      if (!consultoresBase.find(c => c.nome === nome)) {
         consultores.push({ ...calcMetrics(nome, leads),
           dealsTotal: 0, dealsVendidos: 0, dealsEsteMes: 0, lucroTotal: 0, taxaConversaoFat: null,
           status: null, tipo: null, classificacao: null, zonas: [],

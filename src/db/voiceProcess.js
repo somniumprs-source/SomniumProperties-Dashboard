@@ -1,7 +1,7 @@
 /**
  * Interpretação de comandos de linguagem natural PT-PT para o CRM (Claude).
  * Extraído de POST /api/voice/process (server.js) para poder ser chamado
- * directamente por outros pontos de entrada (ex: webhook Slack), sem um
+ * directamente por outros pontos de entrada (ex.: outros serviços), sem um
  * pedido HTTP interno. Lógica preservada verbatim, só ganhou o parâmetro
  * `funcionario` (antes fixo em 'Alexandre Mendes').
  */
@@ -11,7 +11,7 @@ import { randomUUID } from 'crypto'
 
 export async function processVoiceCommand(text, opts = {}) {
   // `|| 'default'` em vez de default param — cobre tanto undefined como null
-  // (ex: resolveSlackUserName devolve null quando não consegue mapear o autor).
+  // (ex.: quando não se consegue identificar o autor).
   const funcionario = opts.funcionario || 'Alexandre Mendes'
   const Anthropic = (await import('@anthropic-ai/sdk')).default
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
