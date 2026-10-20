@@ -143,6 +143,54 @@ async function afinarTarefa(pool, p, tarefaId, data, tipoContacto = null) {
   }
 }
 
+// ── Contacto feito → tarefa concluída na agenda ─────────────
+// Cada contacto feito fica como tarefa concluída à hora em que aconteceu
+// (origem_campo = "contacto:<id da interação>", como "visita:<id>" nas
+// visitas): se fechou o contacto marcado é essa tarefa, senão cria-se uma.
+// Acompanha as correções do registo; se o registo é apagado (ou deixa de ser
+// um contacto feito), a tarefa fica «Cancelada:» — nunca se apaga.
+// criar = false: só atualiza a tarefa que já exista (correções de registos antigos).
+async function sincronizarTarefaFeita(pool, p, interacaoId, { criar = true, user = null } = {}) {
+  const { cfg, tipo, id } = p
+  const campo = `contacto:${interacaoId}`
+  const { rows: [x] } = await pool.query(`SELECT * FROM ${cfg.interacoes} WHERE id = $1`, [interacaoId])
+  const { rows: [t] } = await pool.query(
+    'SELECT id, tarefa FROM tarefas WHERE origem_tipo = $1 AND origem_id = $2 AND origem_campo = $3 ORDER BY created_at LIMIT 1',
+    [tipo, id, campo]
+  )
+  if (!x || x.resultado !== 'Feito' || x.canal === 'Nota') {
+    if (t && !String(t.tarefa).startsWith('Cancelada: ')) {
+      await pool.query("UPDATE tarefas SET tarefa = $1, status = 'Concluída', updated_at = NOW() WHERE id = $2", [`Cancelada: ${t.tarefa}`, t.id])
+    }
+    return null
+  }
+  if (!t && !criar) return null
+  const imoveis = (await assuntosDe(pool, cfg.origem, [interacaoId])).filter(a => a.imovel_id)
+  const tipoContacto = x.finalidade === 'discovery' ? 'discovery_call' : 'follow_up'
+  const titulo = `${TIPOS_CONTACTO[tipoContacto]} — ${p.nome || 'Sem nome'}${imoveis.length ? ` (${imoveis.map(a => a.imovel_nome || 'Imóvel').join(', ')})` : ''}`
+  const categoria = imoveis.length && tipoContacto === 'follow_up' ? 'Follow-up de Imóveis' : cfg.categorias[tipoContacto]
+  const ini = new Date(x.data_hora)
+  const inicio = ini.toISOString()
+  const fim = new Date(ini.getTime() + 0.5 * 3600000).toISOString()
+  const dia = ini.toLocaleDateString('sv-SE', { timeZone: 'Europe/Lisbon' })
+  const regiao = imoveis[0]?.imovel_regiao || null
+  if (t) {
+    await pool.query(
+      `UPDATE tarefas SET tarefa = $1, categoria = $2, regiao = $3, data_limite = $4, inicio = $5, fim = $6, status = 'Concluída', updated_at = NOW() WHERE id = $7`,
+      [titulo, categoria, regiao, dia, inicio, fim, t.id]
+    )
+    return t.id
+  }
+  const nova = randomUUID()
+  await pool.query(
+    `INSERT INTO tarefas (id, tarefa, categoria, status, prioridade, data_limite, inicio, fim, user_id, funcionario,
+                          tempo_horas, origem_tipo, origem_id, origem_campo, regiao)
+     VALUES ($1,$2,$3,'Concluída','media',$4,$5,$6,$7,$8,0.5,$9,$10,$11,$12)`,
+    [nova, titulo, categoria, dia, inicio, fim, user?.id || null, user?.nome || x.autor || null, tipo, id, campo, regiao]
+  )
+  return nova
+}
+
 // ── Leitura (ficha da pessoa) ────────────────────────────────
 export async function lerContactoPessoa(pool, tipo, id) {
   const p = await carregarPessoa(pool, tipo, id)
@@ -281,6 +329,12 @@ async function registarContactoPessoaTx(pool, tipo, id, {
   }
   if (!semSucesso) await juntarAssuntos(pool, cfg.origem, interacaoId, novos)
   if (t) await pool.query("UPDATE tarefas SET status = 'Concluída', updated_at = NOW() WHERE id = $1", [t.id])
+  // O contacto feito fica na agenda: a tarefa marcada passa a ser a dele (e sai
+  // de 'proximo_contacto', já fechada); sem tarefa marcada, cria-se uma concluída.
+  if (!semSucesso) {
+    if (t) await pool.query('UPDATE tarefas SET origem_campo = $1 WHERE id = $2', [`contacto:${interacaoId}`, t.id])
+    await sincronizarTarefaFeita(pool, p, interacaoId, { user })
+  }
 
   let tarefaId = null
   if (proximo?.data) {
@@ -367,11 +421,14 @@ async function editarContactoTx(pool, tipo, id, hid, campos = {}) {
     await pool.query('DELETE FROM contacto_assuntos WHERE origem = $1 AND origem_id = $2 AND imovel_id IS NOT NULL', [cfg.origem, hid])
     await juntarAssuntos(pool, cfg.origem, hid, imoveis.map(imovel_id => ({ imovel_id })))
   }
+  const p = await carregarPessoa(pool, tipo, id)
+  if (p) await sincronizarTarefaFeita(pool, p, hid, { criar: false })
   return true
 }
 
 // ── Apagar um contacto do histórico (registo feito por engano) ──
-// Leva com ele os assuntos que lhe estavam ligados; não mexe no próximo contacto.
+// Leva com ele os assuntos que lhe estavam ligados e marca a tarefa da agenda
+// como «Cancelada:»; não mexe no próximo contacto.
 export async function apagarContacto(poolOuCx, tipo, id, hid) {
   return emTransacao(poolOuCx, async pool => {
     const cfg = PESSOAS[tipo]
@@ -385,6 +442,8 @@ export async function apagarContacto(poolOuCx, tipo, id, hid) {
     const r = await pool.query(`DELETE FROM ${cfg.interacoes} WHERE id = $1 AND ${cfg.fk} = $2`, [hid, id])
     if (!r.rowCount) return false
     await pool.query('DELETE FROM contacto_assuntos WHERE origem = $1 AND origem_id = $2', [cfg.origem, hid])
+    const p = await carregarPessoa(pool, tipo, id)
+    if (p) await sincronizarTarefaFeita(pool, p, hid)
     return true
   })
 }
