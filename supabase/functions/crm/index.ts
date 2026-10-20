@@ -22,11 +22,11 @@ import {
   ConsultorInteracoes, InvestidorInteracoes, DocumentosInvestidor, Visitas,
   Empreiteiros, Parceiros, getDashboardStats, ensureColumn,
 } from "../_shared/crud.ts";
-import { getVisitasEnriquecidas, syncDataVisitaDerivada, getFichaVisitaParaImovel } from "../_shared/queries.ts";
+import { getVisitasEnriquecidas, syncDataVisitaDerivada } from "../_shared/queries.ts";
 import {
-  generateDoc, getDocsForEstado, docEmbedeLocalizacao, generateCompiledReport,
+  docEmbedeLocalizacao, generateCompiledReport,
 } from "../_shared/pdfImovelDocs.ts";
-import { onImovelCreated, persistDocumento, listDocumentos, urlAssinadaDocumento } from "../_shared/documentLifecycle.ts";
+import { persistDocumento, listDocumentos, urlAssinadaDocumento } from "../_shared/documentLifecycle.ts";
 import { generateImovelPDF } from "../_shared/pdfReport.ts";
 import { generateMeetingPDF } from "../_shared/pdfMeetingReport.ts";
 import { analyzeReuniao, autoFillConsultor, autoFillInvestidor } from "../_shared/meetingAnalysis.ts";
@@ -891,8 +891,7 @@ const HOOKS_IMOVEIS = {
     if (driveConfigured()) {
       await createImovelFolder(item.id, item.nome || "Sem nome", item.estado || "Adicionado");
     }
-    // Auto-gerar Ficha do Imóvel v1 (persiste em Storage + documentos_imovel)
-    onImovelCreated(item).catch((e: any) => console.error("[docs] onCreate ficha:", e.message));
+    // Ficha do imóvel: deixou de ser gerada ao criar (20/10/2026); gera-se ao abrir.
     // Se o imóvel é criado já num estado de modelo de negócio, auto-criar projecto
     if (ESTADO_IMOVEL_PARA_CATEGORIA[item.estado]) {
       autoCriarNegocioDeImovel(item, item.estado).catch((e: any) => console.error("[auto-negocio] onCreate:", e.message));
@@ -942,23 +941,9 @@ const HOOKS_IMOVEIS = {
           console.error("[auto-negocio] onUpdate:", e.message)
         );
       }
-      // Gerar documentos da fase: persistir em Supabase Storage + DB e upload ao Drive
-      const docs = getDocsForEstado(body.estado);
-      for (const tipo of docs) {
-        try {
-          let analise: any = null;
-          try {
-            const { rows: [a] } = await pool.query("SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1", [item.id]);
-            analise = a;
-          } catch { /* ignore */ }
-          if (tipo === "ficha_visita") { try { item._fichaVisita = await getFichaVisitaParaImovel(item.id); } catch { /* ignore */ } }
-          await persistDocumento(item, tipo, { trigger: `estado:${body.estado}`, generatedBy: "system", analise });
-          if (driveConfigured()) {
-            const pdfDoc = await generateDoc(tipo, item, analise);
-            if (pdfDoc) await uploadDocToFolder(item.id, pdfDoc, `${tipo}.pdf`, { tipo });
-          }
-        } catch (e) { console.error(`[docs] Erro ${tipo}:`, (e as Error).message); }
-      }
+      // Documentos da fase: deixaram de ser gerados automaticamente (decisão do
+      // João, 20/10/2026 — acumulavam PDFs que ninguém abria). São gerados só ao
+      // abrir (GET /imoveis/:id/documento/:tipo) ou ao regenerar.
     }
     // Wholesaling: se mudou o fee de cedência (ou a proposta), recompor o lucro esperado dos negocios deste imovel
     if (body.fee_cedencia !== undefined || body.valor_proposta !== undefined) {
@@ -1083,7 +1068,6 @@ app.post("/oportunidades/:id/aprovar", async (c: any) => {
     if (driveConfigured()) {
       await createImovelFolder(item.id, item.nome || "Sem nome", item.estado || "Adicionado");
     }
-    onImovelCreated(item).catch((e: any) => console.error("[docs] oportunidade aprovar:", e.message));
     if (cand.link && cand.link.startsWith("http")) {
       scrapePhotosFromLink(cand.link, item.id).then(async (photos: any[]) => {
         if (photos.length > 0) {

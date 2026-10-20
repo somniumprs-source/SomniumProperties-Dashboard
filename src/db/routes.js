@@ -25,12 +25,12 @@ import pool from './pg.js'
 import { agendarPassoImovel, sincronizarTarefaVisita } from './agendaEngine.js'
 import { agendarFollowUpImovelManual, registarFollowUpFeito } from './followUpImovel.js'
 import { lerContactoPessoa, agendarContactoPessoa, registarContactoPessoa, editarContacto, apagarContacto, anotarPessoa, lerContactosDoImovel, juntarImovelAoContacto } from './contactoPessoa.js'
-import { getVisitasEnriquecidas, syncDataVisitaDerivada, getFichaVisitaParaImovel } from './queries.js'
+import { getVisitasEnriquecidas, syncDataVisitaDerivada } from './queries.js'
 import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
 import { createImovelFolder, moveImovelFolder, uploadDocToFolder, uploadUserFileToFolder, uploadComprovativoToFolder, isConfigured as driveConfigured, downloadDriveFile, createInvestidorFolder, uploadDocumentoInvestidor, moverParaElementosApagados, ensureInvestidorFolderShared } from './driveSync.js'
-import { generateDoc, getDocsForEstado, docEmbedeLocalizacao } from './pdfImovelDocs.js'
-import { onImovelCreated, listDocumentos, persistDocumento, streamPdfToResAndPersist, urlAssinadaDocumento } from './documentLifecycle.js'
+import { docEmbedeLocalizacao } from './pdfImovelDocs.js'
+import { listDocumentos, persistDocumento, streamPdfToResAndPersist, urlAssinadaDocumento } from './documentLifecycle.js'
 import { ensureOportunidadesScraperTable } from './oportunidadesScraper.js'
 import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
 import { generateMeetingPDF } from './pdfMeetingReport.js'
@@ -394,8 +394,7 @@ const HOOKS_IMOVEIS = {
     if (driveConfigured()) {
       await createImovelFolder(item.id, item.nome || 'Sem nome', item.estado || 'Adicionado')
     }
-    // Auto-gerar Ficha do Imóvel v1 (persiste em disco + documentos_imovel)
-    onImovelCreated(item).catch(e => console.error('[docs] onCreate ficha:', e.message))
+    // Ficha do imóvel: deixou de ser gerada ao criar (20/10/2026); gera-se ao abrir.
     // Se o imóvel é criado já num estado de modelo de negócio, auto-criar projecto
     if (ESTADO_IMOVEL_PARA_CATEGORIA[item.estado]) {
       autoCriarNegocioDeImovel(item, item.estado).catch(e => console.error('[auto-negocio] onCreate:', e.message))
@@ -441,20 +440,9 @@ const HOOKS_IMOVEIS = {
       if (ESTADO_IMOVEL_PARA_CATEGORIA[body.estado]) {
         autoCriarNegocioDeImovel({ ...item, ...body }, body.estado).catch(e => console.error('[auto-negocio] onUpdate:', e.message))
       }
-      // Gerar documentos da fase: persistir em Supabase Storage + DB e upload ao Drive
-      const docs = getDocsForEstado(body.estado)
-      for (const tipo of docs) {
-        try {
-          let analise = null
-          try { const { rows: [a] } = await pool.query('SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1', [item.id]); analise = a } catch {}
-          if (tipo === 'ficha_visita') { try { item._fichaVisita = await getFichaVisitaParaImovel(item.id) } catch {} }
-          await persistDocumento(item, tipo, { trigger: `estado:${body.estado}`, generatedBy: 'system', analise })
-          if (driveConfigured()) {
-            const pdfDoc = await generateDoc(tipo, item, analise)
-            if (pdfDoc) await uploadDocToFolder(item.id, pdfDoc, `${tipo}.pdf`, { tipo })
-          }
-        } catch (e) { console.error(`[docs] Erro ${tipo}:`, e.message) }
-      }
+      // Documentos da fase: deixaram de ser gerados automaticamente (decisão do
+      // João, 20/10/2026 — acumulavam PDFs que ninguém abria). São gerados só ao
+      // abrir (GET /imoveis/:id/documento/:tipo) ou ao regenerar.
     }
     // Wholesaling: se mudou o fee de cedência (ou a proposta), recompor o lucro esperado dos negocios deste imovel
     if (body.fee_cedencia !== undefined || body.valor_proposta !== undefined) {
@@ -577,7 +565,6 @@ router.post('/oportunidades/:id/aprovar', async (req, res) => {
     if (driveConfigured()) {
       await createImovelFolder(item.id, item.nome || 'Sem nome', item.estado || 'Adicionado')
     }
-    onImovelCreated(item).catch(e => console.error('[docs] oportunidade aprovar:', e.message))
     if (cand.link && cand.link.startsWith('http')) {
       scrapePhotosFromLink(cand.link, item.id).then(async (photos) => {
         if (photos.length > 0) {
