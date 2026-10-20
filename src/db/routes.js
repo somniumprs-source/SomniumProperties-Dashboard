@@ -30,7 +30,7 @@ import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
 import { createImovelFolder, moveImovelFolder, uploadDocToFolder, uploadUserFileToFolder, uploadComprovativoToFolder, isConfigured as driveConfigured, downloadDriveFile, createInvestidorFolder, uploadDocumentoInvestidor, moverParaElementosApagados, ensureInvestidorFolderShared } from './driveSync.js'
 import { docEmbedeLocalizacao } from './pdfImovelDocs.js'
-import { listDocumentos, persistDocumento, streamPdfToResAndPersist, urlAssinadaDocumento } from './documentLifecycle.js'
+import { listDocumentos, persistDocumento, streamPdfToResAndPersist, urlAssinadaDocumento, apagarDocumentosDoImovel } from './documentLifecycle.js'
 import { ensureOportunidadesScraperTable } from './oportunidadesScraper.js'
 import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
 import { generateMeetingPDF } from './pdfMeetingReport.js'
@@ -270,7 +270,7 @@ function qualidadeImovel(estado) {
 // beforeUpdate(id, body) corre ANTES de crud.update — só aí ainda se tem o
 // registo no estado anterior sem ambiguidade. Se devolver { error }, a rota
 // responde 400 e não persiste nada.
-function crudRoutes(path, crud, { onCreate, onUpdate, beforeUpdate } = {}) {
+function crudRoutes(path, crud, { onCreate, onUpdate, beforeUpdate, onDelete } = {}) {
   router.get(path, async (req, res) => {
     try {
       const { limit = 100, offset = 0, sort, search, ...filter } = req.query
@@ -327,6 +327,7 @@ function crudRoutes(path, crud, { onCreate, onUpdate, beforeUpdate } = {}) {
     try {
       const ok = await crud.delete(req.params.id, { regiaoActiva: req.regiaoActiva })
       if (!ok) return res.status(404).json({ error: 'Não encontrado' })
+      if (onDelete) await onDelete(req.params.id).catch(e => console.error(`[hook] delete ${path}:`, e.message))
       res.json({ ok: true })
     } catch (e) { res.status(500).json({ error: e.message }) }
   })
@@ -390,6 +391,8 @@ async function autoCriarNegocioDeImovel(imovel, novoEstado) {
 // Em constante para a rota do follow-up correr os mesmos efeitos da mudança
 // de fase (pasta no Drive, documentos da fase) quando é ela a mover o imóvel.
 const HOOKS_IMOVEIS = {
+  // Apagar o imóvel apaga também os PDFs dele no Storage (20/10/2026).
+  onDelete: (id) => apagarDocumentosDoImovel(id),
   onCreate: async (item) => {
     if (driveConfigured()) {
       await createImovelFolder(item.id, item.nome || 'Sem nome', item.estado || 'Adicionado')

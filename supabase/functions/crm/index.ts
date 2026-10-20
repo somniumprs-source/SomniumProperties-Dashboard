@@ -26,7 +26,7 @@ import { getVisitasEnriquecidas, syncDataVisitaDerivada } from "../_shared/queri
 import {
   docEmbedeLocalizacao, generateCompiledReport,
 } from "../_shared/pdfImovelDocs.ts";
-import { persistDocumento, listDocumentos, urlAssinadaDocumento } from "../_shared/documentLifecycle.ts";
+import { persistDocumento, listDocumentos, urlAssinadaDocumento, apagarDocumentosDoImovel } from "../_shared/documentLifecycle.ts";
 import { generateImovelPDF } from "../_shared/pdfReport.ts";
 import { generateMeetingPDF } from "../_shared/pdfMeetingReport.ts";
 import { analyzeReuniao, autoFillConsultor, autoFillInvestidor } from "../_shared/meetingAnalysis.ts";
@@ -734,6 +734,8 @@ function crudRoutes(
     // Corre ANTES de crud.update — só aí ainda se tem o registo no estado
     // anterior sem ambiguidade. Se devolver { error }, a rota responde 400.
     beforeUpdate?: (id: string, body: any) => Promise<{ error: string; [k: string]: any } | null>;
+    // Corre DEPOIS de um delete bem-sucedido (limpeza de ficheiros associados).
+    onDelete?: (id: string) => Promise<unknown>;
   } = {},
 ) {
   const table = path.slice(1);
@@ -798,6 +800,7 @@ function crudRoutes(
     try {
       const ok = await crud.delete(c.req.param("id"), { regiaoActiva: c.get("regiaoActiva") });
       if (!ok) return c.json({ error: "Não encontrado" }, 404);
+      if (hooks.onDelete) await hooks.onDelete(c.req.param("id")).catch((e: any) => console.error(`[hook] delete ${path}:`, e.message));
       return c.json({ ok: true });
     } catch (e) { return c.json({ error: (e as Error).message }, 500); }
   });
@@ -887,6 +890,8 @@ app.use("/imoveis/*", async (c: any, next: any) => {
 // Em constante para a rota do follow-up correr os mesmos efeitos da mudança
 // de fase (pasta no Drive, documentos da fase) quando é ela a mover o imóvel.
 const HOOKS_IMOVEIS = {
+  // Apagar o imóvel apaga também os PDFs dele no Storage (20/10/2026).
+  onDelete: (id: string) => apagarDocumentosDoImovel(id),
   onCreate: async (item: any) => {
     if (driveConfigured()) {
       await createImovelFolder(item.id, item.nome || "Sem nome", item.estado || "Adicionado");

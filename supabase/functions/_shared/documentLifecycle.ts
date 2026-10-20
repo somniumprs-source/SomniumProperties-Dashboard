@@ -221,6 +221,26 @@ export async function onImovelCreated(imovel) {
   }
 }
 
+// Ao apagar um imóvel, apaga também os PDFs dele no bucket (decisão do João,
+// 20/10/2026 — os documentos de imóveis apagados ficavam para sempre no
+// Storage). Os registos em documentos_imovel já saem por ON DELETE CASCADE.
+// Só aceita um UUID: nunca pode apagar a raiz do bucket nem outra pasta.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export async function apagarDocumentosDoImovel(imovelId: string): Promise<number> {
+  if (!supabase || !UUID_RE.test(String(imovelId || ""))) return 0;
+  let apagados = 0;
+  for (const pasta of [String(imovelId), `imoveis/${imovelId}`]) {
+    const { data, error } = await supabase.storage.from(BUCKET).list(pasta, { limit: 1000 });
+    if (error || !data?.length) continue;
+    const caminhos = data.filter((f: any) => f.id).map((f: any) => `${pasta}/${f.name}`);
+    if (!caminhos.length) continue;
+    const r = await supabase.storage.from(BUCKET).remove(caminhos);
+    if (r.error) throw new Error(`apagar documentos do imóvel ${imovelId}: ${r.error.message}`);
+    apagados += caminhos.length;
+  }
+  return apagados;
+}
+
 export async function listDocumentos(imovelId) {
   const r = await pool.query(
     `SELECT id, tipo, version, pdf_path, pdf_size_bytes, frozen, trigger_event, generated_at
