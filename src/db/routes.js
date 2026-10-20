@@ -24,7 +24,7 @@ import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, Consul
 import pool from './pg.js'
 import { agendarPassoImovel, sincronizarTarefaVisita } from './agendaEngine.js'
 import { agendarFollowUpImovelManual, registarFollowUpFeito } from './followUpImovel.js'
-import { lerContactoPessoa, agendarContactoPessoa, registarContactoPessoa, editarNotaContacto, anotarPessoa, lerContactosDoImovel, juntarImovelAoContacto } from './contactoPessoa.js'
+import { lerContactoPessoa, agendarContactoPessoa, registarContactoPessoa, editarContacto, apagarContacto, anotarPessoa, lerContactosDoImovel, juntarImovelAoContacto } from './contactoPessoa.js'
 import { getVisitasEnriquecidas, syncDataVisitaDerivada, getFichaVisitaParaImovel } from './queries.js'
 import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
@@ -1692,7 +1692,6 @@ function derivarTipoChamada(out) {
   if (DC_SCORE_FIELDS.some(f => out[f] !== null)) return 'discovery_call'
   if (out.cc_resultado) return 'cold_call'
   if (out.pp_compromisso_confirmado !== null || out.pp_criterios_pesquisa_enviados !== null || out.pp_negocios_fechados !== null) return 'pivot_parceria'
-  if (out.fu_follow_up) return 'follow_up'
   return null
 }
 
@@ -1725,8 +1724,6 @@ function sanitizeRegistoManual(input, current = {}) {
   out.pp_criterios_pesquisa_enviados = toBool(pick('pp_criterios_pesquisa_enviados'))
   const ppNeg = toNum(pick('pp_negocios_fechados'))
   out.pp_negocios_fechados = ppNeg === null ? null : Math.round(ppNeg)
-
-  out.fu_follow_up = toBool(pick('fu_follow_up'))
 
   out.tipo_chamada = derivarTipoChamada(out)
 
@@ -1853,7 +1850,7 @@ router.post('/consultores/:id/gravacoes', uploadRateLimit, uploadAudio.single('a
          dc_notas_objetivo, dc_notas_motivo_real, dc_notas_dor_desafio, dc_notas_impacto, dc_notas_urgencia, dc_notas_tentativas_anteriores,
          dc_pontuacao_total, dc_onus_verificado, dc_direito_preferencia_esclarecido,
          cl_resultado, cl_valor_ancora, cl_valor_contraproposta, cl_deadline, cl_formalizado_escrito_mesmo_dia,
-         pp_compromisso_confirmado, pp_criterios_pesquisa_enviados, pp_negocios_fechados, fu_follow_up,
+         pp_compromisso_confirmado, pp_criterios_pesquisa_enviados, pp_negocios_fechados,
          created_at, updated_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,
          $10,$11,$12,$13,
@@ -1862,7 +1859,7 @@ router.post('/consultores/:id/gravacoes', uploadRateLimit, uploadAudio.single('a
          $24,$25,$26,$27,$28,$29,
          $30,$31,$32,
          $33,$34,$35,$36,$37,
-         $38,$39,$40,$42,
+         $38,$39,$40,
          $41,$41)
        RETURNING *`,
       [id, req.params.id, req.body.followup_id || null, req.body.imovel_id || null,
@@ -1874,7 +1871,7 @@ router.post('/consultores/:id/gravacoes', uploadRateLimit, uploadAudio.single('a
        registo.dc_pontuacao_total, registo.dc_onus_verificado, registo.dc_direito_preferencia_esclarecido,
        registo.cl_resultado, registo.cl_valor_ancora, registo.cl_valor_contraproposta, registo.cl_deadline, registo.cl_formalizado_escrito_mesmo_dia,
        registo.pp_compromisso_confirmado, registo.pp_criterios_pesquisa_enviados, registo.pp_negocios_fechados,
-       now, registo.fu_follow_up]
+       now]
     )
     res.json(row)
   } catch (e) { res.status(500).json({ error: e.message }) }
@@ -1893,8 +1890,6 @@ router.patch('/gravacoes/:id/registo', async (req, res) => {
     const registoFonte = req.body?.registo_fonte === 'ia_sugestao_confirmada' ? 'ia_sugestao_confirmada' : 'manual'
     // Corrigir a data da chamada (opcional): so aceita AAAA-MM-DD.
     const dataChamada = /^\d{4}-\d{2}-\d{2}$/.test(req.body?.data_chamada || '') ? req.body.data_chamada : null
-    // Imovel falado na chamada: so muda se vier no payload ('' = desassociar).
-    const mudaImovel = Object.prototype.hasOwnProperty.call(req.body || {}, 'imovel_id')
 
     const { rows: [row] } = await pool.query(
       `UPDATE consultor_gravacoes SET
@@ -1905,8 +1900,6 @@ router.patch('/gravacoes/:id/registo', async (req, res) => {
         dc_pontuacao_total = $22, dc_onus_verificado = $23, dc_direito_preferencia_esclarecido = $24,
         cl_resultado = $25, cl_valor_ancora = $26, cl_valor_contraproposta = $27, cl_deadline = $28, cl_formalizado_escrito_mesmo_dia = $29,
         pp_compromisso_confirmado = $30, pp_criterios_pesquisa_enviados = $31, pp_negocios_fechados = $32,
-        fu_follow_up = $35,
-        imovel_id = CASE WHEN $36::boolean THEN $37 ELSE imovel_id END,
         updated_at = $33,
         data_chamada = COALESCE($34, data_chamada),
         titulo = CASE WHEN $34::text IS NOT NULL AND titulo LIKE 'Chamada — %' THEN 'Chamada — ' || $34::text ELSE titulo END
@@ -1918,7 +1911,7 @@ router.patch('/gravacoes/:id/registo', async (req, res) => {
        registo.dc_pontuacao_total, registo.dc_onus_verificado, registo.dc_direito_preferencia_esclarecido,
        registo.cl_resultado, registo.cl_valor_ancora, registo.cl_valor_contraproposta, registo.cl_deadline, registo.cl_formalizado_escrito_mesmo_dia,
        registo.pp_compromisso_confirmado, registo.pp_criterios_pesquisa_enviados, registo.pp_negocios_fechados,
-       now, dataChamada, registo.fu_follow_up, mudaImovel, mudaImovel ? (req.body.imovel_id || null) : null]
+       now, dataChamada]
     )
 
     res.json(row)
@@ -1929,8 +1922,7 @@ router.patch('/gravacoes/:id/registo', async (req, res) => {
 router.get('/consultores/:id/gravacoes', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT g.*, i.nome AS imovel_nome FROM consultor_gravacoes g LEFT JOIN imoveis i ON i.id = g.imovel_id
-       WHERE g.consultor_id = $1 ORDER BY g.data_chamada DESC, g.created_at DESC`,
+      `SELECT * FROM consultor_gravacoes WHERE consultor_id = $1 ORDER BY data_chamada DESC, created_at DESC`,
       [req.params.id]
     )
     res.json(rows)
@@ -2375,7 +2367,14 @@ for (const [rota, tipo] of [['consultores', 'consultor'], ['investidores', 'inve
   })
   router.put(`/${rota}/:id/contacto/historico/:hid`, async (req, res) => {
     try {
-      const ok = await editarNotaContacto(pool, tipo, req.params.id, req.params.hid, req.body?.notas)
+      const ok = await editarContacto(pool, tipo, req.params.id, req.params.hid, req.body || {})
+      if (!ok) return res.status(404).json({ error: 'Não encontrado' })
+      res.json({ ok: true })
+    } catch (e) { res.status(400).json({ error: e.message }) }
+  })
+  router.delete(`/${rota}/:id/contacto/historico/:hid`, async (req, res) => {
+    try {
+      const ok = await apagarContacto(pool, tipo, req.params.id, req.params.hid)
       if (!ok) return res.status(404).json({ error: 'Não encontrado' })
       res.json({ ok: true })
     } catch (e) { res.status(400).json({ error: e.message }) }

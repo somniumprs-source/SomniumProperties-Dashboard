@@ -1,7 +1,7 @@
 /**
  * Campos do registo manual de uma chamada (SOP 2) — reutilizado no formulário
  * de criação (RegistoChamadasTab) e na edição inline (GravacaoCard). Mostra
- * sempre os blocos juntos (Follow up/Cold/Discovery/Close/Pivot), sem obrigar a
+ * sempre os quatro blocos juntos (Cold/Discovery/Close/Pivot), sem obrigar a
  * escolher um tipo primeiro: na prática a mesma chamada cobre várias fases
  * seguidas (cold call que passa logo a discovery, por exemplo), por isso o
  * utilizador só preenche os campos que se aplicaram a esta chamada em
@@ -78,11 +78,6 @@ export function RegistoManualFieldset({ registo, onChange }) {
 
   return (
     <div className="space-y-2">
-      <Bloco titulo="Follow up">
-        <CheckboxField label="Follow up ao consultor" checked={registo.fu_follow_up === true}
-          onChange={v => onChange('fu_follow_up', v || null)} />
-      </Bloco>
-
       <Bloco titulo="Cold Call">
         <div className="space-y-1.5">
           <PillField label="Disponibilidade confirmada" value={registo.cc_disponibilidade} options={CC_DISPONIBILIDADE} labels={CC_DISPONIBILIDADE_LABEL}

@@ -23,6 +23,8 @@ export const RESULTADOS_CONTACTO = ['Feito', 'Sem sucesso']
 
 // Tipo do contacto: decide a categoria e o título da tarefa na Agenda.
 export const TIPOS_CONTACTO = { cold_call: 'Cold Call', discovery_call: 'Discovery Call', follow_up: 'Follow-up' }
+// Quem tem finalidade (Discovery / Follow Up) no contacto feito.
+const COM_FINALIDADE = ['consultor', 'investidor']
 
 // espelho: campo de data da pessoa que as listas e os dashboards já leem.
 // fasesFollowUp: só nessas fases o contacto se chama "Follow-up".
@@ -149,7 +151,7 @@ export async function lerContactoPessoa(pool, tipo, id) {
   const t = await tarefaAberta(pool, tipo, id)
   const { rows: feitos } = await pool.query(
     `SELECT x.id, x.data_hora AS quando, x.canal, x.notas, x.resultado, x.proxima_data, x.autor,
-            ${tipo === 'consultor' ? 'x.imovel_id AS imovel_antigo_id, i.nome AS imovel_antigo_nome' : `NULL AS imovel_antigo_id, NULL AS imovel_antigo_nome, ${tipo === 'investidor' ? 'x.finalidade' : 'NULL AS finalidade'}`}
+            ${tipo === 'consultor' ? 'x.imovel_id AS imovel_antigo_id, i.nome AS imovel_antigo_nome, x.finalidade' : `NULL AS imovel_antigo_id, NULL AS imovel_antigo_nome, ${tipo === 'investidor' ? 'x.finalidade' : 'NULL AS finalidade'}`}
      FROM ${cfg.interacoes} x ${tipo === 'consultor' ? 'LEFT JOIN imoveis i ON i.id = x.imovel_id' : ''}
      WHERE x.${cfg.fk} = $1 ORDER BY x.data_hora DESC LIMIT 100`,
     [id]
@@ -271,7 +273,7 @@ async function registarContactoPessoaTx(pool, tipo, id, {
   const agora = new Date().toISOString()
   const cols = ['id', cfg.fk, 'data_hora', 'canal', 'direcao', 'notas', 'resultado', 'proxima_data', 'autor', 'created_at', 'updated_at']
   const vals = [interacaoId, id, feitoEm, canal, 'Enviado', (notas || '').trim() || null, resultado, proximo?.data || null, user?.nome || user?.email || null, agora, agora]
-  if (tipo === 'investidor') { cols.push('finalidade'); vals.push(finalidade === 'discovery' ? 'discovery' : 'follow_up') }
+  if (COM_FINALIDADE.includes(tipo)) { cols.push('finalidade'); vals.push(finalidade === 'discovery' ? 'discovery' : 'follow_up') }
   await pool.query(`INSERT INTO ${cfg.interacoes} (${cols.join(', ')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(', ')})`, vals)
 
   if (idsTratados.length) {
@@ -313,22 +315,78 @@ export async function anotarPessoa(pool, tipo, id, { notas, quando = null, user 
   return nid
 }
 
-// ── Corrigir a nota de um contacto do histórico ─────────────
+// ── Corrigir um contacto do histórico ───────────────────────
 // hid: id da interação, ou "followup:<id>" nos registos antigos do consultor.
-// Só muda o texto: a data do contacto (e por isso a ordem) mantém-se.
-export async function editarNotaContacto(pool, tipo, id, hid, notas) {
+// campos (só os presentes mudam): notas, quando (instante ou dia), canal,
+// finalidade ('follow_up' | 'discovery') e imoveis (lista completa de ids dos
+// imóveis falados; substitui a que lá está, os assuntos de texto mantêm-se).
+export async function editarContacto(poolOuCx, tipo, id, hid, campos = {}) {
+  return emTransacao(poolOuCx, pool => editarContactoTx(pool, tipo, id, hid, campos))
+}
+
+async function editarContactoTx(pool, tipo, id, hid, campos = {}) {
   const cfg = PESSOAS[tipo]
   if (!cfg) return false
-  const texto = String(notas ?? '').trim() || null
+  const tem = k => Object.prototype.hasOwnProperty.call(campos, k)
   const agora = new Date().toISOString()
+  let quando = null
+  if (tem('quando')) {
+    if (!campos.quando || isNaN(new Date(campos.quando).getTime())) throw new Error('Data do contacto inválida')
+    quando = new Date(campos.quando).toISOString()
+  }
+  if (tem('canal') && campos.canal !== 'Nota' && !CANAIS_CONTACTO.includes(campos.canal)) throw new Error('Canal inválido')
+  const imoveis = tem('imoveis') && Array.isArray(campos.imoveis) ? [...new Set(campos.imoveis.filter(Boolean))] : null
+
   const antigo = String(hid || '').match(/^followup:(.+)$/)
   if (antigo) {
     if (tipo !== 'consultor') return false
-    const r = await pool.query('UPDATE consultor_followups SET motivo = $1, updated_at = $2 WHERE id = $3 AND consultor_id = $4', [texto, agora, antigo[1], id])
+    const sets = ['updated_at = $1']
+    const vals = [agora]
+    if (tem('notas')) { vals.push(String(campos.notas ?? '').trim() || null); sets.push(`motivo = $${vals.length}`) }
+    if (quando) { vals.push(quando.slice(0, 10)); sets.push(`data = $${vals.length}`) }
+    if (imoveis) { vals.push(imoveis[0] || null); sets.push(`imovel_id = $${vals.length}`) }
+    vals.push(antigo[1], id)
+    const r = await pool.query(`UPDATE consultor_followups SET ${sets.join(', ')} WHERE id = $${vals.length - 1} AND consultor_id = $${vals.length}`, vals)
     return r.rowCount > 0
   }
-  const r = await pool.query(`UPDATE ${cfg.interacoes} SET notas = $1, updated_at = $2 WHERE id = $3 AND ${cfg.fk} = $4`, [texto, agora, hid, id])
-  return r.rowCount > 0
+
+  const sets = ['updated_at = $1']
+  const vals = [agora]
+  if (tem('notas')) { vals.push(String(campos.notas ?? '').trim() || null); sets.push(`notas = $${vals.length}`) }
+  if (quando) { vals.push(quando); sets.push(`data_hora = $${vals.length}`) }
+  if (tem('canal')) { vals.push(campos.canal); sets.push(`canal = $${vals.length}`) }
+  if (tem('finalidade') && COM_FINALIDADE.includes(tipo)) {
+    vals.push(campos.finalidade === 'discovery' ? 'discovery' : 'follow_up'); sets.push(`finalidade = $${vals.length}`)
+  }
+  // O imóvel único das interações antigas passa para os assuntos.
+  if (imoveis && tipo === 'consultor') sets.push('imovel_id = NULL')
+  vals.push(hid, id)
+  const r = await pool.query(`UPDATE ${cfg.interacoes} SET ${sets.join(', ')} WHERE id = $${vals.length - 1} AND ${cfg.fk} = $${vals.length}`, vals)
+  if (!r.rowCount) return false
+  if (imoveis) {
+    await pool.query('DELETE FROM contacto_assuntos WHERE origem = $1 AND origem_id = $2 AND imovel_id IS NOT NULL', [cfg.origem, hid])
+    await juntarAssuntos(pool, cfg.origem, hid, imoveis.map(imovel_id => ({ imovel_id })))
+  }
+  return true
+}
+
+// ── Apagar um contacto do histórico (registo feito por engano) ──
+// Leva com ele os assuntos que lhe estavam ligados; não mexe no próximo contacto.
+export async function apagarContacto(poolOuCx, tipo, id, hid) {
+  return emTransacao(poolOuCx, async pool => {
+    const cfg = PESSOAS[tipo]
+    if (!cfg) return false
+    const antigo = String(hid || '').match(/^followup:(.+)$/)
+    if (antigo) {
+      if (tipo !== 'consultor') return false
+      const r = await pool.query('DELETE FROM consultor_followups WHERE id = $1 AND consultor_id = $2', [antigo[1], id])
+      return r.rowCount > 0
+    }
+    const r = await pool.query(`DELETE FROM ${cfg.interacoes} WHERE id = $1 AND ${cfg.fk} = $2`, [hid, id])
+    if (!r.rowCount) return false
+    await pool.query('DELETE FROM contacto_assuntos WHERE origem = $1 AND origem_id = $2', [cfg.origem, hid])
+    return true
+  })
 }
 
 // ── Lado do imóvel ───────────────────────────────────────────

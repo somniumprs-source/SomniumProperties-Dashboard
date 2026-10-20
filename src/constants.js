@@ -236,10 +236,9 @@ export function fmtDateRelative(iso) {
 }
 
 // ── SOP 2 — Avaliação de Calls (Cold/Discovery/Close Call + Pivot Parceria) ──
-export const TIPOS_CHAMADA = ['follow_up', 'cold_call', 'discovery_call', 'close_call', 'pivot_parceria']
+export const TIPOS_CHAMADA = ['cold_call', 'discovery_call', 'close_call', 'pivot_parceria']
 
 export const TIPO_CHAMADA_LABEL = {
-  follow_up: 'Follow up',
   cold_call: 'Cold Call',
   discovery_call: 'Discovery Call',
   close_call: 'Close Call',
@@ -247,7 +246,6 @@ export const TIPO_CHAMADA_LABEL = {
 }
 
 export const TIPO_CHAMADA_COLOR = {
-  follow_up: 'bg-blue-100 text-blue-700',
   cold_call: 'bg-gray-100 text-gray-600',
   discovery_call: 'bg-yellow-100 text-yellow-700',
   close_call: 'bg-gray-800 text-white',
@@ -300,7 +298,6 @@ export const CL_RESULTADO_COLOR = {
 // Rótulo humano de cada coluna do registo manual (usado na sugestão da IA e em
 // qualquer listagem genérica dos campos SOP2).
 export const REGISTO_FIELD_LABEL = {
-  fu_follow_up: 'Follow up ao consultor',
   cc_resultado: 'Resultado', cc_aceita_negociar: 'Aceita negociar',
   cc_disponibilidade: 'Disponibilidade confirmada', cc_documentacao: 'Documentação (caderneta e planta)',
   dc_score_objetivo: 'Objetivo', dc_score_motivo_real: 'Motivo Real', dc_score_dor_desafio: 'Dor / Desafio',
@@ -332,7 +329,6 @@ export function fmtRegistoValor(key, v) {
 
 // Campos manuais (colunas do registo) por tipo de chamada, na ordem a mostrar.
 export const CAMPOS_POR_TIPO = {
-  follow_up: ['fu_follow_up'],
   cold_call: ['cc_disponibilidade', 'cc_documentacao', 'cc_resultado', 'cc_aceita_negociar'],
   discovery_call: ['dc_onus_verificado', 'dc_direito_preferencia_esclarecido'],
   close_call: ['cl_resultado', 'cl_valor_ancora', 'cl_valor_contraproposta', 'cl_deadline', 'cl_formalizado_escrito_mesmo_dia'],
@@ -352,7 +348,6 @@ export function temPivot(g) {
 // Fases cobertas por uma chamada (para mostrar 1+ badges por linha).
 export function estagiosCobertos(g) {
   const out = []
-  if (g.fu_follow_up) out.push('follow_up')
   if (g.cc_resultado) out.push('cold_call')
   if (temDiscovery(g)) out.push('discovery_call')
   if (g.cl_resultado) out.push('close_call')
@@ -368,6 +363,5 @@ export function resultadoResumo(g) {
   if (g.dc_pontuacao_total != null) partes.push(`${g.dc_pontuacao_total}/12`)
   if (g.cl_resultado) partes.push(CL_RESULTADO_LABEL[g.cl_resultado] || g.cl_resultado)
   if (g.pp_compromisso_confirmado) partes.push('Compromisso confirmado')
-  if (!partes.length && g.fu_follow_up) partes.push('Follow up feito')
   return partes.length ? partes.join(' · ') : '—'
 }

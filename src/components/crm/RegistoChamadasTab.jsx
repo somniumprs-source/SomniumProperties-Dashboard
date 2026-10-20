@@ -2,7 +2,7 @@
  * Registo de Chamada (SOP 2) — separador próprio na ficha do consultor, ao
  * lado de "Ficha do consultor". Tabela para preenchimento rápido: uma linha
  * por chamada, com data + todas as métricas disponíveis (Cold Call, Discovery
- * Call, Close Call, Pivot para Parceria, Follow up) juntas no mesmo formulário — a mesma
+ * Call, Close Call, Pivot para Parceria) juntas no mesmo formulário — a mesma
  * chamada cobre muitas vezes várias fases seguidas (cold call que passa logo
  * a discovery, por exemplo), por isso não se obriga a escolher um tipo à
  * partida: o utilizador preenche só os campos que se aplicaram. Não depende
@@ -10,7 +10,7 @@
  * agregada destes dados fica na aba "Avaliação de Calls" dentro de
  * Administração.
  */
-import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
 import { Plus, Trash2, Pencil, Check, Loader2, Phone } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
@@ -23,7 +23,6 @@ import {
 } from '../../constants.js'
 import { confirmar } from '../ui/ConfirmDialog.jsx'
 import { dotClass } from '../../lib/statusTone.js'
-import { Combobox } from '../ui/Combobox.jsx'
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
 const REGISTO_KEYS = Object.keys(REGISTO_FIELD_LABEL)
@@ -39,25 +38,6 @@ function EstagiosBadges({ g }) {
           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(TIPO_CHAMADA_COLOR[e])}`} aria-hidden="true" />{TIPO_CHAMADA_LABEL[e]}
         </span>
       ))}
-    </div>
-  )
-}
-
-// Imóvel falado na chamada (opcional) — pesquisa por nome em todos os imóveis.
-function ImovelField({ imoveis, value, onChange }) {
-  const nomes = useMemo(() => imoveis.map(i => i.nome), [imoveis])
-  const atual = imoveis.find(i => i.id === value)?.nome || ''
-  return (
-    <div>
-      <label className="block text-xs text-ink-muted mb-1">Imóvel falado (opcional)</label>
-      <div className="flex gap-2 items-center">
-        <Combobox value={atual} options={nomes} allowFree={false} placeholder="Pesquisar imóvel…" className="flex-1"
-          onChange={nome => onChange(imoveis.find(i => i.nome === nome)?.id || '')} />
-        {value && (
-          <button type="button" onClick={() => onChange('')}
-            className="px-2 py-1 text-xs rounded-md text-ink-muted hover:text-ink hover:bg-surface-muted">Limpar</button>
-        )}
-      </div>
     </div>
   )
 }
@@ -92,13 +72,10 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
   const [saving, setSaving] = useState(false)
   const [novaData, setNovaData] = useState(todayISO())
   const [novoRegisto, setNovoRegisto] = useState({})
-  const [novoImovel, setNovoImovel] = useState('')
-  const [imoveis, setImoveis] = useState([])
   const [expandedId, setExpandedId] = useState(null)
   const [editId, setEditId] = useState(null)
   const [editRegisto, setEditRegisto] = useState(null)
   const [editData, setEditData] = useState('')
-  const [editImovel, setEditImovel] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -112,15 +89,6 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
 
   useEffect(() => { if (consultorId) load() }, [consultorId, load])
 
-  useEffect(() => {
-    apiFetch('/api/crm/imoveis?limit=5000')
-      .then(r => r.json())
-      .then(d => setImoveis((d.data || []).filter(i => i.nome).sort((a, b) => a.nome.localeCompare(b.nome, 'pt'))))
-      .catch(() => setImoveis([]))
-  }, [])
-
-  const nomeImovel = id => imoveis.find(i => i.id === id)?.nome || null
-
   async function adicionar() {
     if (!novaData || !registoPreenchido(novoRegisto)) return
     setSaving(true)
@@ -128,7 +96,6 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
       const fd = new FormData()
       fd.append('data_chamada', novaData)
       fd.append('titulo', `Chamada — ${novaData}`)
-      if (novoImovel) fd.append('imovel_id', novoImovel)
       for (const k of REGISTO_KEYS) {
         const v = novoRegisto[k]
         if (v === undefined || v === null || v === '') continue
@@ -137,10 +104,9 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
       const r = await apiFetch(`/api/crm/consultores/${consultorId}/gravacoes`, { method: 'POST', body: fd })
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || 'Falha ao registar chamada')
-      setChamadas(p => [{ ...data, imovel_nome: nomeImovel(data.imovel_id) }, ...p])
+      setChamadas(p => [data, ...p])
       setNovaData(todayISO())
       setNovoRegisto({})
-      setNovoImovel('')
       setAdding(false)
       onUpdate?.()
     } catch (err) { toast(friendlyError(err.message || 'Falha ao registar chamada'), 'error') }
@@ -151,7 +117,6 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
     setEditId(g.id)
     setEditRegisto(Object.fromEntries(REGISTO_KEYS.map(k => [k, g[k]])))
     setEditData((g.data_chamada || '').slice(0, 10))
-    setEditImovel(g.imovel_id || '')
     setExpandedId(g.id)
   }
 
@@ -163,11 +128,11 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
       const r = await apiFetch(`/api/crm/gravacoes/${id}/registo`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...editRegisto, data_chamada: editData, imovel_id: editImovel, registo_fonte: 'manual' }),
+        body: JSON.stringify({ ...editRegisto, data_chamada: editData, registo_fonte: 'manual' }),
       })
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || 'Falha ao guardar registo')
-      setChamadas(p => p.map(g => g.id === id ? { ...data, imovel_nome: nomeImovel(data.imovel_id) } : g)
+      setChamadas(p => p.map(g => g.id === id ? data : g)
         .sort((a, b) => String(b.data_chamada).localeCompare(String(a.data_chamada))))
       setEditId(null)
       onUpdate?.()
@@ -203,12 +168,9 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
 
       {adding && (
         <div className="bg-surface rounded-xl p-3 space-y-3 border border-line">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-ink-muted mb-1">Data da chamada</label>
-              <input type="date" value={novaData} onChange={e => setNovaData(e.target.value)} className={inputClass} />
-            </div>
-            <ImovelField imoveis={imoveis} value={novoImovel} onChange={setNovoImovel} />
+          <div className="sm:w-1/2">
+            <label className="block text-xs text-ink-muted mb-1">Data da chamada</label>
+            <input type="date" value={novaData} onChange={e => setNovaData(e.target.value)} className={inputClass} />
           </div>
 
           <RegistoManualFieldset registo={novoRegisto} onChange={(k, v) => setNovoRegisto(p => ({ ...p, [k]: v }))} />
@@ -219,7 +181,7 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
               {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               {saving ? 'A registar...' : 'Registar'}
             </button>
-            <button type="button" onClick={() => { setAdding(false); setNovoRegisto({}); setNovoImovel('') }}
+            <button type="button" onClick={() => { setAdding(false); setNovoRegisto({}) }}
               className="px-4 py-2 bg-surface-muted text-ink-muted text-xs font-medium rounded-lg hover:bg-line">
               Cancelar
             </button>
@@ -240,7 +202,6 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
               <tr className="bg-surface text-left text-[10px] uppercase tracking-wide text-ink-muted">
                 <th className="px-3 py-2 font-semibold">Data</th>
                 <th className="px-3 py-2 font-semibold">Fases cobertas</th>
-                <th className="px-3 py-2 font-semibold">Imóvel</th>
                 <th className="px-3 py-2 font-semibold">Resultado</th>
                 <th className="px-3 py-2 font-semibold w-20">Ações</th>
               </tr>
@@ -252,7 +213,6 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
                     onClick={() => setExpandedId(p => p === g.id ? null : g.id)}>
                     <td className="px-3 py-2.5 text-ink-muted whitespace-nowrap">{fmtDate(g.data_chamada)}</td>
                     <td className="px-3 py-2.5"><EstagiosBadges g={g} /></td>
-                    <td className="px-3 py-2.5 text-ink-muted">{g.imovel_nome || nomeImovel(g.imovel_id) || '—'}</td>
                     <td className="px-3 py-2.5 text-ink">{resultadoResumo(g)}</td>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-1">
@@ -269,15 +229,12 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
                   </tr>
                   {expandedId === g.id && (
                     <tr className="border-t border-line bg-surface/60">
-                      <td colSpan={5} className="px-3 py-3">
+                      <td colSpan={4} className="px-3 py-3">
                         {editId === g.id ? (
                           <div className="space-y-2">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div>
-                                <label className="block text-xs text-ink-muted mb-1">Data da chamada</label>
-                                <input type="date" value={editData} onChange={e => setEditData(e.target.value)} className={inputClass} />
-                              </div>
-                              <ImovelField imoveis={imoveis} value={editImovel} onChange={setEditImovel} />
+                            <div className="sm:w-1/2">
+                              <label className="block text-xs text-ink-muted mb-1">Data da chamada</label>
+                              <input type="date" value={editData} onChange={e => setEditData(e.target.value)} className={inputClass} />
                             </div>
                             <RegistoManualFieldset registo={editRegisto}
                               onChange={(k, v) => setEditRegisto(p => ({ ...p, [k]: v }))} />

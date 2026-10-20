@@ -88,7 +88,7 @@ import { carregarChecklist, gravarManual } from "../_shared/checklistImovel.ts";
 import { agendarPassoImovel, sincronizarTarefaVisita } from "../_shared/agendaEngine.ts";
 import { agendarFollowUpImovelManual, registarFollowUpFeito } from "../_shared/followUpImovel.ts";
 import { faseAoAgendarFollowUp, CHAMADAS_IMOVEL, chamadaSugerida } from "../_shared/pipelineImoveis.ts";
-import { lerContactoPessoa, agendarContactoPessoa, registarContactoPessoa, editarNotaContacto, anotarPessoa, lerContactosDoImovel, juntarImovelAoContacto } from "../_shared/contactoPessoa.ts";
+import { lerContactoPessoa, agendarContactoPessoa, registarContactoPessoa, editarContacto, apagarContacto, anotarPessoa, lerContactosDoImovel, juntarImovelAoContacto } from "../_shared/contactoPessoa.ts";
 import { createClient } from "@supabase/supabase-js";
 import { Buffer } from "node:buffer";
 
@@ -2280,7 +2280,6 @@ async function ensureGravacoesTable() {
     ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS pp_compromisso_confirmado BOOLEAN;
     ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS pp_criterios_pesquisa_enviados BOOLEAN;
     ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS pp_negocios_fechados INTEGER;
-    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS fu_follow_up BOOLEAN;
     CREATE INDEX IF NOT EXISTS idx_gravacoes_tipo_chamada ON consultor_gravacoes(tipo_chamada);
     CREATE INDEX IF NOT EXISTS idx_gravacoes_data_chamada ON consultor_gravacoes(data_chamada);
   `);
@@ -2302,7 +2301,6 @@ const REGISTO_MANUAL_KEYS = [
   "dc_onus_verificado", "dc_direito_preferencia_esclarecido",
   "cl_resultado", "cl_valor_ancora", "cl_valor_contraproposta", "cl_deadline", "cl_formalizado_escrito_mesmo_dia",
   "pp_compromisso_confirmado", "pp_criterios_pesquisa_enviados", "pp_negocios_fechados",
-  "fu_follow_up",
 ];
 
 function clampScore(v: any): number | null {
@@ -2331,7 +2329,6 @@ function derivarTipoChamada(out: Record<string, any>): string | null {
   if (DC_SCORE_FIELDS.some((f) => out[f] !== null)) return "discovery_call";
   if (out.cc_resultado) return "cold_call";
   if (out.pp_compromisso_confirmado !== null || out.pp_criterios_pesquisa_enviados !== null || out.pp_negocios_fechados !== null) return "pivot_parceria";
-  if (out.fu_follow_up) return "follow_up";
   return null;
 }
 
@@ -2364,8 +2361,6 @@ function sanitizeRegistoManual(input: Record<string, any>, current: Record<strin
   out.pp_criterios_pesquisa_enviados = toBool(pick("pp_criterios_pesquisa_enviados"));
   const ppNeg = toNum(pick("pp_negocios_fechados"));
   out.pp_negocios_fechados = ppNeg === null ? null : Math.round(ppNeg);
-
-  out.fu_follow_up = toBool(pick("fu_follow_up"));
 
   out.tipo_chamada = derivarTipoChamada(out);
 
@@ -2501,7 +2496,7 @@ app.post("/consultores/:id/gravacoes", async (c: any) => {
          dc_notas_objetivo, dc_notas_motivo_real, dc_notas_dor_desafio, dc_notas_impacto, dc_notas_urgencia, dc_notas_tentativas_anteriores,
          dc_pontuacao_total, dc_onus_verificado, dc_direito_preferencia_esclarecido,
          cl_resultado, cl_valor_ancora, cl_valor_contraproposta, cl_deadline, cl_formalizado_escrito_mesmo_dia,
-         pp_compromisso_confirmado, pp_criterios_pesquisa_enviados, pp_negocios_fechados, fu_follow_up,
+         pp_compromisso_confirmado, pp_criterios_pesquisa_enviados, pp_negocios_fechados,
          created_at, updated_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,
          $10,$11,$12,$13,
@@ -2510,7 +2505,7 @@ app.post("/consultores/:id/gravacoes", async (c: any) => {
          $24,$25,$26,$27,$28,$29,
          $30,$31,$32,
          $33,$34,$35,$36,$37,
-         $38,$39,$40,$42,
+         $38,$39,$40,
          $41,$41)
        RETURNING *`,
       [id, consultorId, followupId, imovelId, titulo, dataChamada, storagePath, file?.name || null, estado,
@@ -2521,7 +2516,7 @@ app.post("/consultores/:id/gravacoes", async (c: any) => {
        registo.dc_pontuacao_total, registo.dc_onus_verificado, registo.dc_direito_preferencia_esclarecido,
        registo.cl_resultado, registo.cl_valor_ancora, registo.cl_valor_contraproposta, registo.cl_deadline, registo.cl_formalizado_escrito_mesmo_dia,
        registo.pp_compromisso_confirmado, registo.pp_criterios_pesquisa_enviados, registo.pp_negocios_fechados,
-       now, registo.fu_follow_up],
+       now],
     );
     return c.json(row);
   } catch (e) {
@@ -2546,8 +2541,6 @@ app.patch("/gravacoes/:id/registo", async (c: any) => {
     const registoFonte = body?.registo_fonte === "ia_sugestao_confirmada" ? "ia_sugestao_confirmada" : "manual";
     // Corrigir a data da chamada (opcional): so aceita AAAA-MM-DD.
     const dataChamada = /^\d{4}-\d{2}-\d{2}$/.test(body?.data_chamada || "") ? body.data_chamada : null;
-    // Imovel falado na chamada: so muda se vier no payload ("" = desassociar).
-    const mudaImovel = Object.prototype.hasOwnProperty.call(body || {}, "imovel_id");
 
     const { rows: [row] } = await pool.query(
       `UPDATE consultor_gravacoes SET
@@ -2558,8 +2551,6 @@ app.patch("/gravacoes/:id/registo", async (c: any) => {
         dc_pontuacao_total = $22, dc_onus_verificado = $23, dc_direito_preferencia_esclarecido = $24,
         cl_resultado = $25, cl_valor_ancora = $26, cl_valor_contraproposta = $27, cl_deadline = $28, cl_formalizado_escrito_mesmo_dia = $29,
         pp_compromisso_confirmado = $30, pp_criterios_pesquisa_enviados = $31, pp_negocios_fechados = $32,
-        fu_follow_up = $35,
-        imovel_id = CASE WHEN $36::boolean THEN $37 ELSE imovel_id END,
         updated_at = $33,
         data_chamada = COALESCE($34, data_chamada),
         titulo = CASE WHEN $34::text IS NOT NULL AND titulo LIKE 'Chamada — %' THEN 'Chamada — ' || $34::text ELSE titulo END
@@ -2571,7 +2562,7 @@ app.patch("/gravacoes/:id/registo", async (c: any) => {
        registo.dc_pontuacao_total, registo.dc_onus_verificado, registo.dc_direito_preferencia_esclarecido,
        registo.cl_resultado, registo.cl_valor_ancora, registo.cl_valor_contraproposta, registo.cl_deadline, registo.cl_formalizado_escrito_mesmo_dia,
        registo.pp_compromisso_confirmado, registo.pp_criterios_pesquisa_enviados, registo.pp_negocios_fechados,
-       now, dataChamada, registo.fu_follow_up, mudaImovel, mudaImovel ? (body.imovel_id || null) : null],
+       now, dataChamada],
     );
 
     return c.json(row);
@@ -2583,8 +2574,7 @@ app.get("/consultores/:id/gravacoes", async (c: any) => {
   try {
     await ensureGravacoesTable();
     const { rows } = await pool.query(
-      `SELECT g.*, i.nome AS imovel_nome FROM consultor_gravacoes g LEFT JOIN imoveis i ON i.id = g.imovel_id
-       WHERE g.consultor_id = $1 ORDER BY g.data_chamada DESC, g.created_at DESC`,
+      `SELECT * FROM consultor_gravacoes WHERE consultor_id = $1 ORDER BY data_chamada DESC, created_at DESC`,
       [c.req.param("id")],
     );
     return c.json(rows);
@@ -2950,7 +2940,14 @@ for (const [rota, tipo] of [["consultores", "consultor"], ["investidores", "inve
   app.put(`/${rota}/:id/contacto/historico/:hid`, async (c: any) => {
     try {
       const body = await c.req.json().catch(() => ({}));
-      const ok = await editarNotaContacto(pool, tipo, c.req.param("id"), c.req.param("hid"), body?.notas);
+      const ok = await editarContacto(pool, tipo, c.req.param("id"), c.req.param("hid"), body || {});
+      if (!ok) return c.json({ error: "Não encontrado" }, 404);
+      return c.json({ ok: true });
+    } catch (e) { return c.json({ error: (e as Error).message }, 400); }
+  });
+  app.delete(`/${rota}/:id/contacto/historico/:hid`, async (c: any) => {
+    try {
+      const ok = await apagarContacto(pool, tipo, c.req.param("id"), c.req.param("hid"));
       if (!ok) return c.json({ error: "Não encontrado" }, 404);
       return c.json({ ok: true });
     } catch (e) { return c.json({ error: (e as Error).message }, 400); }

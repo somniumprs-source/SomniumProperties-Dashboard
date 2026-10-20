@@ -536,6 +536,7 @@ export async function initSchema() {
         ALTER TABLE consultor_interacoes ADD COLUMN IF NOT EXISTS imovel_id TEXT;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
+      ALTER TABLE consultor_interacoes ADD COLUMN IF NOT EXISTS finalidade TEXT;
       CREATE INDEX IF NOT EXISTS idx_interacoes_consultor ON consultor_interacoes(consultor_id);
       CREATE INDEX IF NOT EXISTS idx_interacoes_data ON consultor_interacoes(data_hora DESC);
       CREATE INDEX IF NOT EXISTS idx_interacoes_imovel ON consultor_interacoes(imovel_id);
@@ -617,7 +618,6 @@ export async function initSchema() {
       -- e campos manuais estruturados por tipo. Campo manual e sempre a fonte de
       -- verdade — a IA so sugere dentro de analise (JSONB). Ver migration 0027.
       ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS tipo_chamada TEXT;
-      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS fu_follow_up BOOLEAN;
       ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS registo_fonte TEXT DEFAULT 'manual';
       ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS registo_confirmado_em TEXT;
       ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS registo_confirmado_por TEXT;

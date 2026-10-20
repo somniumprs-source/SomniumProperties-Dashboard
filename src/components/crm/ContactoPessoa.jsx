@@ -16,9 +16,10 @@
  */
 import { useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Phone, RefreshCw, Check, X, Mic, Upload, Plus, Pencil, MessageCircle, Mail, Users, StickyNote } from 'lucide-react'
+import { Phone, RefreshCw, Check, X, Mic, Upload, Plus, Pencil, Trash2, MessageCircle, Mail, Users, StickyNote } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
+import { confirmar } from '../ui/ConfirmDialog.jsx'
 import { useRefreshOnMutation } from '../../hooks/useRefreshOnMutation.js'
 import { inputClass, fmtQuando, fmtDia, emDias, agoraLocal, comHora } from './passosUtil.js'
 
@@ -28,7 +29,7 @@ const TIPOS = { cold_call: 'Cold Call', discovery_call: 'Discovery Call', follow
 const CANAIS = ['Chamada', 'WhatsApp', 'Email', 'Reunião']
 const btn = 'text-xs font-medium px-2 py-1 rounded-lg border border-line text-ink-muted hover:bg-surface'
 const nomeAssunto = a => a.imovel_nome || a.texto || 'Imóvel'
-const MOSTRAR = 12 // registos visíveis antes de «Ver mais antigos»
+const MOSTRAR = 2 // registos visíveis antes de «Ver histórico completo»
 const PREFIXO = /^\[[^\]]+\]\s*/ // etiqueta automática, ex.: «[REACTIVAÇÃO EMAIL]»
 const limpaNota = n => String(n || '').replace(PREFIXO, '')
 // Canal tal como foi gravado (registos antigos em minúsculas) → grafia única.
@@ -36,6 +37,14 @@ const CANAL = { chamada: 'Chamada', whatsapp: 'WhatsApp', email: 'Email', 'reuni
 const canalDe = h => (h.antigo || !h.canal ? 'Follow-up' : CANAL[String(h.canal).toLowerCase()] || h.canal)
 const COR = { Chamada: '#C9A84C', WhatsApp: '#16A34A', Email: '#2563EB', 'Reunião': '#7C3AED', Nota: '#8A857A', 'Follow-up': '#B08A2E' }
 const ICONE = { Chamada: Phone, WhatsApp: MessageCircle, Email: Mail, 'Reunião': Users, Nota: StickyNote, 'Follow-up': RefreshCw }
+const FINALIDADE = { follow_up: 'Follow Up', discovery: 'Discovery' }
+const COM_FINALIDADE = ['consultor', 'investidor'] // espelho de src/db/contactoPessoa.js
+// Instante → valor de <input type="datetime-local"> na hora local.
+const paraLocal = v => {
+  const d = new Date(v || '')
+  if (isNaN(d.getTime())) return agoraLocal()
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+}
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 
 // Título curto do registo: «Call <imóvel>», «Follow Up», «Nota»… O resto só ao abrir.
@@ -48,6 +57,7 @@ function tituloDe(h) {
     return `${canal} · ${t.charAt(0).toUpperCase()}${t.slice(1)}`
   }
   const imoveis = (h.assuntos || []).filter(a => a.imovel_id).map(nomeAssunto)
+  if (imoveis.length && FINALIDADE[h.finalidade] && (canal === 'Chamada' || canal === 'Follow-up')) return `${FINALIDADE[h.finalidade]} · ${imoveis.join(', ')}`
   if (imoveis.length) return `${canal === 'Chamada' || canal === 'Follow-up' ? 'Call' : canal} ${imoveis.join(', ')}`
   if (h.finalidade === 'discovery') return 'Discovery'
   return canal === 'Chamada' || canal === 'Follow-up' ? 'Follow Up' : canal
@@ -67,10 +77,10 @@ function dataDe(v) {
 
 // Um registo da linha cronológica em árvore. Fechado mostra só título e data;
 // ao clicar abre o detalhe, com a nota editável (o campo só aparece no lápis).
-function RegistoArvore({ h, lado, rota, pessoaId, onSaved }) {
+function RegistoArvore({ h, lado, tipo, rota, pessoaId, opcoes, onPedirOpcoes, onSaved }) {
   const [aberto, setAberto] = useState(false)
   const [editar, setEditar] = useState(false)
-  const [texto, setTexto] = useState('')
+  const [form, setForm] = useState(null)
   const [saving, setSaving] = useState(false)
   const [erro, setErro] = useState('')
   const canal = canalDe(h)
@@ -79,21 +89,55 @@ function RegistoArvore({ h, lado, rota, pessoaId, onSaved }) {
   const { dia, resto } = dataDe(h.quando)
   const prefixo = String(h.notas || '').match(PREFIXO)?.[0] || ''
   const dir = lado === 'dir'
+  const eNota = canal === 'Nota'
+  const url = `/api/crm/${rota}/${pessoaId}/contacto/historico/${encodeURIComponent(h.id)}`
 
-  function abrirEdicao() { setTexto(limpaNota(h.notas)); setErro(''); setEditar(true); setAberto(true) }
+  function abrirEdicao() {
+    onPedirOpcoes?.()
+    setForm({
+      quando: paraLocal(h.quando),
+      canal: h.antigo || !h.canal ? null : (CANAL[String(h.canal).toLowerCase()] || h.canal),
+      finalidade: h.finalidade || 'follow_up',
+      imoveis: (h.assuntos || []).filter(a => a.imovel_id).map(a => ({ imovel_id: a.imovel_id, imovel_nome: a.imovel_nome })),
+      notas: limpaNota(h.notas),
+    })
+    setErro(''); setEditar(true); setAberto(true)
+  }
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
   async function guardar() {
+    if (!form.quando) return setErro('Indica a data do contacto.')
     setSaving(true); setErro('')
     try {
-      const corpo = texto.trim() ? `${prefixo}${texto.trim()}` : ''
-      const r = await apiFetch(`/api/crm/${rota}/${pessoaId}/contacto/historico/${encodeURIComponent(h.id)}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notas: corpo }),
-      })
+      const corpo = {
+        notas: form.notas.trim() ? `${prefixo}${form.notas.trim()}` : '',
+        quando: new Date(form.quando).toISOString(),
+      }
+      if (!eNota) {
+        corpo.imoveis = form.imoveis.map(a => a.imovel_id)
+        if (form.canal) corpo.canal = form.canal
+        if (COM_FINALIDADE.includes(tipo) && !h.antigo) corpo.finalidade = form.finalidade
+      }
+      const r = await apiFetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) })
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao guardar')
       setEditar(false)
       onSaved?.()
     } catch (err) {
       setErro(err.message)
     } finally {
+      setSaving(false)
+    }
+  }
+
+  async function apagar() {
+    if (!(await confirmar(`Apagar este registo (${tituloDe(h)}, ${dia} ${resto})?`))) return
+    setSaving(true); setErro('')
+    try {
+      const r = await apiFetch(url, { method: 'DELETE' })
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao apagar')
+      onSaved?.()
+    } catch (err) {
+      setErro(err.message)
       setSaving(false)
     }
   }
@@ -127,9 +171,35 @@ function RegistoArvore({ h, lado, rota, pessoaId, onSaved }) {
             {h.assuntos?.some(a => !a.imovel_id) && (
               <p className="text-ink-muted">Assuntos: {h.assuntos.filter(a => !a.imovel_id).map(nomeAssunto).join(', ')}</p>
             )}
-            {editar ? (
-              <div className="grid gap-1">
-                <textarea rows={3} value={texto} onChange={e => setTexto(e.target.value)} autoFocus aria-label="Nota"
+            {editar && form ? (
+              <div className="grid gap-1.5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                  <label className="text-[11px] text-ink-muted">Quando
+                    <input type="datetime-local" value={form.quando} onChange={e => set('quando', e.target.value)} className={inputClass} />
+                  </label>
+                  {!eNota && form.canal && (
+                    <label className="text-[11px] text-ink-muted">Canal
+                      <select value={form.canal} onChange={e => set('canal', e.target.value)} className={inputClass}>
+                        {CANAIS.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </label>
+                  )}
+                  {!eNota && !h.antigo && COM_FINALIDADE.includes(tipo) && (
+                    <label className="text-[11px] text-ink-muted">Finalidade
+                      <select value={form.finalidade} onChange={e => set('finalidade', e.target.value)} className={inputClass}>
+                        <option value="follow_up">Follow Up</option>
+                        <option value="discovery">Discovery</option>
+                      </select>
+                    </label>
+                  )}
+                </div>
+                {!eNota && (
+                  <div>
+                    <p className="text-[11px] text-ink-muted mb-1">Imóveis falados</p>
+                    <AssuntosEditor itens={form.imoveis} setItens={v => set('imoveis', v.filter(a => a.imovel_id))} opcoes={opcoes} soImoveis />
+                  </div>
+                )}
+                <textarea rows={3} value={form.notas} onChange={e => set('notas', e.target.value)} aria-label="Nota"
                   onKeyDown={e => {
                     if (e.key === 'Escape') setEditar(false)
                     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); guardar() }
@@ -140,19 +210,23 @@ function RegistoArvore({ h, lado, rota, pessoaId, onSaved }) {
                   <button type="button" onClick={() => setEditar(false)} disabled={saving} className={btn}>Cancelar</button>
                   <button type="button" onClick={guardar} disabled={saving}
                     className="text-xs font-semibold px-2 py-1 rounded-lg disabled:opacity-50 bg-ink text-surface hover:opacity-90">
-                    {saving ? 'A guardar…' : 'Guardar nota'}
+                    {saving ? 'A guardar…' : 'Guardar'}
                   </button>
                 </div>
               </div>
-            ) : h.notas ? (
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-ink  whitespace-pre-line break-words min-w-0">{limpaNota(h.notas)}</p>
-                <button type="button" onClick={abrirEdicao} aria-label="Editar nota" title="Editar nota" className="shrink-0 text-ink-muted hover:text-warning">
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-              </div>
             ) : (
-              <button type="button" onClick={abrirEdicao} className="justify-self-start text-ink-muted hover:text-warning">+ nota</button>
+              <>
+                {h.notas && <p className="text-ink  whitespace-pre-line break-words min-w-0">{limpaNota(h.notas)}</p>}
+                {erro && <p className="text-danger">{erro}</p>}
+                <div className="flex justify-end gap-3">
+                  <button type="button" onClick={abrirEdicao} disabled={saving} className="inline-flex items-center gap-1 text-ink-muted hover:text-warning">
+                    <Pencil className="w-3.5 h-3.5" /> Editar
+                  </button>
+                  <button type="button" onClick={apagar} disabled={saving} className="inline-flex items-center gap-1 text-ink-muted hover:text-danger">
+                    <Trash2 className="w-3.5 h-3.5" /> Apagar
+                  </button>
+                </div>
+              </>
             )}
           </div>
         )}
@@ -199,7 +273,7 @@ function NotaForm({ rota, pessoaId, onCancel, onDone }) {
 }
 
 // Lista de assuntos em edição: imóveis (escolhidos da lista) e notas livres.
-function AssuntosEditor({ itens, setItens, opcoes }) {
+function AssuntosEditor({ itens, setItens, opcoes, soImoveis = false }) {
   const [texto, setTexto] = useState('')
   const usados = new Set(itens.map(a => a.imovel_id).filter(Boolean))
   const livres = (opcoes || []).filter(o => !usados.has(o.id))
@@ -218,15 +292,15 @@ function AssuntosEditor({ itens, setItens, opcoes }) {
           ))}
         </div>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+      <div className={`grid grid-cols-1 gap-1.5 ${soImoveis ? '' : 'sm:grid-cols-2'}`}>
         <select value="" className={inputClass} aria-label="Juntar imóvel como assunto"
           onChange={e => { const o = livres.find(x => x.id === e.target.value); if (o) setItens([...itens, { imovel_id: o.id, imovel_nome: o.nome }]) }}>
           <option value="">+ imóvel…</option>
           {livres.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
-        <input type="text" value={texto} onChange={e => setTexto(e.target.value)} onBlur={juntarTexto}
+        {!soImoveis && <input type="text" value={texto} onChange={e => setTexto(e.target.value)} onBlur={juntarTexto}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); juntarTexto() } }}
-          placeholder="+ outro assunto (Enter)" className={inputClass} aria-label="Juntar outro assunto" />
+          placeholder="+ outro assunto (Enter)" className={inputClass} aria-label="Juntar outro assunto" />}
       </div>
     </div>
   )
@@ -377,7 +451,7 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
                 {CANAIS.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </label>
-            {tipo === 'investidor' && (
+            {COM_FINALIDADE.includes(tipo) && (
               <label className="text-[11px] text-ink-muted">Finalidade
                 <select value={finalidade} onChange={e => setFinalidade(e.target.value)} className={inputClass}>
                   <option value="discovery">Discovery</option>
@@ -492,6 +566,7 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
 export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, onNavigate, onUpdate }) {
   const [modo, setModo] = useState(null) // 'agendar' | 'feito' | 'sem_sucesso' | 'novo' (contacto fora do marcado) | 'nota'
   const [verTodos, setVerTodos] = useState(false)
+  const [precisaOpcoes, setPrecisaOpcoes] = useState(false)
   const query = useQuery({
     queryKey: ['contacto-pessoa', tipo, pessoaId],
     queryFn: async () => {
@@ -501,7 +576,7 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
   })
   const todos = useQuery({
     queryKey: ['lookup-imoveis'],
-    enabled: !!modo && !(imoveis?.length > 0),
+    enabled: !!modo || precisaOpcoes,
     queryFn: async () => {
       const r = await apiFetch('/api/crm/lookup/imoveis')
       return r.ok ? r.json() : []
@@ -513,7 +588,10 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
   const { proximo, rotulo, tipo_sugerido: tipoSugerido } = d
   const etiqueta = proximo?.assuntos?.some(a => a.imovel_id) ? 'Follow-up' : TIPOS[proximo?.tipo] || rotulo
   const historico = Array.isArray(d.historico) ? d.historico : []
-  const opcoes = (imoveis?.length > 0 ? imoveis : Array.isArray(todos.data) ? todos.data : []).map(i => ({ id: i.id, nome: i.nome }))
+  // Imóveis da pessoa primeiro; a seguir todos os outros (pode falar-se de um imóvel que não é dela).
+  const proprios = (imoveis || []).map(i => ({ id: i.id, nome: i.nome }))
+  const idsProprios = new Set(proprios.map(i => i.id))
+  const opcoes = [...proprios, ...(Array.isArray(todos.data) ? todos.data : []).filter(i => !idsProprios.has(i.id)).map(i => ({ id: i.id, nome: i.nome }))]
   const atrasado = proximo?.quando && new Date(proximo.quando).getTime() < Date.now() - 86400000
   const Icon = etiqueta === 'Follow-up' ? RefreshCw : Phone
 
@@ -598,19 +676,20 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
       {historico.length > 0 && (
         <div className="mt-3">
           <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2">
-            <span className="text-[11px] uppercase tracking-wider text-ink-muted">Histórico · {historico.length}</span>
+            <span className="text-[11px] uppercase tracking-wider text-ink-muted">{verTodos || historico.length <= MOSTRAR ? `Histórico · ${historico.length}` : `Últimos ${MOSTRAR} contactos`}</span>
             <span className="text-[11px] text-ink-muted">Clica num registo para ver o detalhe</span>
           </div>
           {/* Linha cronológica em árvore: eixo ao centro (à esquerda no telemóvel), mais recente em cima. */}
           <ol className="relative grid gap-2.5 py-1 before:absolute before:top-0 before:bottom-0 before:w-0.5 before:rounded before:bg-line  before:left-[17px] sm:before:left-1/2 sm:before:-translate-x-1/2">
             {(verTodos ? historico : historico.slice(0, MOSTRAR)).map((h, i) => (
-              <RegistoArvore key={h.id} h={h} lado={i % 2 === 0 ? 'dir' : 'esq'} rota={ROTA[tipo]} pessoaId={pessoaId} onSaved={() => query.refetch()} />
+              <RegistoArvore key={h.id} h={h} lado={i % 2 === 0 ? 'dir' : 'esq'} tipo={tipo} rota={ROTA[tipo]} pessoaId={pessoaId}
+                opcoes={opcoes} onPedirOpcoes={() => setPrecisaOpcoes(true)} onSaved={() => { query.refetch(); onUpdate?.() }} />
             ))}
           </ol>
           {historico.length > MOSTRAR && (
             <div className="text-center mt-2">
               <button type="button" onClick={() => setVerTodos(v => !v)} className={btn}>
-                {verTodos ? 'Mostrar menos' : `Ver mais antigos (${historico.length - MOSTRAR})`}
+                {verTodos ? 'Mostrar só os últimos' : `Ver histórico completo (${historico.length})`}
               </button>
             </div>
           )}
