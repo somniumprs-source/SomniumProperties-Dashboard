@@ -241,6 +241,42 @@ export async function apagarDocumentosDoImovel(imovelId: string): Promise<number
   return apagados;
 }
 
+// Ao apagar um imóvel, apaga também as fotos dele no bucket Imoveis (decisão
+// do João, 20/10/2026): imoveis/<id>/*, imoveis/<id>_scraped_* e as imagens
+// das análises do imóvel (analises/<analiseId>/*, ids recolhidos antes do
+// delete — as análises saem por cascata). Nunca apaga uma foto ainda usada
+// por um negócio (snapshot da análise) ou pelos comparáveis de outra análise.
+// Só aceita UUIDs; assets/ e outras pastas nunca são tocadas.
+export async function apagarFotosDoImovel(imovelId: string, analiseIds: string[] = []): Promise<number> {
+  if (!supabase || !UUID_RE.test(String(imovelId || ""))) return 0;
+  const B = "Imoveis";
+  const caminhos: string[] = [];
+  const pasta = await supabase.storage.from(B).list(`imoveis/${imovelId}`, { limit: 1000 });
+  for (const f of pasta.data || []) if (f.id) caminhos.push(`imoveis/${imovelId}/${f.name}`);
+  const soltas = await supabase.storage.from(B).list("imoveis", { limit: 1000, search: String(imovelId) });
+  for (const f of soltas.data || []) if (f.id && f.name.startsWith(`${imovelId}_`)) caminhos.push(`imoveis/${f.name}`);
+  for (const aid of analiseIds) {
+    if (!UUID_RE.test(String(aid))) continue;
+    const r = await supabase.storage.from(B).list(`analises/${aid}`, { limit: 1000 });
+    for (const f of r.data || []) if (f.id) caminhos.push(`analises/${aid}/${f.name}`);
+  }
+  if (!caminhos.length) return 0;
+  // Fotos ainda referidas fora do imóvel apagado ficam.
+  const { rows } = await pool.query(
+    `SELECT coalesce(analise_snapshot::text, '') || coalesce(analise_final::text, '') AS t FROM negocios
+      WHERE coalesce(analise_snapshot::text, '') || coalesce(analise_final::text, '') LIKE '%/Imoveis/%'
+     UNION ALL
+     SELECT comparaveis::text FROM analises WHERE comparaveis::text LIKE '%/Imoveis/%'`,
+  );
+  const usadas = rows.map((r: any) => r.t).join("\n");
+  const apagar = caminhos.filter((c: string) => !usadas.includes(`/Imoveis/${c}`));
+  for (let i = 0; i < apagar.length; i += 50) {
+    const r = await supabase.storage.from(B).remove(apagar.slice(i, i + 50));
+    if (r.error) throw new Error(`apagar fotos do imóvel ${imovelId}: ${r.error.message}`);
+  }
+  return apagar.length;
+}
+
 export async function listDocumentos(imovelId) {
   const r = await pool.query(
     `SELECT id, tipo, version, pdf_path, pdf_size_bytes, frozen, trigger_event, generated_at
