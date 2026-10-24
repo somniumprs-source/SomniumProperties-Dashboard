@@ -137,7 +137,7 @@ app.post("/backfill", async (c: any) => {
     const params: any[] = sinceDate ? [sinceDate] : [];
     const cond = sinceDate ? " AND inicio >= $1" : "";
     const { rows } = await pool.query(
-      `SELECT * FROM tarefas WHERE gcal_event_id IS NULL AND inicio IS NOT NULL${cond}`,
+      `SELECT * FROM tarefas WHERE gcal_event_id IS NULL AND inicio IS NOT NULL AND COALESCE(por_aprovar, false) = false${cond}`,
       params,
     );
 

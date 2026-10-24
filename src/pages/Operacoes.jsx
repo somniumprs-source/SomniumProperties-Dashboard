@@ -101,7 +101,6 @@ export function Operacoes({ embutido = false }) {
   const r = data?.resumo
   const k = data?.kpis
 
-  const ativas = tarefas.filter(t => t.status !== 'Concluída')
 
   return (
     <>
@@ -126,9 +125,8 @@ export function Operacoes({ embutido = false }) {
         {/* Hero banner — Operações */}
         {(() => {
           const todayStr = new Date().toISOString().slice(0, 10)
-          const tarefasAbertas = ativas.length
           const tarefasAtrasadas = tarefas.filter(t => tarefaAtrasada(t)).length
-          const tarefasHoje = tarefas.filter(t => t.inicio?.slice(0, 10) === todayStr).length
+          const tarefasHoje = tarefas.filter(t => !t.por_aprovar && t.inicio?.slice(0, 10) === todayStr).length
           const horasSemana = r?.horasSemana ?? 0
           return (
             <div className="rounded-xl border border-line bg-surface-raised p-5 sm:p-6 shadow-xs">
@@ -144,8 +142,7 @@ export function Operacoes({ embutido = false }) {
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <SummaryStat label="Tarefas abertas" value={tarefasAbertas} sub={`de ${tarefas.length} total`} />
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                 <SummaryStat label="Tarefas atrasadas" value={tarefasAtrasadas} sub="a recuperar" />
                 <SummaryStat label="Horas esta semana" value={HRS(horasSemana)} sub={r?.totalTarefas != null ? `${r.totalTarefas} tarefas total` : ''} />
                 <SummaryStat label="Tarefas hoje" value={tarefasHoje} sub={new Date().toLocaleDateString('pt-PT', { day:'2-digit', month:'2-digit' })} />

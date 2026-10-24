@@ -303,7 +303,8 @@ export async function getConsultores({ regiao }: { regiao?: string | null } = {}
 export async function getTarefas({ regiao }: { regiao?: string | null } = {}) {
   const w = regiaoWhere(regiao);
   const { rows } = await pool.query(`SELECT * FROM tarefas${w.clause} ORDER BY inicio DESC`, w.params);
-  return rows.map((r: any) => ({
+  // Por aprovar ainda não é tarefa da Agenda: fica fora das métricas.
+  return rows.filter((r: any) => !r.por_aprovar).map((r: any) => ({
     id: r.id,
     tarefa: r.tarefa,
     status: r.status,

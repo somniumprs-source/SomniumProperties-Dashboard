@@ -120,10 +120,11 @@ async function juntarAssuntos(pool, origem, origemId, assuntos) {
   }
 }
 
-// Título, categoria e região da tarefa acompanham os assuntos: com imóveis é
-// um follow-up de imóveis (leva a região do primeiro); sem eles é contacto com
-// a pessoa, sem região, com o tipo escolhido (ou o que a tarefa já tinha, ou o
-// sugerido pela fase).
+// Título e região da tarefa acompanham os assuntos: com imóveis é um follow-up
+// (leva a região do primeiro); sem eles é contacto com a pessoa, sem região,
+// com o tipo escolhido (ou o que a tarefa já tinha, ou o sugerido pela fase).
+// A categoria é sempre a da pessoa (modelo centrado na lead, 24/10/2026): os
+// imóveis são assuntos do contacto, não fazem dele um "Follow-up de Imóveis".
 async function afinarTarefa(pool, p, tarefaId, data, tipoContacto = null) {
   const assuntos = await assuntosDe(pool, 'tarefa', [tarefaId])
   const imoveis = assuntos.filter(a => a.imovel_id)
@@ -132,8 +133,9 @@ async function afinarTarefa(pool, p, tarefaId, data, tipoContacto = null) {
     const { rows: [t] } = await pool.query('SELECT categoria FROM tarefas WHERE id = $1', [tarefaId])
     tipo = tipoDaCategoria(p.cfg, t?.categoria) || tipoPadrao(p.cfg, p.fase)
   }
-  const categoria = imoveis.length ? 'Follow-up de Imóveis' : p.cfg.categorias[tipo]
-  const titulo = `${imoveis.length ? 'Follow-up' : TIPOS_CONTACTO[tipo]} — ${p.nome || 'Sem nome'}${imoveis.length ? ` (${imoveis.map(a => a.imovel_nome || 'Imóvel').join(', ')})` : ''}`
+  if (imoveis.length && !TIPOS_CONTACTO[tipoContacto]) tipo = 'follow_up'
+  const categoria = p.cfg.categorias[tipo]
+  const titulo = `${TIPOS_CONTACTO[tipo]} — ${p.nome || 'Sem nome'}${imoveis.length ? ` (${imoveis.map(a => a.imovel_nome || 'Imóvel').join(', ')})` : ''}`
   await pool.query(
     'UPDATE tarefas SET tarefa = $1, categoria = $2, regiao = $3, updated_at = NOW() WHERE id = $4',
     [titulo, categoria, imoveis[0]?.imovel_regiao || null, tarefaId]
@@ -168,7 +170,7 @@ async function sincronizarTarefaFeita(pool, p, interacaoId, { criar = true, user
   const imoveis = (await assuntosDe(pool, cfg.origem, [interacaoId])).filter(a => a.imovel_id)
   const tipoContacto = x.finalidade === 'discovery' ? 'discovery_call' : 'follow_up'
   const titulo = `${TIPOS_CONTACTO[tipoContacto]} — ${p.nome || 'Sem nome'}${imoveis.length ? ` (${imoveis.map(a => a.imovel_nome || 'Imóvel').join(', ')})` : ''}`
-  const categoria = imoveis.length && tipoContacto === 'follow_up' ? 'Follow-up de Imóveis' : cfg.categorias[tipoContacto]
+  const categoria = cfg.categorias[tipoContacto]
   const ini = new Date(x.data_hora)
   const inicio = ini.toISOString()
   const fim = new Date(ini.getTime() + 0.5 * 3600000).toISOString()
@@ -184,8 +186,8 @@ async function sincronizarTarefaFeita(pool, p, interacaoId, { criar = true, user
   const nova = randomUUID()
   await pool.query(
     `INSERT INTO tarefas (id, tarefa, categoria, status, prioridade, data_limite, inicio, fim, user_id, funcionario,
-                          tempo_horas, origem_tipo, origem_id, origem_campo, regiao)
-     VALUES ($1,$2,$3,'Concluída','media',$4,$5,$6,$7,$8,0.5,$9,$10,$11,$12)`,
+                          tempo_horas, origem_tipo, origem_id, origem_campo, regiao, por_aprovar)
+     VALUES ($1,$2,$3,'Concluída','media',$4,$5,$6,$7,$8,0.5,$9,$10,$11,$12,true)`,
     [nova, titulo, categoria, dia, inicio, fim, user?.id || null, user?.nome || x.autor || null, tipo, id, campo, regiao]
   )
   return nova
@@ -272,8 +274,8 @@ async function agendarContactoPessoaTx(pool, tipo, id, { data, quando = null, as
     t = { id: randomUUID() }
     await pool.query(
       `INSERT INTO tarefas (id, tarefa, categoria, status, prioridade, data_limite, inicio, fim, user_id, funcionario,
-                            tempo_horas, origem_tipo, origem_id, origem_campo)
-       VALUES ($1,$2,$3,'A fazer','alta',$4,$5,$6,$7,$8,0.5,$9,$10,$11)`,
+                            tempo_horas, origem_tipo, origem_id, origem_campo, por_aprovar)
+       VALUES ($1,$2,$3,'A fazer','alta',$4,$5,$6,$7,$8,0.5,$9,$10,$11,true)`,
       [t.id, `${p.rotulo} — ${p.nome || 'Sem nome'}`, p.cfg.categorias[tipoPadrao(p.cfg, p.fase)], data, inicio, fim, user?.id || null, user?.nome || null, tipo, id, CAMPO]
     )
   }

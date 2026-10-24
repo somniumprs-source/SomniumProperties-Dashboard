@@ -4159,7 +4159,7 @@ app.post('/api/calendar/backfill', async (req, res) => {
     const params = sinceDate ? [sinceDate] : []
     const cond = sinceDate ? ' AND inicio >= $1' : ''
     const { rows } = await pgPool.query(
-      `SELECT * FROM tarefas WHERE gcal_event_id IS NULL AND inicio IS NOT NULL${cond}`,
+      `SELECT * FROM tarefas WHERE gcal_event_id IS NULL AND inicio IS NOT NULL AND COALESCE(por_aprovar, false) = false${cond}`,
       params
     )
 
@@ -4347,7 +4347,7 @@ app.put('/api/tarefas/:id', async (req, res) => {
   try {
     const pgPool = (await import('./src/db/pg.js')).default
     const { updateGCalEvent, pushTarefaToGCal } = await import('./src/db/calendarSync.js')
-    const { tarefa, categoria, inicio, fim, funcionario, tempo_horas, regiao } = req.body
+    const { tarefa, categoria, inicio, fim, funcionario, tempo_horas, regiao, por_aprovar } = req.body
     const status = req.body.status === undefined ? undefined : normalizarEstadoTarefa(req.body.status)
     // Tarefa aberta tem responsável e prazo (auditoria D11): vale o resultado final.
     const { rows: [atual] } = await pgPool.query('SELECT * FROM tarefas WHERE id = $1', [req.params.id])
@@ -4368,6 +4368,8 @@ app.put('/api/tarefas/:id', async (req, res) => {
     if (fim !== undefined) { sets.push(`fim = $${params.length + 1}`); params.push(fim) }
     if (funcionario !== undefined) { sets.push(`funcionario = $${params.length + 1}`); params.push(funcionario) }
     if (horas !== undefined) { sets.push(`tempo_horas = $${params.length + 1}`); params.push(horas) }
+    // Aprovar uma tarefa criada sozinha (pré-aprovação, migration 0089).
+    if (por_aprovar !== undefined) { sets.push(`por_aprovar = $${params.length + 1}`); params.push(!!por_aprovar) }
     sets.push(`updated_at = $${params.length + 1}`); params.push(now)
     params.push(req.params.id)
     const { rowCount } = await pgPool.query(
@@ -4376,7 +4378,7 @@ app.put('/api/tarefas/:id', async (req, res) => {
     if (!rowCount) return res.status(404).json({ error: 'Não encontrada' })
     // Sync com GCal
     const { rows: [updated] } = await pgPool.query('SELECT * FROM tarefas WHERE id = $1', [req.params.id])
-    if (updated) {
+    if (updated && !updated.por_aprovar) {
       if (updated.gcal_event_id) {
         updateGCalEvent(gcal, GCAL_ID, updated).catch(e => console.error('[gcal-sync]', e.message))
       } else if (updated.inicio) {
@@ -5377,7 +5379,7 @@ app.get('/api/alertas', endpointCache(300000), async (req, res) => {
 
     // Tarefas abertas sem responsável ou sem prazo (auditoria D11)
     try {
-      const { rows: abertas } = await pool.query(`SELECT id, tarefa, status, inicio, data_limite, funcionario FROM tarefas WHERE status <> 'Concluída' AND COALESCE(arquivada, false) = false`)
+      const { rows: abertas } = await pool.query(`SELECT id, tarefa, status, inicio, data_limite, funcionario FROM tarefas WHERE status <> 'Concluída' AND COALESCE(arquivada, false) = false AND COALESCE(por_aprovar, false) = false`)
       for (const t of abertas) {
         const falta = faltaNaTarefa(t)
         if (!falta) continue

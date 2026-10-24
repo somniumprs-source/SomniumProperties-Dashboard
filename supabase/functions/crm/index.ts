@@ -2016,7 +2016,7 @@ app.get("/tarefas/count-atrasadas", async (c: any) => {
     const now = Date.now();
     if (now < _countAtrasadasCache.exp) return c.json({ atrasadas: _countAtrasadasCache.n });
     // «Atrasada» é calculada pelo prazo (auditoria D11)
-    const { rows: abertas } = await pool.query(`SELECT status, inicio, data_limite, arquivada FROM tarefas WHERE status <> 'Concluída' AND COALESCE(arquivada, false) = false`);
+    const { rows: abertas } = await pool.query(`SELECT status, inicio, data_limite, arquivada FROM tarefas WHERE status <> 'Concluída' AND COALESCE(arquivada, false) = false AND COALESCE(por_aprovar, false) = false`);
     const rows = [{ n: abertas.filter((t: any) => tarefaAtrasada(t)).length }];
     const n = rows[0]?.n ?? 0;
     _countAtrasadasCache = { exp: now + 30_000, n };
@@ -2878,10 +2878,14 @@ app.post("/imoveis/:id/follow-up", async (c: any) => {
     if (fase.mover && !(motivo || "").trim()) return c.json({ error: `Indica o motivo: é a justificação da passagem para «${fase.mover}»` }, 400);
     if (fase.mover && !juntar && data < new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Lisbon' })) return c.json({ error: "A data tem de ser hoje ou depois: entrar na fase pede um passo à frente" }, 400);
     // Imóvel com consultor: o follow-up é um assunto do contacto com ele (um
-    // só próximo contacto por pessoa), não uma tarefa do imóvel.
+    // só próximo contacto por pessoa), não uma tarefa do imóvel. Sem sucesso
+    // também: fica no histórico do imóvel e o contacto passa para a nova data.
     const user = await resolveCrmUser(c);
-    const noContacto = imovel.consultor_id && !sem_sucesso
-      ? await juntarImovelAoContacto(pool, id, { data: juntar ? null : data, quando: juntar ? null : quando, mover: !!mover_contacto, user })
+    if (imovel.consultor_id && sem_sucesso) {
+      await registarFollowUpFeito(id, { resultado: "Sem sucesso", motivo, proximaData: data, user });
+    }
+    const noContacto = imovel.consultor_id
+      ? await juntarImovelAoContacto(pool, id, { data: juntar ? null : data, quando: juntar ? null : quando, mover: !!mover_contacto || !!sem_sucesso, user })
       : null;
     if (juntar && !noContacto) return c.json({ error: "O consultor não tem contacto marcado: indica a data" }, 400);
     const patch: Record<string, any> = { data_follow_up: noContacto ? noContacto.data : data };
@@ -4082,11 +4086,21 @@ app.post("/auto-task", async (c: any) => {
     if (!template) return c.json({ ok: true, created: false, reason: "No task for this phase" });
 
     const tarefa = template.replace("{name}", entityName);
+    // Modelo centrado na lead: a pessoa já com tarefa aberta (contacto marcado
+    // ou sugestão anterior) não ganha outra. A sugestão fica por aprovar na Agenda.
+    const origemTipo = entity === "consultores" ? "consultor" : "investidor";
+    const { rows: [aberta] } = await pool.query(
+      `SELECT id FROM tarefas WHERE ((origem_tipo = $1 AND origem_id = $2) OR lower(trim(tarefa)) = lower(trim($3)))
+         AND status NOT IN ('Concluída', 'Concluida') AND COALESCE(arquivada, false) = false LIMIT 1`,
+      [origemTipo, entityId || "", tarefa],
+    );
+    if (aberta) return c.json({ ok: true, created: false, reason: "A pessoa já tem uma tarefa aberta" });
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     await pool.query(
-      "INSERT INTO tarefas (id, tarefa, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)",
-      [id, tarefa, "A fazer", now, now],
+      `INSERT INTO tarefas (id, tarefa, status, created_at, updated_at, origem_tipo, origem_id, origem_campo, por_aprovar)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'fase', true)`,
+      [id, tarefa, "A fazer", now, now, origemTipo, entityId || null],
     );
     return c.json({ ok: true, created: true, tarefa, id });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }

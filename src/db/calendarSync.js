@@ -46,18 +46,43 @@ async function alertarConflitoSync(tarefaAntes, eventoNovo) {
 
 // ── PUSH: Tarefa → Google Calendar ──────────────────────────
 
+// Duas sincronizações ao mesmo tempo (abrir a Agenda + o cron, dois
+// separadores) criavam dois eventos para a mesma tarefa, e o segundo voltava
+// como tarefa duplicada no pull. Antes de criar o evento, a tarefa é reservada
+// (gcal_synced_at, válida 2 min): só quem a reserva cria o evento. Tarefa por
+// aprovar não vai para o Google Calendar.
+async function reservarPush(id) {
+  const { rowCount } = await pool.query(
+    `UPDATE tarefas SET gcal_synced_at = $1
+     WHERE id = $2 AND gcal_event_id IS NULL AND COALESCE(por_aprovar, false) = false
+       AND (gcal_synced_at IS NULL OR gcal_synced_at::timestamptz < NOW() - INTERVAL '2 minutes')`,
+    [new Date().toISOString(), id]
+  )
+  return rowCount > 0
+}
+
+// Mesmo instante, venha a data como vier (".000Z" vs "Z", só o dia, etc.).
+function mesmoInstante(a, b) {
+  if (!a || !b) return false
+  const sa = String(a), sb = String(b)
+  if (sa.slice(0, 16) === sb.slice(0, 16)) return true
+  const ta = new Date(sa).getTime(), tb = new Date(sb).getTime()
+  return !isNaN(ta) && ta === tb
+}
+
 /**
  * Cria evento no GCal a partir de uma tarefa.
  * Guarda o gcal_event_id na tarefa.
  */
 export async function pushTarefaToGCal(gcal, calendarId, tarefa) {
   if (!gcal || !tarefa.inicio) return null
+  if (!(await reservarPush(tarefa.id))) return null
   try {
     const event = buildEvent(tarefa)
     const r = await gcal.events.insert({ calendarId, resource: event })
     const eventId = r.data.id
     await pool.query(
-      'UPDATE tarefas SET gcal_event_id = $1, gcal_synced_at = $2 WHERE id = $3',
+      'UPDATE tarefas SET gcal_event_id = $1, gcal_synced_at = $2 WHERE id = $3 AND gcal_event_id IS NULL',
       [eventId, new Date().toISOString(), tarefa.id]
     )
     console.log(`[gcal-sync] PUSH criado: "${tarefa.tarefa}" → ${eventId}`)
@@ -65,6 +90,7 @@ export async function pushTarefaToGCal(gcal, calendarId, tarefa) {
   } catch (e) {
     const detail = e.errors?.[0]?.message || e.response?.data?.error?.message || e.message
     console.error(`[gcal-sync] PUSH erro "${tarefa.tarefa}":`, detail)
+    await pool.query('UPDATE tarefas SET gcal_synced_at = NULL WHERE id = $1 AND gcal_event_id IS NULL', [tarefa.id]).catch(() => {})
     return null
   }
 }
@@ -280,21 +306,24 @@ export async function pullGCalToTarefas(gcal, calendarId, { days = 30 } = {}) {
           skipped++
         }
       } else {
-        // Verificar se já existe uma tarefa com o mesmo título e data (evitar duplicados)
-        const { rows: [duplicate] } = await pool.query(
-          "SELECT id FROM tarefas WHERE tarefa = $1 AND inicio = $2 AND gcal_event_id IS NULL",
-          [titulo, inicio]
+        // Mesmo título à mesma hora: a tarefa sem evento liga-se a ele; se já tem
+        // outro evento, este é uma cópia no Google Calendar e a tarefa que dele
+        // nascer fica por aprovar (rejeitar apaga a cópia nos dois lados).
+        const { rows: iguais } = await pool.query(
+          "SELECT id, inicio, gcal_event_id FROM tarefas WHERE lower(trim(tarefa)) = lower(trim($1)) AND COALESCE(arquivada, false) = false",
+          [titulo],
         )
-
-        if (duplicate) {
-          // Ligar a tarefa existente ao evento
+        const mesmos = iguais.filter((t) => mesmoInstante(t.inicio, inicio))
+        const livre = mesmos.find((t) => !t.gcal_event_id)
+        if (livre) {
           await pool.query(
-            'UPDATE tarefas SET gcal_event_id = $1, gcal_synced_at = $2 WHERE id = $3',
-            [eventId, new Date().toISOString(), duplicate.id]
+            "UPDATE tarefas SET gcal_event_id = $1, gcal_synced_at = $2 WHERE id = $3 AND gcal_event_id IS NULL AND NOT EXISTS (SELECT 1 FROM tarefas WHERE gcal_event_id = $1)",
+            [eventId, new Date().toISOString(), livre.id],
           )
           skipped++
           continue
         }
+        const copia = mesmos.length > 0
 
         // Criar nova tarefa a partir do evento
         const { randomUUID } = await import('crypto')
@@ -303,16 +332,18 @@ export async function pullGCalToTarefas(gcal, calendarId, { days = 30 } = {}) {
         const horas = inicio && fim ? Math.max(0, (new Date(fim) - new Date(inicio)) / 3600000) : 0
         const funcMatch = descricao.match(/Funcion[aá]rio:\s*(.+)/i)
 
-        await pool.query(
+        const ins = await pool.query(
           `INSERT INTO tarefas (id, tarefa, status, inicio, fim, funcionario, tempo_horas,
-           gcal_event_id, gcal_synced_at, created_at, updated_at, categoria)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+           gcal_event_id, gcal_synced_at, created_at, updated_at, categoria, por_aprovar)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+           ON CONFLICT (gcal_event_id) WHERE gcal_event_id IS NOT NULL DO NOTHING`,
           [uuid, titulo, 'A fazer', inicio, fim,
            funcMatch ? funcMatch[1].trim() : null,
            Math.round(horas * 100) / 100,
-           eventId, nowStr, nowStr, nowStr, categoriaPorTitulo(titulo)]
+           eventId, nowStr, nowStr, nowStr, categoriaPorTitulo(titulo), copia]
         )
-        created++
+        if (ins.rowCount) created++
+        else skipped++
       }
     }
 
@@ -340,7 +371,7 @@ export async function pushAllTarefas(gcal, calendarId, { sinceDate } = {}) {
 
   // 1. Tarefas com data mas sem gcal_event_id (criar)
   const { rows: unsynced } = await pool.query(
-    `SELECT * FROM tarefas WHERE gcal_event_id IS NULL AND inicio IS NOT NULL AND COALESCE(arquivada, false) = false${dateCond}`,
+    `SELECT * FROM tarefas WHERE gcal_event_id IS NULL AND inicio IS NOT NULL AND COALESCE(arquivada, false) = false AND COALESCE(por_aprovar, false) = false${dateCond}`,
     params
   )
   let created = 0
@@ -351,7 +382,7 @@ export async function pushAllTarefas(gcal, calendarId, { sinceDate } = {}) {
 
   // 2. Tarefas alteradas depois do último sync (atualizar evento existente)
   const { rows: stale } = await pool.query(
-    `SELECT * FROM tarefas WHERE gcal_event_id IS NOT NULL AND COALESCE(arquivada, false) = false
+    `SELECT * FROM tarefas WHERE gcal_event_id IS NOT NULL AND COALESCE(arquivada, false) = false AND COALESCE(por_aprovar, false) = false
      AND updated_at::timestamptz > COALESCE(gcal_synced_at, '1970-01-01')::timestamptz${dateCond}`,
     params
   )

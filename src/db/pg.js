@@ -1749,6 +1749,8 @@ export async function initSchema() {
         ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS simultaneo BOOLEAN NOT NULL DEFAULT false;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
+      -- Pré-aprovação das tarefas criadas sozinhas (ver migration 0089_tarefas_por_aprovar.sql).
+      ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS por_aprovar BOOLEAN NOT NULL DEFAULT false;
 
       -- Aba "Faturas" do Projecto: estado de pagamento por despesa/fatura
       -- (ver migration 0053_despesas_pago.sql).

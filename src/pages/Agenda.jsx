@@ -10,10 +10,15 @@
  * Dados: tabela `tarefas` (sincronizada com o GCal por /api/calendar/sync) +
  * eventos lidos em directo do GCal que ainda não são tarefa (ex.: recorrentes).
  * As horas guardadas em `inicio`/`fim` são tratadas como hora local (AAAA-MM-DDTHH:MM).
+ *
+ * Pré-aprovação (24/10/2026): o que o sistema cria sozinho (mudança de fase,
+ * contacto marcado ou feito na ficha, follow-up do imóvel, cópia de um evento
+ * do GCal) chega com `por_aprovar` e fica no painel "Por aprovar" — fora do
+ * calendário, das listas e do Google Calendar até ser aprovado. Rejeitar apaga.
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
-  CalendarClock, ListChecks, ChevronLeft, ChevronRight, RefreshCw, Plus, Trash2, Check, Inbox, ExternalLink,
+  CalendarClock, ListChecks, ChevronLeft, ChevronRight, RefreshCw, Plus, Trash2, Check, Inbox, ExternalLink, ShieldCheck, X,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { PageSkeleton } from '../components/ui/Skeleton.jsx'
@@ -29,7 +34,7 @@ import { REGIOES } from '../constants.js'
 import { confirmar } from '../components/ui/ConfirmDialog.jsx'
 import { AnimatePresence } from 'framer-motion'
 import { useResponsaveisRegiao } from '../hooks/useResponsaveisRegiao.js'
-import { ESTADOS_TAREFA, tarefaAtrasada } from '../constants/regrasTarefas.js'
+import { ESTADOS_TAREFA, tarefaAtrasada, faltaNaTarefa } from '../constants/regrasTarefas.js'
 
 const FUNCIONARIOS = ['João Abreu', 'Alexandre Mendes']
 const AMBOS = 'João Abreu, Alexandre Mendes'
@@ -142,7 +147,7 @@ export function Agenda({ embutido = false }) {
     await aposAlterar(diaDe(payload.inicio) || undefined)
   }, [aposAlterar])
 
-  const eliminar = useCallback(async (tarefa) => {
+  const eliminar = useCallback(async (tarefa, { recarregar = true } = {}) => {
     // Em produção o DELETE da tarefa não apaga o evento: apaga-se primeiro no GCal,
     // senão o próximo pull voltava a criar a tarefa.
     if (tarefa.gcal_event_id) {
@@ -151,8 +156,28 @@ export function Agenda({ embutido = false }) {
     }
     const r = await apiFetch(`/api/tarefas/${tarefa.id}`, { method: 'DELETE' })
     if (!r.ok) throw new Error('Falha ao eliminar')
-    await carregar()
+    if (recarregar) await carregar()
   }, [carregar])
+
+  // Apagar várias: 4 de cada vez, uma só recarga no fim; as que falharem
+  // ficam e diz-se quantas.
+  const eliminarVarias = useCallback(async (lista) => {
+    let falhas = 0
+    for (let i = 0; i < lista.length; i += 4) {
+      const res = await Promise.allSettled(lista.slice(i, i + 4).map(t => eliminar(t, { recarregar: false })))
+      falhas += res.filter(x => x.status === 'rejected').length
+    }
+    await carregar()
+    if (falhas) throw new Error(`${falhas} de ${lista.length} tarefa(s) não foram apagadas (Google Calendar indisponível). Tenta de novo.`)
+    toast?.(`${lista.length} tarefa(s) apagada(s)`, 'success')
+  }, [eliminar, carregar, toast])
+
+  // Aprovar: a tarefa passa para a Agenda (e para o Google Calendar). Se lhe
+  // falta responsável ou data, abre-se para os preencher antes.
+  const aprovar = useCallback(async (tarefa) => {
+    if (faltaNaTarefa(tarefa)) { setModal({ tarefa, aprovar: true }); return }
+    await guardar(tarefa, { por_aprovar: false })
+  }, [guardar])
 
   const accao = useCallback(async (fn) => {
     try { await fn() } catch (e) { toast?.(e.message, 'error') }
@@ -160,9 +185,12 @@ export function Agenda({ embutido = false }) {
 
   async function guardarModal(dados) {
     setSaving(true)
-    try { await guardar(modal.tarefa, dados); setModal(null) } catch (e) { toast?.(e.message, 'error') }
+    try { await guardar(modal.tarefa, modal.aprovar ? { ...dados, por_aprovar: false } : dados); setModal(null) } catch (e) { toast?.(e.message, 'error') }
     setSaving(false)
   }
+
+  const porAprovar = useMemo(() => tarefas.filter(t => t.por_aprovar), [tarefas])
+  const daAgenda = useMemo(() => tarefas.filter(t => !t.por_aprovar), [tarefas])
 
   return (
     <>
@@ -187,9 +215,13 @@ export function Agenda({ embutido = false }) {
           </div>
         </div>
 
+        {!loading && porAprovar.length > 0 && (
+          <PorAprovar lista={porAprovar} agenda={daAgenda} aprovar={aprovar} eliminar={eliminar} eliminarVarias={eliminarVarias} accao={accao} abrir={setModal} />
+        )}
+
         {loading ? <PageSkeleton /> : tab === 'calendario'
-          ? <CalendarioTab tarefas={tarefas} guardar={guardar} accao={accao} abrir={setModal} sincronizar={sincronizar} />
-          : <TarefasTab tarefas={tarefas} guardar={guardar} eliminar={eliminar} accao={accao} abrir={setModal} />}
+          ? <CalendarioTab tarefas={daAgenda} todas={tarefas} guardar={guardar} accao={accao} abrir={setModal} sincronizar={sincronizar} />
+          : <TarefasTab tarefas={daAgenda} guardar={guardar} eliminarVarias={eliminarVarias} eliminar={eliminar} accao={accao} abrir={setModal} />}
       </div>
 
       <AnimatePresence>
@@ -232,8 +264,8 @@ function TarefaModal({ modal, saving, onClose, onSave, onDelete }) {
   }
   return (
     <Modal open onClose={onClose} size="lg"
-      title={t?.id ? 'Editar tarefa' : doGoogle ? 'Registar evento do Google Calendar' : 'Nova tarefa'}
-      subtitle={doGoogle ? 'Passa a tarefa do CRM, ligada ao mesmo evento' : 'Com hora marcada, aparece no Google Calendar'}
+      title={modal.aprovar ? 'Aprovar tarefa' : t?.id ? 'Editar tarefa' : doGoogle ? 'Registar evento do Google Calendar' : 'Nova tarefa'}
+      subtitle={modal.aprovar ? 'Indica o responsável e a data: ao guardar, entra na Agenda' : doGoogle ? 'Passa a tarefa do CRM, ligada ao mesmo evento' : 'Com hora marcada, aparece no Google Calendar'}
       footer={
         <Modal.Footer>
           {onDelete && <Button variant="secondary" icon={Trash2} onClick={async () => { if (await confirmar('Eliminar esta tarefa (e o evento no Google Calendar)?')) onDelete() }}>Eliminar</Button>}
@@ -308,7 +340,7 @@ function TarefaModal({ modal, saving, onClose, onSave, onDelete }) {
 const DIAS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 const ALTURA = (HORA_FIM - HORA_INI) * 60 * PX_MIN
 
-function CalendarioTab({ tarefas, guardar, accao, abrir, sincronizar }) {
+function CalendarioTab({ tarefas, todas = tarefas, guardar, accao, abrir, sincronizar }) {
   const [ref, setRef] = useState(() => new Date())
   const [quem, setQuem] = useState('todos')
   const [gcal, setGcal] = useState([])
@@ -335,7 +367,7 @@ function CalendarioTab({ tarefas, guardar, accao, abrir, sincronizar }) {
     : quem === 'nenhum' ? !t.funcionario : (t.funcionario || '').includes(quem), [quem])
 
   const { comHora, diaInteiro, semHora } = useMemo(() => {
-    const ligados = new Set(tarefas.map(t => t.gcal_event_id).filter(Boolean))
+    const ligados = new Set(todas.map(t => t.gcal_event_id).filter(Boolean))
     const comHora = Object.fromEntries(dias.map(d => [d, []])), diaInteiro = Object.fromEntries(dias.map(d => [d, []]))
     for (const t of tarefas) {
       const d = diaDe(t.inicio)
@@ -372,7 +404,7 @@ function CalendarioTab({ tarefas, guardar, accao, abrir, sincronizar }) {
     }
     const semHora = tarefas.filter(t => !t.inicio && !concluida(t) && passaFiltro(t))
     return { comHora, diaInteiro, semHora }
-  }, [tarefas, gcal, dias, quem, passaFiltro])
+  }, [tarefas, todas, gcal, dias, quem, passaFiltro])
 
   // ── Arrastar na grelha ───────────────────────────────────────
   function posicao(e) {
@@ -538,9 +570,74 @@ function CalendarioTab({ tarefas, guardar, accao, abrir, sincronizar }) {
 }
 
 // ════════════════════════════════════════════════════════════════
+// Por aprovar — tarefas criadas sozinhas, à espera de OK
+// ════════════════════════════════════════════════════════════════
+function origemDe(t) {
+  const c = t.origem_campo || ''
+  if (c === 'fase') return 'Mudança de fase'
+  if (c === 'proximo_contacto') return 'Contacto marcado'
+  if (c.startsWith('contacto:')) return 'Contacto feito'
+  if (c === 'data_follow_up') return 'Follow-up do imóvel'
+  if (t.gcal_event_id && !t.origem_tipo) return 'Cópia no Google Calendar'
+  return 'Criada sozinha'
+}
+const normTitulo = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim()
+
+function PorAprovar({ lista, agenda, aprovar, eliminar, eliminarVarias, accao, abrir }) {
+  // Possível duplicado: já há na Agenda uma tarefa aberta com o mesmo título,
+  // ou da mesma pessoa/imóvel.
+  const duplicadoDe = t => agenda.find(o => !concluida(o) && (normTitulo(o.tarefa) === normTitulo(t.tarefa)
+    || (t.origem_tipo && o.origem_tipo === t.origem_tipo && o.origem_id === t.origem_id)))
+  const quando = s => s ? new Date(s).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) + (temHora(s) ? ' ' + s.slice(11, 16) : '') : 'sem data'
+  async function aprovarTodas() {
+    const prontas = lista.filter(t => !faltaNaTarefa(t))
+    if (!prontas.length) return
+    if (!(await confirmar(`Aprovar ${prontas.length} tarefa(s)?${prontas.length < lista.length ? ` ${lista.length - prontas.length} sem responsável ou data ficam para aprovar uma a uma.` : ''}`))) return
+    accao(async () => { for (const t of prontas) await aprovar(t) })
+  }
+  async function rejeitarTodas() {
+    if (!(await confirmar(`Rejeitar e apagar as ${lista.length} tarefa(s) por aprovar?`))) return
+    accao(() => eliminarVarias(lista))
+  }
+  return (
+    <div className="rounded-xl border border-warning/40 bg-warning/5 p-3 sm:p-4">
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <ShieldCheck className="w-4 h-4 text-ink-muted" />
+        <h3 className="text-sm font-semibold text-ink">Por aprovar <span className="text-ink-muted font-normal">({lista.length})</span></h3>
+        <span className="text-xs text-ink-muted">Criadas sozinhas pelo CRM. Só entram na Agenda e no Google Calendar depois de aprovadas.</span>
+        <div className="ml-auto flex gap-2">
+          <button onClick={aprovarTodas} className="px-3 py-1 text-xs font-semibold rounded-lg border border-line text-ink bg-surface-raised hover:bg-surface-muted">Aprovar todas</button>
+          <button onClick={rejeitarTodas} className="px-3 py-1 text-xs font-semibold rounded-lg border border-danger/30 text-danger bg-danger/10 hover:bg-danger/15">Rejeitar todas</button>
+        </div>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {lista.map(t => {
+          const dup = duplicadoDe(t)
+          return (
+            <div key={t.id} className="flex flex-wrap items-center gap-2 bg-surface-raised border border-line rounded-lg px-3 py-2">
+              <div className="flex-1 min-w-[200px] cursor-pointer" onClick={() => abrir({ tarefa: t, aprovar: true })}>
+                <p className="text-sm text-ink font-medium leading-tight">{t.tarefa}</p>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  <span className="text-[10px] px-1.5 py-0.5 bg-surface-muted text-ink-muted rounded">{origemDe(t)}</span>
+                  {t.categoria && <span className="text-[10px] px-1.5 py-0.5 bg-surface-muted text-ink rounded">{t.categoria}</span>}
+                  <span className="text-[10px] num px-1.5 py-0.5 text-ink-muted">{quando(t.inicio || t.data_limite)}</span>
+                  {dup && <span className="text-[10px] px-1.5 py-0.5 bg-danger/10 text-danger rounded">Possível duplicado de «{dup.tarefa}» ({quando(dup.inicio || dup.data_limite)})</span>}
+                </div>
+              </div>
+              <button onClick={() => accao(() => aprovar(t))} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg border border-success/30 text-success bg-success/10 hover:bg-success/15"><Check className="w-3.5 h-3.5" />Aprovar</button>
+              <button onClick={() => accao(() => eliminar(t))} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg border border-danger/30 text-danger bg-danger/10 hover:bg-danger/15"><X className="w-3.5 h-3.5" />Rejeitar</button>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
 // Tarefas (lista / quadro) — movido de Operações
 // ════════════════════════════════════════════════════════════════
-function TarefasTab({ tarefas, guardar, eliminar, accao, abrir }) {
+function TarefasTab({ tarefas, guardar, eliminar, eliminarVarias, accao, abrir }) {
   const [filtro, setFiltro] = useState('semana')
   const [func, setFunc] = useState('todos')
   const [reg, setReg] = useState('todas')
@@ -552,28 +649,35 @@ function TarefasTab({ tarefas, guardar, eliminar, accao, abrir }) {
 
   const seg = segunda(new Date()), fimSem = maisDias(seg, 7)
   const destaSemana = t => { if (!t.inicio) return true; const d = new Date(t.inicio); return d >= seg && d < fimSem }
-  const ativas = tarefas.filter(t => !concluida(t))
+  // Atrasada = aberta com o prazo ultrapassado. O que está "A fazer" com a data
+  // ainda por chegar não é atrasado nem pendente: está só marcado.
+  const atrasadas = tarefas.filter(t => tarefaAtrasada(t))
   const semana = tarefas.filter(destaSemana)
   const arquivo = tarefas.filter(t => concluida(t) && !destaSemana(t))
-  const base = filtro === 'semana' ? semana : filtro === 'pendentes' ? ativas : arquivo
+  const base = filtro === 'semana' ? semana : filtro === 'atrasadas' ? atrasadas : arquivo
   const lista = base.filter(t => (func === 'todos' || (t.funcionario || '').includes(func)) && (reg === 'todas' || t.regiao === reg))
 
   const alternar = id => setSel(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
   const todas = () => setSel(sel.size === lista.length ? new Set() : new Set(lista.map(t => t.id)))
   const mudarEstado = (t, status) => accao(() => guardar(t, { status }))
   async function apagarVarias() {
-    if (!sel.size || !(await confirmar(`Apagar ${sel.size} tarefa(s)?`))) return
-    accao(async () => { for (const t of tarefas.filter(x => sel.has(x.id))) await eliminar(t); setSel(new Set()) })
+    if (!sel.size || !(await confirmar(`Apagar ${sel.size} tarefa(s) (e os eventos no Google Calendar)?`))) return
+    accao(async () => { await eliminarVarias(tarefas.filter(x => sel.has(x.id))); setSel(new Set()) })
+  }
+  async function apagarAtrasadas() {
+    const alvo = lista.filter(t => tarefaAtrasada(t))
+    if (!alvo.length || !(await confirmar(`Apagar as ${alvo.length} tarefa(s) atrasada(s) desta vista (e os eventos no Google Calendar)?`))) return
+    accao(async () => { await eliminarVarias(alvo); setSel(new Set()) })
   }
   const data = s => s ? new Date(s).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) + (temHora(s) ? ' ' + s.slice(11, 16) : '') : '—'
   const chip = activo => `px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors duration-fast ${activo ? 'border-ink/30 bg-surface-muted text-ink' : 'border-line text-ink-muted hover:bg-surface-muted'}`
-  const colunas = filtro === 'semana' ? ['A fazer', 'Em andamento', 'Atrasada', 'Concluída'] : ['A fazer', 'Em andamento', 'Atrasada']
+  const colunas = ['A fazer', 'Em andamento', 'Atrasada', 'Concluída']
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex gap-2 flex-wrap">
-          {[['semana', `Esta semana (${semana.length})`], ['pendentes', `Todas pendentes (${ativas.length})`], ['arquivo', `Arquivo (${arquivo.length})`]].map(([k, l]) => (
+          {[['semana', `Esta semana (${semana.length})`], ['atrasadas', `Atrasadas (${atrasadas.length})`], ['arquivo', `Arquivo (${arquivo.length})`]].map(([k, l]) => (
             <button key={k} onClick={() => { setFiltro(k); setSel(new Set()) }} className={chip(filtro === k)}>{l}</button>
           ))}
         </div>
@@ -596,9 +700,14 @@ function TarefasTab({ tarefas, guardar, eliminar, accao, abrir }) {
         </label>
         {sel.size > 0 && <button onClick={apagarVarias} className="px-3 py-1 text-xs font-semibold rounded-lg border border-danger/30 text-danger bg-danger/10 hover:bg-danger/15">Apagar {sel.size} tarefa(s)</button>}
         {sel.size > 0 && <button onClick={() => setSel(new Set())} className="px-3 py-1 text-xs rounded-lg border border-line text-ink-muted hover:bg-surface-muted">Limpar seleção</button>}
+        {sel.size === 0 && lista.some(t => tarefaAtrasada(t)) && (
+          <button onClick={apagarAtrasadas} className="ml-auto px-3 py-1 text-xs font-semibold rounded-lg border border-danger/30 text-danger bg-danger/10 hover:bg-danger/15">
+            Apagar as {lista.filter(t => tarefaAtrasada(t)).length} atrasada(s)
+          </button>
+        )}
       </div>
 
-      {vista === 'board' && filtro !== 'arquivo' ? (
+      {vista === 'board' && filtro === 'semana' ? (
         <div className={`grid grid-cols-1 gap-4 ${colunas.length === 4 ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
           {colunas.map(status => {
             // Atrasada = aberta com o prazo ultrapassado; sai das colunas do estado.
@@ -646,6 +755,7 @@ function TarefasTab({ tarefas, guardar, eliminar, accao, abrir }) {
       ) : (
         <div className="bg-surface-raised rounded-xl border border-line shadow-xs overflow-hidden">
           {filtro === 'arquivo' && <div className="px-4 py-3 bg-success/10 border-b border-success/30 text-xs text-success">Arquivo — tarefas concluídas de semanas anteriores.</div>}
+          {filtro === 'atrasadas' && <div className="px-4 py-3 bg-danger/10 border-b border-danger/30 text-xs text-danger">Atrasadas — tarefas em aberto com a data já passada. O que está marcado para depois não aparece aqui.</div>}
           <ScrollableTable>
             <table className="min-w-[800px] w-full text-sm">
               <thead>
@@ -682,7 +792,7 @@ function TarefasTab({ tarefas, guardar, eliminar, accao, abrir }) {
                     <td className="py-2 px-3 text-right"><button onClick={() => accao(() => eliminar(t))} className="text-ink-muted/70 hover:text-danger text-sm">x</button></td>
                   </tr>
                 ))}
-                {!lista.length && <tr><td colSpan={9} className="py-8 text-center text-ink-muted text-xs">Sem tarefas. Usa "Nova tarefa" ou cria no Google Calendar.</td></tr>}
+                {!lista.length && <tr><td colSpan={9} className="py-8 text-center text-ink-muted text-xs">{filtro === 'atrasadas' ? 'Nenhuma tarefa atrasada.' : 'Sem tarefas. Usa "Nova tarefa" ou cria no Google Calendar.'}</td></tr>}
               </tbody>
             </table>
           </ScrollableTable>

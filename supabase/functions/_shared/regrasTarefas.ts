@@ -19,14 +19,16 @@ export function prazoTarefa(t) {
     const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(dl) ? `${dl}T23:59:59` : dl)
     return isNaN(d) ? null : d
   }
+  // Início só com o dia (evento de dia inteiro): o prazo é o fim desse dia.
   const ini = String(t?.inicio ?? '').trim()
   if (!ini) return null
-  const d = new Date(ini)
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(ini) ? `${ini}T23:59:59` : ini)
   return isNaN(d) ? null : d
 }
 
 export function tarefaAtrasada(t, agora = new Date()) {
-  if (!t || tarefaConcluida(t) || t.arquivada) return false
+  // Por aprovar ainda não é tarefa da Agenda: não conta como atrasada.
+  if (!t || tarefaConcluida(t) || t.arquivada || t.por_aprovar) return false
   const p = prazoTarefa(t)
   return !!p && p < agora
 }

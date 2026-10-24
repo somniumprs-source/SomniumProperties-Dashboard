@@ -3234,7 +3234,7 @@ app.post("/tarefas", async (c: any) => {
 app.put("/tarefas/:id", async (c: any) => {
   try {
     const body = await c.req.json().catch(() => ({}));
-    const { tarefa, categoria, inicio, fim, funcionario, tempo_horas, regiao } = body;
+    const { tarefa, categoria, inicio, fim, funcionario, tempo_horas, regiao, por_aprovar } = body;
     const status = body.status === undefined ? undefined : normalizarEstadoTarefa(body.status);
     // Tarefa aberta tem responsável e prazo (auditoria D11): vale o resultado final.
     const { rows: [atual] } = await pool.query("SELECT * FROM tarefas WHERE id = $1", [c.req.param("id")]);
@@ -3256,6 +3256,8 @@ app.put("/tarefas/:id", async (c: any) => {
     if (funcionario !== undefined) { sets.push(`funcionario = $${params.length + 1}`); params.push(funcionario); }
     if (horas !== undefined) { sets.push(`tempo_horas = $${params.length + 1}`); params.push(horas); }
     if (regiao !== undefined) { sets.push(`regiao = $${params.length + 1}`); params.push(regiao || null); }
+    // Aprovar uma tarefa criada sozinha (pré-aprovação, migration 0089).
+    if (por_aprovar !== undefined) { sets.push(`por_aprovar = $${params.length + 1}`); params.push(!!por_aprovar); }
     if (sets.length === 0) return c.json({ error: "nada para actualizar" }, 400);
     sets.push(`updated_at = $${params.length + 1}`); params.push(now);
     params.push(c.req.param("id"));
@@ -3921,7 +3923,7 @@ app.get("/alertas", endpointCache(300000), async (c: any) => {
 
     // Tarefas abertas sem responsável ou sem prazo (auditoria D11)
     try {
-      const { rows: abertas } = await pool.query(`SELECT id, tarefa, status, inicio, data_limite, funcionario FROM tarefas WHERE status <> 'Concluída' AND COALESCE(arquivada, false) = false`);
+      const { rows: abertas } = await pool.query(`SELECT id, tarefa, status, inicio, data_limite, funcionario FROM tarefas WHERE status <> 'Concluída' AND COALESCE(arquivada, false) = false AND COALESCE(por_aprovar, false) = false`);
       for (const t of abertas) {
         const falta = faltaNaTarefa(t);
         if (!falta) continue;
