@@ -570,7 +570,17 @@ export function CRM() {
   const [alertCount, setAlertCount] = useState(0)
   const [consultoresLookup, setConsultoresLookup] = useState([])
   const [invSubTab, setInvSubTab] = useUrlState('invSubTab', 'Passivo') // sub-tab investidores
-  const [invArea, setInvArea] = useUrlState('invArea', '') // área dos ativos: '' (Geral) | 'Coimbra' | 'AMP'
+  // Área dos ativos: sempre 'Coimbra' ou 'AMP' — Porto e Coimbra nunca se
+  // misturam (sem "Geral"). Última escolha guardada na sessão.
+  const [invAreaUrl, setInvAreaUrl] = useUrlState('invArea', '')
+  const invArea = invAreaUrl === 'Coimbra' || invAreaUrl === 'AMP' ? invAreaUrl : (() => {
+    try { const r = sessionStorage.getItem('somnium.area.investidores-ativos'); return r === 'AMP' ? 'AMP' : 'Coimbra' } catch { return 'Coimbra' }
+  })()
+  const setInvArea = (r) => {
+    if (r !== 'Coimbra' && r !== 'AMP') return
+    setInvAreaUrl(r)
+    try { sessionStorage.setItem('somnium.area.investidores-ativos', r) } catch {}
+  }
   const [detailName, setDetailName] = useState(null) // nome para breadcrumb
   const [moveModal, setMoveModal] = useState(null) // { id, newColumn, type } | null
   const [agendar, setAgendar] = useState(null) // { id, newColumn, tipo } | null — janela de data ao mover para fases com passo agendado
@@ -645,7 +655,7 @@ export function CRM() {
   const dataTodos = useMemo(() => listQuery.data?.items ?? [], [listQuery.data])
   // Investidores ativos divididos por área de atuação (Porto | Coimbra).
   // Filtro client-side: quem atua nas duas áreas aparece em ambas.
-  const filtraArea = tab === 'Investidores' && invSubTab === 'Ativo' && !!invArea
+  const filtraArea = tab === 'Investidores' && invSubTab === 'Ativo'
   const data = useMemo(
     () => filtraArea ? dataTodos.filter(i => areasInvestidor(i).has(invArea)) : dataTodos,
     [dataTodos, filtraArea, invArea]
@@ -1080,7 +1090,7 @@ export function CRM() {
     <>
       <Header title="Departamento Comercial" subtitle="Imóveis, consultores, investidores e parceiros" onRefresh={load} loading={loading} breadcrumbs={breadcrumbs}
         regiao={regionalKey ? <RegiaoToggle value={regiaoActiva} onChange={setRegiaoActiva} />
-          : tab === 'Investidores' && invSubTab === 'Ativo' ? <RegiaoToggle value={invArea || null} onChange={r => { setInvArea(r || ''); setDetail(null, { replace: true }) }} />
+          : tab === 'Investidores' && invSubTab === 'Ativo' ? <RegiaoToggle value={invArea} options={['Coimbra', 'AMP']} onChange={r => { if (!r) return; setInvArea(r); setDetail(null, { replace: true }) }} />
           : null} />
       <div className="p-4 sm:p-6 flex flex-col gap-3 sm:gap-4">
 
