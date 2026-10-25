@@ -21,7 +21,7 @@ import { Button } from '../components/ui/Button.jsx'
 import { Modal } from '../components/ui/Modal.jsx'
 import { MultiSelect } from '../components/ui/MultiSelect.jsx'
 import { Combobox } from '../components/ui/Combobox.jsx'
-import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, etapaImovel, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR, PARC_TIPOS, PARC_ESTADOS, CONCELHOS_POR_REGIAO, concelhosDe } from '../constants.js'
+import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, etapaImovel, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR, PARC_TIPOS, PARC_ESTADOS, CONCELHOS_POR_REGIAO, concelhosDe } from '../constants.js'
 import { apiFetch, apiFetchJson, openDocument } from '../lib/api.js'
 import { useUrlState, useUrlFilters } from '../hooks/useUrlState.js'
 import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
@@ -1188,55 +1188,9 @@ export function CRM() {
           {/* Oportunidades — fila de aprovar/rejeitar da pesquisa diária Idealista */}
           {tab === 'Oportunidades' && <OportunidadesPanel regiao={regiaoActiva} />}
 
-          {/* Investidores: Split View (lista compacta + detalhe lado a lado) */}
+          {/* Investidores: ficha com navegação anterior/seguinte */}
           {tab === 'Investidores' && detail ? (
-            <div className="flex gap-4" style={{ minHeight: '70vh' }}>
-              {/* Lista compacta à esquerda */}
-              <div className="w-72 shrink-0 bg-surface-raised  rounded-xl border border-line  shadow-xs overflow-hidden flex flex-col">
-                <div className="flex-1 overflow-y-auto">
-                  {[...data].sort((a, b) => {
-                    // Estados desconhecidos vão para o fim (não para o topo).
-                    const ai = INV_STATUS.indexOf(a.status); const bi = INV_STATUS.indexOf(b.status)
-                    const ax = ai === -1 ? Infinity : ai; const bx = bi === -1 ? Infinity : bi
-                    return (ax - bx) || (a.nome || '').localeCompare(b.nome || '')
-                  }).map((inv, idx, sorted) => {
-                    const isActive = inv.id === detail
-                    const prevInv = idx > 0 ? sorted[idx - 1] : null
-                    const statusChanged = !prevInv || prevInv.status !== inv.status
-                    return (
-                      <div key={inv.id}>
-                        {statusChanged && (
-                          <div className="px-3 py-1 bg-surface border-b border-line">
-                            <span className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider">{inv.status}</span>
-                          </div>
-                        )}
-                        <button onClick={() => setDetail(inv.id)}
-                          className={`w-full text-left px-3 py-2.5 border-b border-line transition-[background-color,border-color,color,box-shadow,opacity,transform] ${
-                            isActive
-                              ? `${invSubTab === 'Ativo' ? 'bg-success/10 border-l-3 border-l-green-500' : 'bg-warning/10 border-l-3 border-l-yellow-400'}`
-                              : 'hover:bg-surface'
-                          }`}>
-                          <div className="flex items-center gap-2">
-                            <ClassBadge cls={inv.classificacao} />
-                            <span className={`text-sm truncate ${isActive ? 'font-bold text-ink' : 'text-ink'}`}>{inv.nome}</span>
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            {inv.capital_max > 0 && <span className="text-[10px] num text-ink">{EUR(inv.capital_max)}</span>}
-                            {inv.telemovel && <span className="text-[10px] text-ink-muted">{inv.telemovel}</span>}
-                          </div>
-                        </button>
-                      </div>
-                    )
-                  })}
-                  {data.length === 0 && <p className="text-xs text-ink-muted text-center py-6">Sem investidores</p>}
-                </div>
-                <div className="px-3 py-2 border-t border-line bg-surface text-[10px] text-ink-muted text-center">
-                  {data.length} investidor{data.length !== 1 ? 'es' : ''} {invSubTab === 'Ativo' ? 'ativos' : 'passivos'}
-                </div>
-              </div>
-
-              {/* Detalhe à direita */}
-              <div className="flex-1 min-w-0">
+            <div>
                 {/* Navegação anterior/seguinte */}
                 {(() => {
                   const currentIdx = data.findIndex(i => i.id === detail)
@@ -1260,7 +1214,6 @@ export function CRM() {
                   <DetailPanel type="Investidores" id={detail} onClose={() => { setDetail(null, { replace: true }); load() }} onSave={load}
                     onNavigate={(navType, navId) => { setDetail(null, { replace: true }); setTab(navType, { replace: true }); setTimeout(() => setDetail(navId), 150) }} />
                 </Suspense>
-              </div>
             </div>
           ) : detail && ['Imóveis', 'Consultores', 'Parceiros'].includes(tab) ? (
             <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>}>
