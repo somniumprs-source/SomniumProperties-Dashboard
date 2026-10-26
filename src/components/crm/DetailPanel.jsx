@@ -17,6 +17,7 @@ import { PartilharAcesso } from '../PartilharAcesso.jsx'
 import { GravacoesConsultor } from './GravacoesConsultor.jsx'
 import { DocumentosConsultor } from './DocumentosConsultor.jsx'
 import { RegistoChamadasTab } from './RegistoChamadasTab.jsx'
+import { ChamadasInvestidor } from './ChamadasInvestidor.jsx'
 import { isWholesaling } from '../../lib/modelos.js'
 import { fmtTempoMercado } from '../../lib/tempoMercado.js'
 import { DealBreakersPanel } from './DealBreakersPanel.jsx'
@@ -1459,6 +1460,11 @@ function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onC
 
   return (
     <div className="space-y-3">
+      {entidadeTipo === 'investidores' && (
+        <div className="pb-5 mb-2 border-b border-line">
+          <ChamadasInvestidor investidorId={entidadeId} />
+        </div>
+      )}
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-semibold text-ink">Histórico de Reuniões</h3>
         <div className="flex items-center gap-3">

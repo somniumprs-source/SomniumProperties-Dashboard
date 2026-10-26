@@ -34,6 +34,8 @@ import { listDocumentos, persistDocumento, streamPdfToResAndPersist, urlAssinada
 import { ensureOportunidadesScraperTable } from './oportunidadesScraper.js'
 import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
 import { generateMeetingPDF } from './pdfMeetingReport.js'
+import { generateChamadasInvestidoresPDF } from './pdfChamadasInvestidores.js'
+import { ensureInvestidorGravacoesTable, tabelaDaGravacao, sanitizeRegistoInvestidor, analisarEGravar, relatorioChamadasInvestidores, sinteseChamadasInvestidores, TIPOS_CHAMADA_INV } from './chamadasInvestidor.js'
 import { ensureLabels, organizeMessage, organizeBatch, autoOrganize, isConfigured as gmailConfigured } from './gmailSync.js'
 import { exportDepartment } from './excelExport.js'
 import { listarFaturas, exportarZip, marcarEnviadas } from './contabilidade.js'
@@ -1928,14 +1930,22 @@ router.get('/consultores/:id/gravacoes', async (req, res) => {
 router.get('/gravacoes/pendentes', async (req, res) => {
   try {
     if (!supabaseStorage) return res.json([])
+    await ensureInvestidorGravacoesTable(pool)
     // Inclui pendentes + gravacoes presas em a_transcrever ha >15min (worker que
     // crashou a meio): de outra forma ficariam encravadas para sempre.
+    // Junta as chamadas com investidores: o worker trata as duas da mesma forma
+    // (consultor_nome so serve para o log).
     const staleCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString()
     const { rows } = await pool.query(
-      `SELECT g.id, g.consultor_id, g.ficheiro_path, g.ficheiro_nome, c.nome AS consultor_nome
-       FROM consultor_gravacoes g LEFT JOIN consultores c ON c.id = g.consultor_id
-       WHERE g.estado = 'pendente' OR (g.estado = 'a_transcrever' AND g.updated_at < $1)
-       ORDER BY g.created_at ASC LIMIT 5`,
+      `SELECT * FROM (
+         SELECT g.id, g.consultor_id, g.ficheiro_path, g.ficheiro_nome, c.nome AS consultor_nome, g.created_at
+         FROM consultor_gravacoes g LEFT JOIN consultores c ON c.id = g.consultor_id
+         WHERE g.estado = 'pendente' OR (g.estado = 'a_transcrever' AND g.updated_at < $1)
+         UNION ALL
+         SELECT g.id, NULL, g.ficheiro_path, g.ficheiro_nome, 'Investidor: ' || COALESCE(i.nome, '?'), g.created_at
+         FROM investidor_gravacoes g LEFT JOIN investidores i ON i.id = g.investidor_id
+         WHERE g.estado = 'pendente' OR (g.estado = 'a_transcrever' AND g.updated_at < $1)
+       ) t ORDER BY created_at ASC LIMIT 5`,
       [staleCutoff]
     )
     const out = []
@@ -1954,8 +1964,9 @@ router.post('/gravacoes/:id/iniciar-transcricao', async (req, res) => {
     // Permite re-adquirir um lock obsoleto (a_transcrever ha >15min) sem roubar
     // um lock fresco de outro worker concorrente.
     const staleCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString()
+    const tabela = await tabelaDaGravacao(pool, req.params.id)
     const { rows: [row] } = await pool.query(
-      `UPDATE consultor_gravacoes SET estado = 'a_transcrever', updated_at = $2
+      `UPDATE ${tabela} SET estado = 'a_transcrever', updated_at = $2
        WHERE id = $1 AND (estado = 'pendente' OR (estado = 'a_transcrever' AND updated_at < $3)) RETURNING id`,
       [req.params.id, new Date().toISOString(), staleCutoff]
     )
@@ -1969,6 +1980,16 @@ router.post('/gravacoes/:id/transcricao', async (req, res) => {
     const { transcricao, duracao_seg } = req.body || {}
     if (!transcricao?.trim()) return res.status(400).json({ error: 'Transcricao vazia' })
     const now = new Date().toISOString()
+    if (await tabelaDaGravacao(pool, req.params.id) === 'investidor_gravacoes') {
+      const { rows: [gi] } = await pool.query(
+        `UPDATE investidor_gravacoes SET transcricao = $2, duracao_seg = $3, estado = 'transcrito', erro = NULL, updated_at = $4
+         WHERE id = $1 RETURNING *`,
+        [req.params.id, transcricao, duracao_seg ?? null, now]
+      )
+      if (!gi) return res.status(404).json({ error: 'Gravacao nao encontrada' })
+      try { return res.json(await analisarEGravar(pool, req.params.id)) }
+      catch { const { rows: [f] } = await pool.query('SELECT * FROM investidor_gravacoes WHERE id = $1', [req.params.id]); return res.json(f) }
+    }
     const { rows: [g] } = await pool.query(
       `UPDATE consultor_gravacoes SET transcricao = $2, duracao_seg = $3, estado = 'transcrito', erro = NULL, updated_at = $4
        WHERE id = $1 RETURNING *`,
@@ -1998,8 +2019,9 @@ router.post('/gravacoes/:id/transcricao', async (req, res) => {
 // Worker: reportar falha de transcricao (audio corrompido, whisper falhou, etc.).
 router.post('/gravacoes/:id/falha', async (req, res) => {
   try {
+    const tabela = await tabelaDaGravacao(pool, req.params.id)
     const { rows: [row] } = await pool.query(
-      `UPDATE consultor_gravacoes SET estado = 'erro', erro = $2, updated_at = $3 WHERE id = $1 RETURNING id`,
+      `UPDATE ${tabela} SET estado = 'erro', erro = $2, updated_at = $3 WHERE id = $1 RETURNING id`,
       [req.params.id, (req.body?.erro || 'Falha na transcricao').slice(0, 500), new Date().toISOString()]
     )
     res.json({ ok: !!row })
@@ -2009,8 +2031,9 @@ router.post('/gravacoes/:id/falha', async (req, res) => {
 // Repor uma gravacao em erro para 'pendente' (re-tentar transcricao).
 router.post('/gravacoes/:id/retomar', async (req, res) => {
   try {
+    const tabela = await tabelaDaGravacao(pool, req.params.id)
     const { rows: [row] } = await pool.query(
-      `UPDATE consultor_gravacoes SET estado = 'pendente', erro = NULL, updated_at = $2
+      `UPDATE ${tabela} SET estado = 'pendente', erro = NULL, updated_at = $2
        WHERE id = $1 AND estado IN ('erro','a_transcrever') RETURNING *`,
       [req.params.id, new Date().toISOString()]
     )
@@ -2243,6 +2266,116 @@ router.get('/consultores/:id/interacoes', async (req, res) => {
       [req.params.id]
     )
     res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Chamadas gravadas com investidores (SOP 4) ───────────────
+// Mesmo fluxo das gravacoes dos consultores (bucket "Gravacoes", worker
+// Whisper local), mas avaliadas contra o SOP 4. Logica em chamadasInvestidor.js.
+router.post('/investidores/:id/chamadas', uploadRateLimit, uploadAudio.single('audio'), async (req, res) => {
+  try {
+    await ensureInvestidorGravacoesTable(pool)
+    const inv = await Investidores.getById(req.params.id)
+    if (!inv) return res.status(404).json({ error: 'Investidor nao encontrado' })
+    if (!req.file) return res.status(400).json({ error: 'Escolhe o ficheiro de audio da chamada' })
+    if (!supabaseStorage) return res.status(503).json({ error: 'Supabase Storage nao configurado' })
+
+    const id = randomUUID()
+    const ext = (path.extname(req.file.originalname) || '.mp3').toLowerCase()
+    const storagePath = `investidores/${req.params.id}/${id}${ext}`
+    const { error: upErr } = await supabaseStorage.storage
+      .from(GRAVACOES_BUCKET)
+      .upload(storagePath, req.file.buffer, { contentType: req.file.mimetype || 'application/octet-stream', upsert: true })
+    if (upErr) return res.status(500).json({ error: `Storage: ${upErr.message}` })
+
+    const tipo = TIPOS_CHAMADA_INV.includes(req.body?.tipo_chamada) ? req.body.tipo_chamada : 'cold_call'
+    const dataChamada = /^\d{4}-\d{2}-\d{2}$/.test(req.body?.data_chamada || '') ? req.body.data_chamada : new Date().toISOString().slice(0, 10)
+    const u = await resolveCrmUser(req).catch(() => null)
+    const now = new Date().toISOString()
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO investidor_gravacoes (id, investidor_id, tipo_chamada, titulo, data_chamada, realizada_por, ficheiro_path, ficheiro_nome, estado, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pendente',$9,$9) RETURNING *`,
+      [id, req.params.id, tipo, `${tipo === 'follow_up' ? 'Follow-up' : 'Cold Call'} ${dataChamada}`, dataChamada,
+       u?.nome || u?.email || null, storagePath, req.file.originalname, now]
+    )
+    res.json(row)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/investidores/:id/chamadas', async (req, res) => {
+  try {
+    await ensureInvestidorGravacoesTable(pool)
+    const { rows } = await pool.query(
+      'SELECT * FROM investidor_gravacoes WHERE investidor_id = $1 ORDER BY data_chamada DESC, created_at DESC',
+      [req.params.id]
+    )
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Registo manual (fonte de verdade): editar ou "aceitar sugestao" da IA.
+router.patch('/chamadas-investidores/:id/registo', async (req, res) => {
+  try {
+    await ensureInvestidorGravacoesTable(pool)
+    const { rows: [current] } = await pool.query('SELECT * FROM investidor_gravacoes WHERE id = $1', [req.params.id])
+    if (!current) return res.status(404).json({ error: 'Chamada nao encontrada' })
+    const body = req.body || {}
+    const r = sanitizeRegistoInvestidor(body, current)
+    const tipo = TIPOS_CHAMADA_INV.includes(body.tipo_chamada) ? body.tipo_chamada : current.tipo_chamada
+    const dataChamada = /^\d{4}-\d{2}-\d{2}$/.test(body.data_chamada || '') ? body.data_chamada : current.data_chamada
+    const fonte = body.registo_fonte === 'ia_sugestao_confirmada' ? 'ia_sugestao_confirmada' : 'manual'
+    const { rows: [row] } = await pool.query(
+      `UPDATE investidor_gravacoes SET resultado = $2, proximo_passo = $3, temperatura = $4, data_follow_up = $5, notas = $6,
+         tipo_chamada = $7, data_chamada = $8, registo_fonte = $9, registo_confirmado_em = $10, updated_at = $10
+       WHERE id = $1 RETURNING *`,
+      [req.params.id, r.resultado, r.proximo_passo, r.temperatura, r.data_follow_up, r.notas, tipo, dataChamada, fonte, new Date().toISOString()]
+    )
+    res.json(row)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/chamadas-investidores/:id/analisar', async (req, res) => {
+  try {
+    await ensureInvestidorGravacoesTable(pool)
+    res.json(await analisarEGravar(pool, req.params.id))
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/chamadas-investidores/:id', async (req, res) => {
+  try {
+    await ensureInvestidorGravacoesTable(pool)
+    const { rows: [g] } = await pool.query('SELECT ficheiro_path FROM investidor_gravacoes WHERE id = $1', [req.params.id])
+    if (!g) return res.status(404).json({ error: 'Chamada nao encontrada' })
+    if (g.ficheiro_path && supabaseStorage) {
+      await supabaseStorage.storage.from(GRAVACOES_BUCKET).remove([g.ficheiro_path]).catch(() => {})
+    }
+    await pool.query('DELETE FROM investidor_gravacoes WHERE id = $1', [req.params.id])
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+const periodoChamadas = (req) => ({
+  desde: /^\d{4}-\d{2}-\d{2}$/.test(req.query.desde || '') ? req.query.desde : '1970-01-01',
+  ate: /^\d{4}-\d{2}-\d{2}$/.test(req.query.ate || '') ? req.query.ate : '2999-12-31',
+})
+
+router.get('/chamadas-investidores/relatorio', async (req, res) => {
+  try { res.json(await relatorioChamadasInvestidores(pool, periodoChamadas(req))) }
+  catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/chamadas-investidores/sintese', async (req, res) => {
+  try { res.json((await sinteseChamadasInvestidores(pool, periodoChamadas(req))).sintese) }
+  catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/chamadas-investidores/relatorio/pdf', async (req, res) => {
+  try {
+    const periodo = periodoChamadas(req)
+    const { rel, sintese } = await sinteseChamadasInvestidores(pool, periodo)
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', pdfDisposition(req, `Relatorio_Chamadas_Investidores_${periodo.desde}_${periodo.ate}.pdf`))
+    generateChamadasInvestidoresPDF(rel, sintese).pipe(res)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 

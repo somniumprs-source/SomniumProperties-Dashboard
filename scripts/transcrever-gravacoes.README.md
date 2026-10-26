@@ -61,8 +61,14 @@ launchctl load   ~/Library/LaunchAgents/com.somnium.transcrever-gravacoes.plist
 | `WHISPER_PY` | `whisper` | Binario whisper python (fallback) |
 | `WHISPER_PY_MODEL` | `medium` | Modelo do whisper python |
 | `FFMPEG_BIN`/`FFPROBE_BIN` | `ffmpeg`/`ffprobe` | Conversao/duracao |
+| `INTERNAL_API_KEY` | (obrigatoria) | Autentica o worker nas rotas `/gravacoes` (`x-api-key`) |
+| `SUPABASE_ANON_KEY` | (obrigatoria) | Bearer para o gateway: o `crm` tem `verify_jwt = true` |
 
-O `crm` corre com `verify_jwt = false`, por isso o worker nao precisa de chave.
+Sem `SUPABASE_ANON_KEY` o gateway devolve `401 UNAUTHORIZED_NO_AUTH_HEADER` e nada e
+transcrito (aconteceu de 25/08 a 26/10/2026). E a anon key publica (`VITE_SUPABASE_ANON_KEY`).
+
+O mesmo worker transcreve as gravacoes dos consultores e as chamadas com investidores
+(`investidor_gravacoes`, SOP 4): `/gravacoes/pendentes` devolve as duas.
 
 ## Re-tentar uma gravacao em erro
 No CRM, a gravacao em estado "Erro" tem botao "Tentar de novo" (repoe para pendente).

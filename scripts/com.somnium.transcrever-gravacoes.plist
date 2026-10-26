@@ -42,6 +42,12 @@
         <key>INTERNAL_API_KEY</key>
         <string></string>
 
+        <!-- Anon key publica do Supabase (VITE_SUPABASE_ANON_KEY do .env). O gateway
+             da funcao crm tem verify_jwt = true: sem este Bearer devolve 401
+             UNAUTHORIZED_NO_AUTH_HEADER antes de chegar ao codigo. -->
+        <key>SUPABASE_ANON_KEY</key>
+        <string></string>
+
         <!-- Motor: whisper python (openai-whisper). Modelo small = bom equilibrio
              qualidade/velocidade para 8GB RAM em CPU. Sobe para medium se quiseres
              mais qualidade (mais lento). Para usar whisper.cpp (mais rapido), define

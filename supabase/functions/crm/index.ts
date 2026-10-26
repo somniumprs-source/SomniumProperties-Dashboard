@@ -29,6 +29,8 @@ import {
 import { persistDocumento, listDocumentos, urlAssinadaDocumento, apagarDocumentosDoImovel, apagarFotosDoImovel } from "../_shared/documentLifecycle.ts";
 import { generateImovelPDF } from "../_shared/pdfReport.ts";
 import { generateMeetingPDF } from "../_shared/pdfMeetingReport.ts";
+import { generateChamadasInvestidoresPDF } from "../_shared/pdfChamadasInvestidores.ts";
+import { ensureInvestidorGravacoesTable, tabelaDaGravacao, sanitizeRegistoInvestidor, analisarEGravar, relatorioChamadasInvestidores, sinteseChamadasInvestidores, TIPOS_CHAMADA_INV } from "../_shared/chamadasInvestidor.ts";
 import { analyzeReuniao, autoFillConsultor, autoFillInvestidor } from "../_shared/meetingAnalysis.ts";
 import { isConfigured as firefliesConfigured, syncFireflies } from "../_shared/firefliesSync.ts";
 import { runEstudoLocalizacao } from "../_shared/estudoLocalizacao.ts";
@@ -2582,15 +2584,23 @@ app.get("/consultores/:id/gravacoes", async (c: any) => {
 app.get("/gravacoes/pendentes", async (c: any) => {
   try {
     await ensureGravacoesTable();
+    await ensureInvestidorGravacoesTable(pool);
     if (!supabase) return c.json([]);
     // Inclui pendentes + gravacoes presas em a_transcrever ha >15min (worker que
     // crashou a meio): de outra forma ficariam encravadas para sempre.
+    // Junta as chamadas com investidores: o worker trata as duas da mesma forma
+    // (consultor_nome so serve para o log).
     const staleCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
     const { rows } = await pool.query(
-      `SELECT g.id, g.consultor_id, g.ficheiro_path, g.ficheiro_nome, c.nome AS consultor_nome
-       FROM consultor_gravacoes g LEFT JOIN consultores c ON c.id = g.consultor_id
-       WHERE g.estado = 'pendente' OR (g.estado = 'a_transcrever' AND g.updated_at < $1)
-       ORDER BY g.created_at ASC LIMIT 5`,
+      `SELECT * FROM (
+         SELECT g.id, g.consultor_id, g.ficheiro_path, g.ficheiro_nome, c.nome AS consultor_nome, g.created_at
+         FROM consultor_gravacoes g LEFT JOIN consultores c ON c.id = g.consultor_id
+         WHERE g.estado = 'pendente' OR (g.estado = 'a_transcrever' AND g.updated_at < $1)
+         UNION ALL
+         SELECT g.id, NULL, g.ficheiro_path, g.ficheiro_nome, 'Investidor: ' || COALESCE(i.nome, '?'), g.created_at
+         FROM investidor_gravacoes g LEFT JOIN investidores i ON i.id = g.investidor_id
+         WHERE g.estado = 'pendente' OR (g.estado = 'a_transcrever' AND g.updated_at < $1)
+       ) t ORDER BY created_at ASC LIMIT 5`,
       [staleCutoff],
     );
     const out: any[] = [];
@@ -2608,8 +2618,9 @@ app.post("/gravacoes/:id/iniciar-transcricao", async (c: any) => {
     // Permite re-adquirir um lock obsoleto (a_transcrever ha >15min) sem roubar
     // um lock fresco de outro worker concorrente.
     const staleCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const tabela = await tabelaDaGravacao(pool, c.req.param("id"));
     const { rows: [row] } = await pool.query(
-      `UPDATE consultor_gravacoes SET estado = 'a_transcrever', updated_at = $2
+      `UPDATE ${tabela} SET estado = 'a_transcrever', updated_at = $2
        WHERE id = $1 AND (estado = 'pendente' OR (estado = 'a_transcrever' AND updated_at < $3)) RETURNING id`,
       [c.req.param("id"), new Date().toISOString(), staleCutoff],
     );
@@ -2625,6 +2636,16 @@ app.post("/gravacoes/:id/transcricao", async (c: any) => {
     const transcricao = typeof body.transcricao === "string" ? body.transcricao : "";
     if (!transcricao.trim()) return c.json({ error: "Transcricao vazia" }, 400);
     const now = new Date().toISOString();
+    if (await tabelaDaGravacao(pool, id) === "investidor_gravacoes") {
+      const { rows: [gi] } = await pool.query(
+        `UPDATE investidor_gravacoes SET transcricao = $2, duracao_seg = $3, estado = 'transcrito', erro = NULL, updated_at = $4
+         WHERE id = $1 RETURNING *`,
+        [id, transcricao, body.duracao_seg ?? null, now],
+      );
+      if (!gi) return c.json({ error: "Gravacao nao encontrada" }, 404);
+      try { return c.json(await analisarEGravar(pool, id)); }
+      catch { const { rows: [f] } = await pool.query("SELECT * FROM investidor_gravacoes WHERE id = $1", [id]); return c.json(f); }
+    }
     const { rows: [g] } = await pool.query(
       `UPDATE consultor_gravacoes SET transcricao = $2, duracao_seg = $3, estado = 'transcrito', erro = NULL, updated_at = $4
        WHERE id = $1 RETURNING *`,
@@ -2653,8 +2674,9 @@ app.post("/gravacoes/:id/transcricao", async (c: any) => {
 app.post("/gravacoes/:id/falha", async (c: any) => {
   try {
     const body = await c.req.json().catch(() => ({}));
+    const tabela = await tabelaDaGravacao(pool, c.req.param("id"));
     const { rows: [row] } = await pool.query(
-      `UPDATE consultor_gravacoes SET estado = 'erro', erro = $2, updated_at = $3 WHERE id = $1 RETURNING id`,
+      `UPDATE ${tabela} SET estado = 'erro', erro = $2, updated_at = $3 WHERE id = $1 RETURNING id`,
       [c.req.param("id"), String(body.erro || "Falha na transcricao").slice(0, 500), new Date().toISOString()],
     );
     return c.json({ ok: !!row });
@@ -2664,8 +2686,9 @@ app.post("/gravacoes/:id/falha", async (c: any) => {
 // Repor uma gravacao em erro para 'pendente' (re-tentar transcricao).
 app.post("/gravacoes/:id/retomar", async (c: any) => {
   try {
+    const tabela = await tabelaDaGravacao(pool, c.req.param("id"));
     const { rows: [row] } = await pool.query(
-      `UPDATE consultor_gravacoes SET estado = 'pendente', erro = NULL, updated_at = $2
+      `UPDATE ${tabela} SET estado = 'pendente', erro = NULL, updated_at = $2
        WHERE id = $1 AND estado IN ('erro','a_transcrever') RETURNING *`,
       [c.req.param("id"), new Date().toISOString()],
     );
@@ -2812,6 +2835,124 @@ app.get("/gravacoes", async (c: any) => {
       params,
     );
     return c.json(rows);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ── Chamadas gravadas com investidores (SOP 4) ───────────────
+// Mesmo fluxo das gravacoes dos consultores (bucket "Gravacoes", worker
+// Whisper local), mas avaliadas contra o SOP 4. Logica em chamadasInvestidor.ts.
+app.post("/investidores/:id/chamadas", async (c: any) => {
+  try {
+    const _rl = await checkUploadLimit(c, 10, 60 * 60 * 1000); if (_rl) return _rl;
+    await ensureInvestidorGravacoesTable(pool);
+    const investidorId = c.req.param("id");
+    const { rows: [inv] } = await pool.query("SELECT id FROM investidores WHERE id = $1", [investidorId]);
+    if (!inv) return c.json({ error: "Investidor nao encontrado" }, 404);
+
+    const form = await c.req.formData();
+    const fileRaw = form.get("audio");
+    const file = fileRaw instanceof File ? fileRaw : null;
+    if (!file) return c.json({ error: "Escolhe o ficheiro de audio da chamada" }, 400);
+    assertSafeUpload(file, 200 * 1024 * 1024, AUDIO_ALLOWED_EXT);
+    if (!supabase) return c.json({ error: "Storage indisponivel" }, 503);
+
+    const id = crypto.randomUUID();
+    const ext = (file.name.match(/\.[a-z0-9]+$/i)?.[0] || ".mp3").toLowerCase();
+    const storagePath = `investidores/${investidorId}/${id}${ext}`;
+    await uploadPrivate(GRAVACOES_BUCKET, storagePath, new Uint8Array(await file.arrayBuffer()), file.type || "application/octet-stream");
+
+    const tipo = TIPOS_CHAMADA_INV.includes(String(form.get("tipo_chamada"))) ? String(form.get("tipo_chamada")) : "cold_call";
+    const dataChamada = /^\d{4}-\d{2}-\d{2}$/.test(String(form.get("data_chamada") || "")) ? String(form.get("data_chamada")) : new Date().toISOString().slice(0, 10);
+    const u = await resolveCrmUser(c);
+    const now = new Date().toISOString();
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO investidor_gravacoes (id, investidor_id, tipo_chamada, titulo, data_chamada, realizada_por, ficheiro_path, ficheiro_nome, estado, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pendente',$9,$9) RETURNING *`,
+      [id, investidorId, tipo, `${tipo === "follow_up" ? "Follow-up" : "Cold Call"} ${dataChamada}`, dataChamada,
+       u?.nome || u?.email || null, storagePath, file.name, now],
+    );
+    return c.json(row);
+  } catch (e) {
+    console.error("[chamadas investidor upload]", (e as Error).message);
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+app.get("/investidores/:id/chamadas", async (c: any) => {
+  try {
+    await ensureInvestidorGravacoesTable(pool);
+    const { rows } = await pool.query(
+      `SELECT * FROM investidor_gravacoes WHERE investidor_id = $1 ORDER BY data_chamada DESC, created_at DESC`,
+      [c.req.param("id")],
+    );
+    return c.json(rows);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// Registo manual (fonte de verdade): editar ou "aceitar sugestao" da IA.
+app.patch("/chamadas-investidores/:id/registo", async (c: any) => {
+  try {
+    await ensureInvestidorGravacoesTable(pool);
+    const id = c.req.param("id");
+    const { rows: [current] } = await pool.query("SELECT * FROM investidor_gravacoes WHERE id = $1", [id]);
+    if (!current) return c.json({ error: "Chamada nao encontrada" }, 404);
+    const body = await c.req.json().catch(() => ({}));
+    const r = sanitizeRegistoInvestidor(body || {}, current);
+    const tipo = TIPOS_CHAMADA_INV.includes(body?.tipo_chamada) ? body.tipo_chamada : current.tipo_chamada;
+    const dataChamada = /^\d{4}-\d{2}-\d{2}$/.test(body?.data_chamada || "") ? body.data_chamada : current.data_chamada;
+    const fonte = body?.registo_fonte === "ia_sugestao_confirmada" ? "ia_sugestao_confirmada" : "manual";
+    const { rows: [row] } = await pool.query(
+      `UPDATE investidor_gravacoes SET resultado = $2, proximo_passo = $3, temperatura = $4, data_follow_up = $5, notas = $6,
+         tipo_chamada = $7, data_chamada = $8, registo_fonte = $9, registo_confirmado_em = $10, updated_at = $10
+       WHERE id = $1 RETURNING *`,
+      [id, r.resultado, r.proximo_passo, r.temperatura, r.data_follow_up, r.notas, tipo, dataChamada, fonte, new Date().toISOString()],
+    );
+    return c.json(row);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/chamadas-investidores/:id/analisar", async (c: any) => {
+  try {
+    await ensureInvestidorGravacoesTable(pool);
+    return c.json(await analisarEGravar(pool, c.req.param("id")));
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.delete("/chamadas-investidores/:id", async (c: any) => {
+  try {
+    await ensureInvestidorGravacoesTable(pool);
+    const { rows: [g] } = await pool.query("SELECT ficheiro_path FROM investidor_gravacoes WHERE id = $1", [c.req.param("id")]);
+    if (!g) return c.json({ error: "Chamada nao encontrada" }, 404);
+    if (g.ficheiro_path) await removeFromStorage(GRAVACOES_BUCKET, g.ficheiro_path);
+    await pool.query("DELETE FROM investidor_gravacoes WHERE id = $1", [c.req.param("id")]);
+    return c.json({ ok: true });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+const periodoChamadas = (c: any) => ({
+  desde: /^\d{4}-\d{2}-\d{2}$/.test(c.req.query("desde") || "") ? c.req.query("desde") : "1970-01-01",
+  ate: /^\d{4}-\d{2}-\d{2}$/.test(c.req.query("ate") || "") ? c.req.query("ate") : "2999-12-31",
+});
+
+app.get("/chamadas-investidores/relatorio", async (c: any) => {
+  try { return c.json(await relatorioChamadasInvestidores(pool, periodoChamadas(c))); }
+  catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.get("/chamadas-investidores/sintese", async (c: any) => {
+  try { return c.json((await sinteseChamadasInvestidores(pool, periodoChamadas(c))).sintese); }
+  catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.get("/chamadas-investidores/relatorio/pdf", async (c: any) => {
+  try {
+    const periodo = periodoChamadas(c);
+    const { rel, sintese } = await sinteseChamadasInvestidores(pool, periodo);
+    const buffer = await streamToBuffer(generateChamadasInvestidoresPDF(rel, sintese));
+    return c.body(buffer, 200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": pdfDisposition(c, `Relatorio_Chamadas_Investidores_${periodo.desde}_${periodo.ate}.pdf`),
+    });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 

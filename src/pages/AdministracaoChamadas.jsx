@@ -4,6 +4,7 @@
  * de todas as chamadas (Cold/Discovery/Close/Pivot) no período seleccionado.
  * O preenchimento de cada chamada acontece na ficha do consultor
  * (FollowUpsSection/GravacaoCard) — esta aba é só leitura.
+ * A vista "Investidores" (SOP 4) vive em AdministracaoChamadasInvestidores.jsx.
  */
 import { useState, useEffect, useMemo } from 'react'
 import { Phone, TrendingUp, Target, Award, Clock, Handshake, AlertCircle } from 'lucide-react'
@@ -12,6 +13,8 @@ import { KpiCard } from '../components/ui/KpiCard.jsx'
 import { ScrollableTable } from '../components/ui/ScrollableTable.jsx'
 import { TIPO_CHAMADA_LABEL, TIPO_CHAMADA_COLOR, bandaScorecard, fmtDate, resultadoResumo } from '../constants.js'
 import { dotClass } from '../lib/statusTone.js'
+import { useUrlState } from '../hooks/useUrlState.js'
+import { AdministracaoChamadasInvestidores } from './AdministracaoChamadasInvestidores.jsx'
 
 const hoje = () => new Date().toISOString().slice(0, 10)
 const diasAtras = n => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10)
@@ -32,7 +35,7 @@ function BandaRow({ label, cor, n, total }) {
   )
 }
 
-export function AdministracaoChamadas() {
+function AvaliacaoConsultores() {
   const [desde, setDesde] = useState(diasAtras(30))
   const [ate, setAte] = useState(hoje())
   const [dados, setDados] = useState(null)
@@ -182,6 +185,25 @@ export function AdministracaoChamadas() {
           </ScrollableTable>
         )}
       </div>
+    </div>
+  )
+}
+
+const AREAS = ['Consultores', 'Investidores']
+
+export function AdministracaoChamadas() {
+  const [area, setArea] = useUrlState('area', 'Consultores')
+  return (
+    <div className="space-y-4">
+      <div className="inline-flex rounded-lg border border-line bg-surface-raised p-0.5">
+        {AREAS.map(a => (
+          <button key={a} type="button" onClick={() => setArea(a)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${area === a ? 'bg-ink text-surface' : 'text-ink-muted hover:text-ink'}`}>
+            {a}
+          </button>
+        ))}
+      </div>
+      {area === 'Investidores' ? <AdministracaoChamadasInvestidores /> : <AvaliacaoConsultores />}
     </div>
   )
 }
