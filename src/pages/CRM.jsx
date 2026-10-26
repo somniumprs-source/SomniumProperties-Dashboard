@@ -943,6 +943,11 @@ export function CRM() {
       toast('Escolhe Coimbra ou AMP antes de criar — em "Geral" não é possível atribuir região ao novo registo', 'error')
       return
     }
+    // Sem tipo, o investidor ficava fora das abas Passivo e Ativo.
+    if (tab === 'Investidores' && parseTipoPrincipalArr(item.tipo_principal).length === 0) {
+      toast('Escolhe o Tipo de Investidor (Ativo e/ou Passivo) antes de guardar', 'error')
+      return
+    }
     try {
       const url = isNew ? `/api/crm/${endpoint}` : `/api/crm/${endpoint}/${item.id}`
       const method = isNew ? 'POST' : 'PUT'

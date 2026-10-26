@@ -173,8 +173,9 @@ function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at 
           // filtro é "contém", não igualdade exacta (senão nunca aparecia em
           // nenhuma das duas abas quando tem os dois valores).
           if (table === 'investidores' && k === 'tipo_principal') {
-            params.push(`%"${v}"%`)
-            whereParts.push(`tipo_principal LIKE $${params.length}`)
+            // Também aceita o formato antigo (string simples, ex: 'Passivo').
+            params.push(`%"${v}"%`, v)
+            whereParts.push(`(tipo_principal LIKE $${params.length - 1} OR tipo_principal = $${params.length})`)
             continue
           }
           params.push(v)
