@@ -363,12 +363,12 @@ try {
         // contexto. Fica na linha do tempo só se o envio correu bem.
         let apresentacaoEnviada = false
         if (action === 'created' && investidorId) {
-          const { emailApresentacaoInvestidor, REPLY_TO_APRESENTACAO } = await import('./src/db/emailApresentacaoInvestidor.js')
+          const { emailApresentacaoInvestidor } = await import('./src/db/emailApresentacaoInvestidor.js')
+          const { sendGmail } = await import('./src/db/gmailSend.js')
           const ap = emailApresentacaoInvestidor({
             nome, objetivo: body.objetivo, experiencia: body.experiencia, capital: body.capital, empreiteiro: body.empreiteiro,
           })
-          const r = await sendEmail(ap.subject, ap.html, { to: email, text: ap.text, replyTo: REPLY_TO_APRESENTACAO })
-            .catch((e) => ({ ok: false, error: e.message }))
+          const r = await sendGmail({ to: email, subject: ap.subject, html: ap.html, text: ap.text })
           apresentacaoEnviada = r.ok
           if (r.ok) {
             const agoraIso = new Date().toISOString()

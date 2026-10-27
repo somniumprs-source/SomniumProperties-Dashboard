@@ -6,8 +6,6 @@
  * Espelho em supabase/functions/_shared/emailApresentacaoInvestidor.ts (manter em sync).
  */
 
-export const REPLY_TO_APRESENTACAO = 'somniumprs@gmail.com'
-
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
 ))

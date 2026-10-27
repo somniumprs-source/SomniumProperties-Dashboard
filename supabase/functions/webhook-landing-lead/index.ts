@@ -5,7 +5,8 @@ import { Investidores } from "../_shared/crud.ts";
 import { sendEmail } from "../_shared/emailService.ts";
 import pool from "../_shared/pg.ts";
 import { registar, POLITICA_VERSAO } from "../_shared/consentimentos.ts";
-import { emailApresentacaoInvestidor, REPLY_TO_APRESENTACAO } from "../_shared/emailApresentacaoInvestidor.ts";
+import { emailApresentacaoInvestidor } from "../_shared/emailApresentacaoInvestidor.ts";
+import { sendGmail } from "../_shared/gmailSend.ts";
 
 const app = createApp("/webhook-landing-lead");
 
@@ -139,8 +140,7 @@ app.post("/", async (c) => {
       const ap = emailApresentacaoInvestidor({
         nome, objetivo: body.objetivo, experiencia: body.experiencia, capital: body.capital, empreiteiro: body.empreiteiro,
       });
-      const r = await sendEmail(ap.subject, ap.html, { to: email, text: ap.text, replyTo: REPLY_TO_APRESENTACAO })
-        .catch((e: any) => ({ ok: false, error: e.message }));
+      const r = await sendGmail({ to: email, subject: ap.subject, html: ap.html, text: ap.text });
       apresentacaoEnviada = r.ok;
       if (r.ok) {
         const agoraIso = new Date().toISOString();
