@@ -378,6 +378,10 @@ try {
             ).catch((e) => console.error('[landing-lead] nota apresentação:', e.message))
           } else {
             console.error('[landing-lead] email apresentação:', r.error)
+            await pgPool.query(
+              "INSERT INTO investidor_interacoes (id, investidor_id, data_hora, canal, direcao, notas, autor, created_at, updated_at) VALUES ($1, $2, $3, 'Nota', 'Nota', $4, 'Envio automático', $3, $3)",
+              [(await import('crypto')).randomUUID(), investidorId, new Date().toISOString(), `Email de apresentação NÃO enviado: ${r.error}`],
+            ).catch((e) => console.error('[landing-lead] nota apresentação:', e.message))
           }
         }
 
