@@ -22,6 +22,7 @@ interface SendOpts {
   to?: string | string[];
   text?: string;
   attachments?: Attachment[];
+  replyTo?: string;
 }
 
 type EmailResult = { ok: boolean; messageId?: string; error?: string };
@@ -40,12 +41,14 @@ export async function sendEmail(
   let to: string | string[] = EMAIL_TO;
   let text: string | undefined;
   let attachments: Attachment[] | undefined;
+  let replyTo: string | undefined;
   if (typeof textOrOpts === "string") {
     text = textOrOpts;
   } else if (textOrOpts && typeof textOrOpts === "object") {
     to = textOrOpts.to || EMAIL_TO;
     text = textOrOpts.text;
     attachments = textOrOpts.attachments;
+    replyTo = textOrOpts.replyTo;
   }
 
   const body: Record<string, unknown> = {
@@ -56,6 +59,7 @@ export async function sendEmail(
     text: text || html.replace(/<[^>]+>/g, ""),
   };
   if (attachments && attachments.length > 0) body.attachments = attachments;
+  if (replyTo) body.reply_to = replyTo;
 
   try {
     const r = await fetch("https://api.resend.com/emails", {

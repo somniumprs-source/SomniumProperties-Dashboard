@@ -41,12 +41,13 @@ export async function sendEmail(subject, html, textOrOpts) {
   }
   // Suporta forma antiga sendEmail(subject, html, text) e nova sendEmail(subject, html, { to, text, attachments })
   let to = EMAIL_TO
-  let text, attachments
+  let text, attachments, replyTo
   if (typeof textOrOpts === 'string') text = textOrOpts
   else if (textOrOpts && typeof textOrOpts === 'object') {
     to = textOrOpts.to || EMAIL_TO
     text = textOrOpts.text
     attachments = textOrOpts.attachments
+    replyTo = textOrOpts.replyTo
   }
   try {
     const info = await getTransporter().sendMail({
@@ -56,6 +57,7 @@ export async function sendEmail(subject, html, textOrOpts) {
       html,
       text: text || html.replace(/<[^>]+>/g, ''),
       ...(attachments ? { attachments } : {}),
+      ...(replyTo ? { replyTo } : {}),
     })
     console.log('[email] Enviado:', subject, '→', to, info.messageId)
     return { ok: true, messageId: info.messageId }

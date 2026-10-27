@@ -5,6 +5,7 @@ import { Investidores } from "../_shared/crud.ts";
 import { sendEmail } from "../_shared/emailService.ts";
 import pool from "../_shared/pg.ts";
 import { registar, POLITICA_VERSAO } from "../_shared/consentimentos.ts";
+import { emailApresentacaoInvestidor, REPLY_TO_APRESENTACAO } from "../_shared/emailApresentacaoInvestidor.ts";
 
 const app = createApp("/webhook-landing-lead");
 
@@ -131,6 +132,27 @@ app.post("/", async (c) => {
       }).catch((e: any) => console.error("[landing-lead] consentimento:", e.message));
     }
 
+    // Apresentação da Somnium ao lead novo, para chegar à primeira chamada com
+    // contexto. Fica na linha do tempo só se o envio correu bem.
+    let apresentacaoEnviada = false;
+    if (action === "created" && investidorId) {
+      const ap = emailApresentacaoInvestidor({
+        nome, objetivo: body.objetivo, experiencia: body.experiencia, capital: body.capital, empreiteiro: body.empreiteiro,
+      });
+      const r = await sendEmail(ap.subject, ap.html, { to: email, text: ap.text, replyTo: REPLY_TO_APRESENTACAO })
+        .catch((e: any) => ({ ok: false, error: e.message }));
+      apresentacaoEnviada = r.ok;
+      if (r.ok) {
+        const agoraIso = new Date().toISOString();
+        await pool.query(
+          "INSERT INTO investidor_interacoes (id, investidor_id, data_hora, canal, direcao, notas, autor, created_at, updated_at) VALUES ($1, $2, $3, 'Email', 'Enviado', $4, 'Envio automático', $3, $3)",
+          [crypto.randomUUID(), investidorId, agoraIso, `Email de apresentação da Somnium enviado para ${email}`],
+        ).catch((e: any) => console.error("[landing-lead] nota apresentação:", e.message));
+      } else {
+        console.error("[landing-lead] email apresentação:", r.error);
+      }
+    }
+
     // Email de notificação para somniumprs@gmail.com
     const emailHtml = `
       <div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;color:#1a1a1a;">
@@ -142,6 +164,10 @@ app.post("/", async (c) => {
       action === "created"
         ? "<strong>Novo lead criado</strong> no CRM com status <em>Pendente de Aprovação</em>."
         : "<strong>Lead existente actualizado</strong> (match por telemóvel)."
+    }${
+      action !== "created" ? ""
+        : apresentacaoEnviada ? "<br>Email de apresentação enviado ao lead."
+        : "<br><strong style=\"color:#b91c1c;\">Email de apresentação NÃO foi enviado</strong> (ver logs da função)."
     }</p>
         <table style="border-collapse:collapse;font-size:14px;width:100%;">
           <tr><td style="padding:8px 14px 8px 0;color:#888;width:160px;">Nome</td><td style="font-weight:600;">${escapeHtml(nome)}</td></tr>
