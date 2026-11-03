@@ -76,6 +76,16 @@ export function FinanceiroDashboard({ data: d, finKpis: f, analises: a, periodo,
             <Indicador id="G32" value={pctOuNulo(ec?.margemPct)} sub={semFechos ?? (fechados ? `${fechados} ${fechados === 1 ? 'negócio' : 'negócios'}` : undefined)} tone="indigo" />
           </Numeros>
         </Bloco>
+        {d?.obras?.custoFinal?.some(c => c.erosao) && (
+          <Bloco titulo="Erosão de lucro por projeto" nota="lucro na compra face ao previsto hoje">
+            <Numeros>
+              {d.obras.custoFinal.filter(c => c.erosao).map((c) => (
+                <Indicador key={c.id} id="P07" value={eur(c.erosao.erosao)} tone={c.erosao.erosao > 0 ? 'red' : 'green'}
+                  sub={`${c.nome} · ${EUR(c.erosao.lucroReferencia)} → ${EUR(c.erosao.lucroPrevisto)}`} />
+              ))}
+            </Numeros>
+          </Bloco>
+        )}
         {d?.obras?.projetos?.length > 0 && (
           <Bloco titulo="Contribuição da Somnium por projeto" nota="ainda sem descontar custos diretos">
             <Numeros>

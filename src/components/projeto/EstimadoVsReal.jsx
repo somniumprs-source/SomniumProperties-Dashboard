@@ -10,7 +10,7 @@
  * recarrega em qualquer mutação (somnium:refresh). A análise chega via /resumo,
  * que o ProjectoDetalhe já recarrega nas mesmas mutações.
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, TrendingDown, TrendingUp, ChevronDown, ChevronRight, FileText, Scale, Wallet, Receipt, Calculator, Landmark, ListTree, FilePlus2 } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
@@ -25,60 +25,10 @@ const EUR2 = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 
 const n = v => Number(v) || 0
 const round2 = x => Math.round((x + Number.EPSILON) * 100) / 100
 
-// Rubricas da Análise Financeira (calcAnalise em src/db/calcEngine.js). A soma
-// dos estimados é igual ao custo_total da análise. `acumula`: rubricas que vão
-// sendo faturadas ao longo do projecto (obra, custos mensais) — enquanto o
-// projecto corre, o custo final previsto é max(real, estimado); nas restantes
-// (pagamento único) uma fatura registada é tratada como valor final.
-// `semCapital`: não conta para o capital a adiantar (comissão paga pelo sinal).
-const GRUPO_VENDA_DEDUCAO = 'Descontado na venda'
-
-export const RUBRICAS = [
-  // Compra = total de aquisição guardado menos os restantes custos de aquisição:
-  // inclui o fee de cedência (Wholesaling), tal como calcAnalise o soma à compra.
-  { key: 'compra',           grupo: 'Aquisição',      label: 'Preço de compra',            est: estCompra },
-  { key: 'imt',              grupo: 'Aquisição',      label: 'IMT',                        est: a => n(a.imt) },
-  { key: 'imposto_selo',     grupo: 'Aquisição',      label: 'Imposto do Selo',            est: a => n(a.imposto_selo) },
-  { key: 'escritura',        grupo: 'Aquisição',      label: 'Escritura e registos',       est: a => (a.escritura == null ? 0 : n(a.escritura) || 700) },
-  { key: 'cpcv_compra',      grupo: 'Aquisição',      label: 'CPCV de compra',             est: a => n(a.cpcv_compra) },
-  { key: 'due_diligence',    grupo: 'Aquisição',      label: 'Due diligence',              est: a => n(a.due_diligence) },
-  { key: 'financiamento',    grupo: 'Financiamento',  label: 'Custos bancários (IS, comissões, hipoteca, amortização)',
-    est: a => n(a.is_financiamento) + n(a.comissoes_banco) + n(a.hipoteca) + n(a.penalizacao_amort) },
-  { key: 'prestacoes',       grupo: 'Financiamento',  label: 'Prestações do crédito',      est: a => n(a.prestacao_mensal) * meses(a), acumula: true },
-  { key: 'obra',             grupo: 'Obra',           label: 'Obra (c/ IVA)',              est: a => n(a.obra_com_iva), acumula: true },
-  // Licenças e certificações: detalhe do subtotal licenciamento da Análise. A key
-  // 'licenciamento' fica como "Outras" (residual) — compatível com faturas antigas
-  // e com análises sem detalhe, e a soma das 3 é sempre igual a licenciamento.
-  { key: 'lic_camara',       grupo: 'Licenças e certificações', label: 'Licenças e taxas camarárias', est: a => n(a.lic_camara) },
-  { key: 'lic_aru',          grupo: 'Licenças e certificações', label: 'Certificação ARU',            est: a => n(a.lic_aru) },
-  { key: 'licenciamento',    grupo: 'Licenças e certificações', label: 'Outras licenças e certidões',
-    est: a => Math.max(n(a.licenciamento) - n(a.lic_camara) - n(a.lic_aru), 0) },
-  { key: 'imi',              grupo: 'Detenção',       label: 'IMI proporcional',           est: a => n(a.imi_proporcional), acumula: true },
-  { key: 'seguro',           grupo: 'Detenção',       label: 'Seguro',                     est: a => n(a.seguro_mensal) * meses(a), acumula: true },
-  { key: 'condominio',       grupo: 'Detenção',       label: 'Condomínio',                 est: a => n(a.condominio_mensal) * meses(a), acumula: true },
-  { key: 'utilidades',       grupo: 'Detenção',       label: 'Utilidades (água, luz, gás)', est: a => n(a.utilidades_mensal) * meses(a), acumula: true },
-  { key: 'tranches',         grupo: 'Detenção',       label: 'Custos de tranches',         est: a => n(a.n_tranches || 1) * n(a.custo_tranche) },
-  { key: 'ligacao_servicos', grupo: 'Detenção',       label: 'Ligação de serviços',        est: a => n(a.ligacao_servicos) },
-  { key: 'excedente_capital',grupo: 'Detenção',       label: 'Excedente de capital (reserva)', est: a => n(a.excedente_capital) },
-  // A comissão sai do preço de venda (paga no sinal do comprador): não é despesa
-  // coberta pelo capital — fica num grupo próprio, mas conta para o lucro.
-  { key: 'comissao_venda',   grupo: GRUPO_VENDA_DEDUCAO, label: 'Comissão de mediação (c/ IVA)', est: a => n(a.comissao_com_iva), semCapital: true },
-  { key: 'cpcv_venda',       grupo: 'Venda',          label: 'CPCV de venda',              est: a => n(a.cpcv_venda) },
-  { key: 'cert_energetico',  grupo: 'Venda',          label: 'Certificado energético',     est: a => n(a.cert_energetico) },
-  { key: 'home_staging',     grupo: 'Venda',          label: 'Home staging',               est: a => n(a.home_staging) },
-  { key: 'outros_venda',     grupo: 'Venda',          label: 'Outros custos de venda',     est: a => n(a.outros_venda) },
-]
-function meses(a) { return Math.max(parseInt(a.meses) || 6, 1) }
-function estCompra(a) {
-  const declarado = n(a.compra) + n(a.fee_cedencia)
-  if (!(n(a.total_aquisicao) > 0)) return declarado
-  const outros = n(a.imt) + n(a.imposto_selo) + (a.escritura == null ? 0 : n(a.escritura) || 700) + n(a.cpcv_compra) + n(a.due_diligence)
-  const derivado = Math.max(n(a.total_aquisicao) - outros, 0)
-  // Diferenças abaixo de 1 € são arredondamentos dos impostos guardados: usa o valor declarado.
-  return Math.abs(derivado - declarado) < 1 ? declarado : derivado
-}
-
-export const RUBRICA_EXTRA = 'extra'
+// Rubricas e regras do custo final: módulo partilhado com o Dashboard.
+export { RUBRICAS, RUBRICA_EXTRA, GRUPOS, GRUPO_VENDA_DEDUCAO, rubricaDe } from '../../../supabase/functions/_shared/rubricasAnalise.js'
+import { RUBRICAS, RUBRICA_EXTRA, GRUPOS, GRUPO_VENDA_DEDUCAO, rubricaDe, custoFinalPrevisto, erosaoLucro } from '../../../supabase/functions/_shared/rubricasAnalise.js'
+import { useToast } from '../ui/Toast.jsx'
 
 export const MOTIVOS_EXTRA = [
   'Imprevisto de obra',
@@ -89,17 +39,6 @@ export const MOTIVOS_EXTRA = [
   'Custos de venda adicionais',
   'Outro',
 ]
-
-// Despesas pagas pelo capital primeiro; o que é descontado na venda fica no fim.
-export const GRUPOS = [...new Set(RUBRICAS.map(r => r.grupo))]
-  .sort((a, b) => (a === GRUPO_VENDA_DEDUCAO) - (b === GRUPO_VENDA_DEDUCAO))
-
-// Despesas antigas sem rubrica: as registadas numa fase de obra contam como Obra.
-export function rubricaDe(d) {
-  if (d.rubrica_analise) return d.rubrica_analise
-  if (d.fase_id) return 'obra'
-  return null
-}
 
 // Consultoria/Assessoria: não há Análise Financeira — só custos próprios da
 // Somnium, por tipo. Faturas de obra do cliente (rubrica 'obra') não contam.
@@ -264,7 +203,7 @@ export function QuadroConsultoria({ negocioId, faturacao }) {
   )
 }
 
-export function QuadroEstimadoVsReal({ negocioId, analise, faturacao }) {
+export function QuadroEstimadoVsReal({ negocioId, negocio, analise, faturacao, readOnly, onChange }) {
   const [aberto, setAberto] = useState(false)
   const despesasQuery = useQuery({
     queryKey: ['projeto-faturas', negocioId],
@@ -509,7 +448,101 @@ export function QuadroEstimadoVsReal({ negocioId, analise, faturacao }) {
           </div>
         )}
       </Card>
+      {negocio && analise && (
+        <PrevisaoCustoFinal negocio={negocio} analise={analise} despesas={despesas} readOnly={readOnly} onChange={onChange} />
+      )}
     </div>
+  )
+}
+
+// Custo final previsto (O04) e erosão de lucro (P07). A previsão escreve-se
+// só nas rubricas que vão sendo faturadas; nas outras a fatura é o valor final.
+function PrevisaoCustoFinal({ negocio, analise, despesas, readOnly, onChange }) {
+  const toast = useToast()
+  const guardadas = negocio.previsao_rubricas || {}
+  const [valores, setValores] = useState(guardadas)
+  const [saving, setSaving] = useState(false)
+  useEffect(() => { setValores(negocio.previsao_rubricas || {}) }, [negocio.previsao_rubricas])
+  const custo = useMemo(() => custoFinalPrevisto(analise, despesas, valores), [analise, despesas, valores])
+  const erosao = erosaoLucro(negocio.analise_referencia, analise, custo)
+  const acumulam = custo.linhas.filter(l => RUBRICAS.find(r => r.key === l.key)?.acumula && (l.estimado > 0 || l.real > 0))
+
+  async function guardar(key, texto) {
+    const v = texto === '' ? null : Number(String(texto).replace(',', '.'))
+    if (v != null && (!Number.isFinite(v) || v < 0)) {
+      toast?.('A previsão tem de ser um valor em euros, igual ou maior que zero.', 'error', 3500)
+      setValores(guardadas)
+      return
+    }
+    if ((guardadas[key] ?? null) === v) return
+    const novas = { ...guardadas }
+    if (v == null) delete novas[key]; else novas[key] = v
+    setSaving(true)
+    const r = await apiFetch(`/api/crm/negocios/${negocio.id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ previsao_rubricas: JSON.stringify(novas), previsao_atualizada_em: new Date().toISOString() }),
+    })
+    setSaving(false)
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao guardar a previsão: ${err.error || r.status}`, 'error', 3500)
+      setValores(guardadas)
+      return
+    }
+    onChange?.()
+  }
+
+  const atualizada = negocio.previsao_atualizada_em ? new Date(negocio.previsao_atualizada_em).toLocaleDateString('pt-PT') : null
+  return (
+    <Card>
+      <Card.Header icon={Calculator} title="Custo final previsto"
+        subtitle={atualizada ? `Previsão atualizada a ${atualizada}` : 'Sem previsão escrita: obra e custos mensais contam pelo estimado'} />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KpiCard size="sm" tone="gray" label="Orçamento" value={EUR(custo.orcamento)} sub="Análise Financeira" />
+        <KpiCard size="sm" tone="amber" label="Já faturado" value={EUR(custo.real)} sub={`faltam ${EUR(custo.restante)}`} />
+        <KpiCard size="sm" tone={custo.desvio < 0 ? 'red' : 'green'} label="Custo final previsto" value={EUR(custo.previsto)}
+          sub={custo.desvio < 0 ? `${EUR(-custo.desvio)} acima do orçamento` : custo.desvio > 0 ? `${EUR(custo.desvio)} abaixo do orçamento` : 'igual ao orçamento'} />
+        <KpiCard size="sm" tone={erosao?.erosao > 0 ? 'red' : 'green'} label="Erosão de lucro"
+          value={erosao ? EUR(erosao.erosao) : '—'}
+          sub={erosao ? `${EUR(erosao.lucroReferencia)} na compra → ${EUR(erosao.lucroPrevisto)} hoje` : 'sem análise de referência'} />
+      </div>
+      {acumulam.length > 0 && (
+        <div className="mt-4 rounded-xl border border-line overflow-hidden">
+          <ScrollableTable>
+            <table className="w-full min-w-[520px] text-sm">
+              <thead>
+                <tr className="border-b border-line text-xs text-ink-muted uppercase bg-surface">
+                  <th className="text-left py-2.5 px-4">Rubrica que vai sendo faturada</th>
+                  <th className="text-right py-2.5 px-3">Estimado</th>
+                  <th className="text-right py-2.5 px-3">Faturado</th>
+                  <th className="text-right py-2.5 px-3 w-40">Previsão final</th>
+                </tr>
+              </thead>
+              <tbody>
+                {acumulam.map(l => (
+                  <tr key={l.key} className="border-b border-line">
+                    <td className="py-2 px-4 text-ink">{labelRubrica(l.key)}</td>
+                    <td className="py-2 px-3 text-right num text-ink-muted">{EUR(l.estimado)}</td>
+                    <td className="py-2 px-3 text-right num text-ink">{EUR(l.real)}</td>
+                    <td className="py-1.5 px-3 text-right">
+                      {readOnly
+                        ? <span className="num text-ink">{EUR(l.final)}</span>
+                        : <input type="text" inputMode="decimal" disabled={saving} value={valores[l.key] ?? ''} placeholder={String(Math.round(l.final))}
+                            onChange={e => setValores({ ...valores, [l.key]: e.target.value })} onBlur={e => guardar(l.key, e.target.value.trim())}
+                            aria-label={`Previsão final de ${labelRubrica(l.key)}`}
+                            className="w-32 rounded-lg border border-line bg-surface px-2 py-1 text-sm text-right num text-ink" />}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </ScrollableTable>
+        </div>
+      )}
+      <p className="mt-2 text-[11px] text-ink-muted">
+        Escreve quanto achas que cada rubrica vai custar no fim. Vazio usa o maior entre o estimado e o faturado; nunca conta menos do que já foi faturado. As restantes rubricas contam pela fatura, ou pelo estimado enquanto não houver fatura.
+      </p>
+    </Card>
   )
 }
 

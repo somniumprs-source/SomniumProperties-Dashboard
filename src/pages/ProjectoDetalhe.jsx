@@ -475,7 +475,7 @@ function TabResumo({ resumo, fases, onChange, readOnly }) {
     <div className="space-y-4">
       {negocio.categoria === 'Consultoria/Assessoria'
         ? <QuadroConsultoria negocioId={negocio.id} faturacao={faturacao} />
-        : <QuadroEstimadoVsReal negocioId={negocio.id} analise={analise} faturacao={faturacao} />}
+        : <QuadroEstimadoVsReal negocioId={negocio.id} negocio={negocio} analise={analise} faturacao={faturacao} readOnly={readOnly} onChange={onChange} />}
 
       {/* Wholesaling (fee em prestações) e Consultoria (honorário) recebem em
           tranches, que alimentam a Faturação real. CAEP e Fix and Flip não têm

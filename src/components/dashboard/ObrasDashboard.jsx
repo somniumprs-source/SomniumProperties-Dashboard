@@ -20,7 +20,7 @@ function Dado({ titulo, children }) {
   )
 }
 
-function CartaoProjeto({ p, bloqueios }) {
+function CartaoProjeto({ p, bloqueios, custo }) {
   const doProjeto = bloqueios?.bloqueios.filter(b => b.negocioId === p.id) || []
   const prazos = bloqueios?.prazos.filter(x => x.negocioId === p.id) || []
   return (
@@ -34,6 +34,9 @@ function CartaoProjeto({ p, bloqueios }) {
         <Dado titulo="Atraso">{p.prazos.atrasadas ? `${p.prazos.atrasadas} ${p.prazos.atrasadas === 1 ? 'fase' : 'fases'}, até ${p.prazos.maiorAtrasoDias} dias` : 'Sem atraso registado'}</Dado>
         <Dado titulo="Fases com data">{p.prazos.comPrevisao} de {p.prazos.total}</Dado>
         <Dado titulo="Custo real">{EUR(p.custoReal)}</Dado>
+        <Dado titulo="Custo final previsto">
+          {custo ? `${EUR(custo.previsto)} (${custo.desvio < 0 ? `+${EUR(-custo.desvio)}` : custo.desvio > 0 ? `−${EUR(custo.desvio)}` : 'igual ao'} orçamento)` : 'Sem análise final'}
+        </Dado>
         <Dado titulo="Venda prevista">{fmtData(p.vendaPrevista)}</Dado>
         {bloqueios && <div className="col-span-2"><Dado titulo="Bloqueios abertos">
           {doProjeto.length ? doProjeto.map(b => `${b.descricao} (há ${b.dias} ${b.dias === 1 ? 'dia' : 'dias'})`).join(' · ') : 'Nenhum'}
@@ -61,7 +64,7 @@ export function ObrasDashboard({ data: d }) {
       {sub === 'projetos' && <>
         <Bloco titulo="Projetos" nota="situação atual">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {o?.projetos?.map(p => <CartaoProjeto key={p.id} p={p} bloqueios={bl} />)}
+            {o?.projetos?.map(p => <CartaoProjeto key={p.id} p={p} bloqueios={bl} custo={o?.custoFinal?.find(c => c.id === p.id)} />)}
           </div>
         </Bloco>
         <Bloco titulo="Situação atual">
@@ -69,6 +72,11 @@ export function ObrasDashboard({ data: d }) {
             <Indicador id="G46" value={fmtNum(o?.negociosAtivos)} />
             <Indicador id="O01" value={o ? `${o.comAnaliseFinal} de ${o.negociosTotal}` : null} sub="com análise final" />
             <Indicador id="O02" value={o ? EUR(o.custoReal) : null} tone="amber" />
+            {o?.custoFinal && (() => {
+              const orc = o.custoFinal.reduce((s, c) => s + c.orcamento, 0), prev = o.custoFinal.reduce((s, c) => s + c.previsto, 0)
+              return <Indicador id="O04" value={EUR(prev)} tone={prev > orc ? 'red' : 'green'}
+                sub={o.custoFinal.length ? `orçamento ${EUR(orc)} · ${o.custoFinal.length} ${o.custoFinal.length === 1 ? 'projeto' : 'projetos'}` : 'sem projetos com análise final'} />
+            })()}
           </Numeros>
         </Bloco>
       </>}

@@ -247,3 +247,24 @@ test('resposta em 24 h: nos dois sentidos, conversa nova fora', () => {
   assert.deepEqual(r.consultor, { amostra: 1, pct: 100 })
   assert.deepEqual(r.somnium, { amostra: 1, pct: 0 })
 })
+
+test('custo final previsto: previsão manual só em rubricas que acumulam', async () => {
+  const { custoFinalPrevisto, erosaoLucro } = await import('../supabase/functions/_shared/rubricasAnalise.js')
+  const analise = { compra: 100000, obra_com_iva: 50000, imt: 2000, escritura: null, lucro_bruto: 30000 }
+  const despesas = [
+    { rubrica_analise: 'compra', custo_mensal: 100000 },
+    { rubrica_analise: 'imt', custo_mensal: 2500 },
+    { fase_id: 'f1', custo_mensal: 10000 },
+    { rubrica_analise: 'extra', custo_mensal: 1000 },
+  ]
+  const semPrevisao = custoFinalPrevisto(analise, despesas)
+  assert.equal(semPrevisao.orcamento, 152000)
+  assert.equal(semPrevisao.previsto, 153500, 'obra fica no estimado, IMT na fatura, extra soma')
+  assert.equal(semPrevisao.desvio, -1500)
+  const comPrevisao = custoFinalPrevisto(analise, despesas, { obra: 58000, imt: 1 })
+  assert.equal(comPrevisao.previsto, 161500, 'IMT não acumula: previsão ignorada')
+  assert.equal(custoFinalPrevisto(analise, despesas, { obra: 5000 }).previsto, 113500, 'nunca abaixo do faturado')
+  const e = erosaoLucro({ lucro_bruto: 35000 }, analise, comPrevisao)
+  assert.deepEqual(e, { lucroReferencia: 35000, lucroPrevisto: 20500, erosao: 14500 })
+  assert.equal(erosaoLucro(null, analise, comPrevisao), null)
+})

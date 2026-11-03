@@ -3,6 +3,8 @@
 // serem testadas com `npm run test:dashboard` e nunca divergirem entre backends.
 // As explicações de cada indicador vivem em src/lib/catalogoMetricas.js.
 
+import { custoFinalPrevisto, erosaoLucro } from "./rubricasAnalise.js";
+
 const ESTADOS_PARCERIA = new Set(["Em Parceria", "Investidor em parceria"]);
 const ESTADOS_CAPACIDADE = new Set(["Investidor em parceria", "Investidor Qualificado em Carteira"]);
 const ESTADOS_IMOVEL_FORA = new Set(["Descartado", "Nao interessa", "Não interessa", "Cancelado"]);
@@ -311,4 +313,24 @@ export function respostas24h(interacoes) {
   });
   // Enviado pela Somnium → resposta do consultor; Recebido → resposta da Somnium.
   return { consultor: taxa(horas.Enviado), somnium: taxa(horas.Recebido) };
+}
+
+// ── Entrega 2, fase 3 ────────────────────────────────────────────────────
+
+// Custo final previsto (O04) e erosão de lucro (P07) dos projetos em curso.
+// Só projetos com análise final guardada: sem ela não há orçamento fixo.
+export function custoFinalProjetos(linhas, despesas, idsEmCurso) {
+  return linhas.filter((p) => idsEmCurso.has(p.id) && p.analise).map((p) => {
+    const custo = custoFinalPrevisto(p.analise, despesas.filter((d) => d.negocio_id === p.id), p.previsao_rubricas || {});
+    return {
+      id: p.id,
+      nome: p.movimento,
+      orcamento: custo.orcamento,
+      real: custo.real,
+      previsto: custo.previsto,
+      desvio: custo.desvio,
+      previsaoEm: p.previsao_atualizada_em || null,
+      erosao: erosaoLucro(p.analise_referencia, p.analise, custo),
+    };
+  });
 }

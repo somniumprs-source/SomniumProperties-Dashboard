@@ -135,7 +135,7 @@ export const CATALOGO = [
   m('P04', 'POC', 'Retorno total sobre o custo', 'Profit on Cost', 'financeiro', 'parcial', 'Retorno total das análises dos negócios reais. Alvo: 20% a 25%.', 'Lucro ÷ capital necessário, não anualizado', '25% sobre o custo não é o mesmo que 25% sobre a venda.', { falta: 'Confirmar o denominador do ROI total.' }),
   m('P05', 'SDC', 'Contribuição da Somnium por negócio', 'Somnium Deal Contribution', 'financeiro', 'parcial', 'O que cabe à Somnium em cada negócio.', 'Quota da Somnium (CAEP) ou fee (restantes) × parte da Somnium', 'CAEP normal: 2/3 para a Somnium e 1/3 para o Luís Pedro. Lages e Condeixa: 100%.', { falta: 'Descontar os custos diretos da Somnium (vem com a classificação das despesas).' }),
   m('P06', 'BESP', 'Preço de equilíbrio', 'Break-even Sale Price', 'financeiro', 'inativo', 'Preço de venda que cobre todos os custos.', 'Preço em que o resultado é zero', 'Não é o preço mínimo comercial.'),
-  m('P07', 'PE', 'Erosão de lucro', 'Profit Erosion', 'financeiro', 'sem_registo', 'Quanto lucro se perdeu face à previsão inicial.', 'Lucro de referência − previsão atual', 'Rever o orçamento não pode apagar a referência.', { falta: 'Manter uma previsão atual por negócio.' }),
+  m('P07', 'PE', 'Erosão de lucro', 'Profit Erosion', 'financeiro', 'medido', 'Quanto lucro se perdeu face à previsão feita na compra.', 'Lucro da análise congelada na compra − (lucro da análise atual + desvio do custo final)', 'Rever o orçamento não apaga a referência: fica a análise do momento da compra.'),
   m('P08', 'HP', 'Prazo do negócio', 'Holding Period', 'financeiro', 'inativo', 'Tempo entre compra e venda, e entre aporte e distribuição.', 'Dias entre as datas', 'Atrasos reduzem o retorno anualizado.'),
   m('P09', 'XIRR', 'Taxa interna de retorno e múltiplo', 'XIRR and Equity Multiple', 'financeiro', 'inativo', 'Retorno do investidor segundo as datas reais dos fluxos.', 'XIRR dos fluxos; distribuições ÷ aportes', 'Sem fluxos reais não se calcula.', consagrada),
   m('P10', 'SEN', 'Sensibilidade e cenários', 'Sensitivity and Scenarios', 'financeiro', 'inativo', 'Efeito de vender mais barato, gastar mais ou atrasar.', 'Recalcular o resultado por cenário', 'São testes, não previsões.'),
@@ -144,7 +144,7 @@ export const CATALOGO = [
   m('O01', 'CB', 'Orçamento de referência', 'Cost Baseline', 'obras', 'parcial', 'Negócios com análise final congelada como referência.', 'Negócios com análise final ÷ negócios', 'Evita esconder derrapagens redefinindo a meta.', { falta: 'Congelar o orçamento de obra por rubrica.' }),
   m('O02', 'AC', 'Custo real', 'Actual Cost', 'obras', 'medido', 'Custo já registado nas faturas dos negócios.', 'Soma das despesas ligadas a negócios', 'Custo registado não é o mesmo que custo final previsto.', consagrada),
   m('O03', 'OC', 'Compromissos por executar', 'Outstanding Commitments', 'obras', 'inativo', 'Parte contratada ainda não executada.', 'Contratado − incorrido', 'Não somar faturas já incluídas no contrato.'),
-  m('O04', 'EAC', 'Custo final previsto', 'Estimate at Completion', 'obras', 'sem_registo', 'Quanto a obra vai custar no fim, e o desvio face ao orçamento.', 'ETC = custo restante; EAC = custo real + ETC; VAC = orçamento − EAC', 'VAC negativo prevê ultrapassagem.', { ...consagrada, falta: 'Manter a previsão do custo restante por rubrica.' }),
+  m('O04', 'EAC', 'Custo final previsto', 'Estimate at Completion', 'obras', 'medido', 'Quanto a obra vai custar no fim, e o desvio face ao orçamento.', 'ETC = custo restante; EAC = custo real + ETC; VAC = orçamento − EAC', 'VAC negativo prevê ultrapassagem. A previsão escreve-se na ficha do projeto, só na obra e nos custos mensais; as outras rubricas contam pela fatura.', consagrada),
   m('O05', 'CU', 'Utilização da contingência', 'Contingency Utilisation', 'obras', 'inativo', 'Contingência já consumida.', 'Consumida ÷ aprovada', 'Mostrar a reserva que resta.'),
   m('O06', 'COE', 'Exposição a trabalhos a mais', 'Change Order Exposure', 'obras', 'inativo', 'Alterações propostas, aprovadas, executadas e pagas.', 'Valores por estado', 'Pendências podem ser custo ainda não previsto.'),
   m('O07', 'MCV', 'Atraso de fases', 'Milestone and Completion Variance', 'obras', 'parcial', 'Fases em atraso face à data prevista.', 'Data atual − fim previsto, nas fases por concluir', 'Atrasos de fases não se somam num atraso global.', { falta: 'Preencher as datas previstas e reais de todas as fases.' }),
@@ -171,8 +171,8 @@ export const CATALOGO = [
 // Onde cada indicador por medir aparece, por departamento e subdivisão.
 export const POR_MEDIR = {
   comercial:  {},
-  obras:      { projetos: ['O04'] },
-  financeiro: { caixa: ['F04', 'F05', 'G33'], capital: ['G38'], rentabilidade: ['P07'] },
+  obras:      {},
+  financeiro: { caixa: ['F04', 'F05', 'G33'], capital: ['G38'] },
 }
 
 const POR_ID = new Map(CATALOGO.map(x => [x.id, x]))

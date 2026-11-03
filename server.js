@@ -780,7 +780,7 @@ const getObras        = async () => []
 // Cache com TTL para endpoints que fazem queries pesadas
 import { TTLCache } from './src/db/utils/ttlCache.js'
 import pool from './src/db/pg.js'
-import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, escrituraRegistada, resumoFases, resumoProjetos, custoRealObra, imoveisContactados, motivosPerda, cumprimentoTarefas, capitalConfirmado, faltaFinanciamento, resumoBloqueios, respostas24h, diasNaFase } from './supabase/functions/_shared/regrasDashboard.js'
+import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, escrituraRegistada, resumoFases, resumoProjetos, custoRealObra, imoveisContactados, motivosPerda, cumprimentoTarefas, capitalConfirmado, faltaFinanciamento, resumoBloqueios, respostas24h, custoFinalProjetos, diasNaFase } from './supabase/functions/_shared/regrasDashboard.js'
 import { alertasConservacao } from './src/db/consentimentos.js'
 import { juntarResponsavel, donosDasRegioes } from './src/db/responsavelRegiao.js'
 import { alertasDeDespesas } from './src/constants/regrasDespesas.js'
@@ -1887,7 +1887,7 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
     const periodo = ['semana','mes','trimestre','ano'].includes(req.query.periodo) ? req.query.periodo : 'mes'
     const regiao = req.regiaoActiva || undefined
 
-    const [imoveisAll, investidoresRaw, consultores, negocios, despesas, ci, ii, pi, fasesRes, analisesRes, historicoRes, tarefasRes, bloqueiosRes, analisesAtivasRes] = await Promise.all([
+    const [imoveisAll, investidoresRaw, consultores, negocios, despesas, ci, ii, pi, fasesRes, analisesRes, historicoRes, tarefasRes, bloqueiosRes, analisesAtivasRes, custoRes, despesasProjetoRes] = await Promise.all([
       getImóveis({ regiao }).catch(() => []),
       getInvestidores({ regiao }).catch(() => []),
       getConsultores({ regiao }).catch(() => []),
@@ -1904,6 +1904,9 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
       // null = tabela da migração 0093 ainda por criar: O09 e W04 ficam sem leitura.
       pool.query(`SELECT b.* FROM projeto_bloqueios b JOIN negocios n ON n.id = b.negocio_id WHERE n.deleted_at IS NULL`).catch(() => null),
       pool.query(`SELECT imovel_id, capital_necessario FROM analises WHERE activa = true`).catch(() => ({ rows: [] })),
+      // null = colunas da migração 0094 ainda por aplicar: O04 e P07 ficam sem leitura.
+      pool.query(`SELECT id, movimento, analise_final->'snapshot' AS analise, analise_referencia, previsao_rubricas, previsao_atualizada_em FROM negocios WHERE deleted_at IS NULL AND analise_final IS NOT NULL`).catch(() => null),
+      pool.query(`SELECT negocio_id, rubrica_analise, fase_id, custo_mensal FROM despesas WHERE negocio_id IS NOT NULL`).catch(() => ({ rows: [] })),
     ])
     const investidores = investidoresRaw.filter(isInvestidorPrincipal)
     const capConfirmado = capitalConfirmado(investidores)
@@ -2110,6 +2113,7 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
         fases: resumoFases(fasesRes.rows.filter(f => idsNegocios.has(f.negocio_id))),
         projetos: resumoProjetos(negocios, fasesRes.rows, despesas),
         bloqueios: bloqueiosRes ? resumoBloqueios(bloqueiosRes.rows) : null,
+        custoFinal: custoRes ? custoFinalProjetos(custoRes.rows, despesasProjetoRes.rows, new Set(negocios.filter(n => !negocioFechado(n)).map(n => n.id))) : null,
       },
       funil: {
         atividade: atividadeImoveis,

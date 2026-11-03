@@ -7284,7 +7284,8 @@ router.post('/projetos/:negocioId/analise-final', async (req, res) => {
       guardada_em: new Date().toISOString(), guardada_por: u?.nome || u?.email || null,
       snapshot: { ...a, ...calcAnalise(a) },
     }
-    await pool.query('UPDATE negocios SET analise_final = $1, updated_at = NOW() WHERE id = $2', [JSON.stringify(final), neg.id])
+    // A referência do lucro (P07) fica com a primeira análise final e não muda depois.
+    await pool.query(`UPDATE negocios SET analise_final = $1, analise_referencia = COALESCE(analise_referencia, ($1::jsonb)->'snapshot'), updated_at = NOW() WHERE id = $2`, [JSON.stringify(final), neg.id])
     const { snapshot: _s, ...meta } = final
     res.json({ ok: true, analiseFinal: meta })
   } catch (e) { console.error('[projetos/analise-final]', e.message); res.status(500).json({ error: e.message }) }

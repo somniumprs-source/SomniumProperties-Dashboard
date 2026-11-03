@@ -26,7 +26,7 @@ import {
 } from "../_shared/queries.ts";
 import { calcBurnRateMensal, despesasDaEmpresa } from "../_shared/financeCalc.ts";
 import { TTLCache } from "../_shared/ttlCache.ts";
-import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, escrituraRegistada, resumoFases, resumoProjetos, custoRealObra, imoveisContactados, motivosPerda, cumprimentoTarefas, capitalConfirmado, faltaFinanciamento, resumoBloqueios, respostas24h, diasNaFase } from "../_shared/regrasDashboard.js";
+import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, escrituraRegistada, resumoFases, resumoProjetos, custoRealObra, imoveisContactados, motivosPerda, cumprimentoTarefas, capitalConfirmado, faltaFinanciamento, resumoBloqueios, respostas24h, custoFinalProjetos, diasNaFase } from "../_shared/regrasDashboard.js";
 
 // Cache de endpoints pesados — port de endpointCache() em server.js (achado
 // da auditoria: dev tinha cache de 2-5min nestes 13 endpoints, produção
@@ -1345,7 +1345,7 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
     const periodo = ["semana", "mes", "trimestre", "ano"].includes(pq) ? pq : "mes";
     const regiao = c.req.header("x-regiao") || undefined;
 
-    const [imoveisRaw, investidoresRaw, consultores, negocios, despesas, ci, ii, pi, fasesRes, analisesRes, historicoRes, tarefasRes, bloqueiosRes, analisesAtivasRes] = await Promise.all([
+    const [imoveisRaw, investidoresRaw, consultores, negocios, despesas, ci, ii, pi, fasesRes, analisesRes, historicoRes, tarefasRes, bloqueiosRes, analisesAtivasRes, custoRes, despesasProjetoRes] = await Promise.all([
       getImóveis({ regiao }).catch(() => [] as any[]),
       getInvestidores({ regiao }).catch(() => [] as any[]),
       getConsultores({ regiao }).catch(() => [] as any[]),
@@ -1362,6 +1362,9 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
       // null = tabela da migração 0093 ainda por criar: O09 e W04 ficam sem leitura.
       pool.query(`SELECT b.* FROM projeto_bloqueios b JOIN negocios n ON n.id = b.negocio_id WHERE n.deleted_at IS NULL`).catch(() => null),
       pool.query(`SELECT imovel_id, capital_necessario FROM analises WHERE activa = true`).catch(() => ({ rows: [] as any[] })),
+      // null = colunas da migração 0094 ainda por aplicar: O04 e P07 ficam sem leitura.
+      pool.query(`SELECT id, movimento, analise_final->'snapshot' AS analise, analise_referencia, previsao_rubricas, previsao_atualizada_em FROM negocios WHERE deleted_at IS NULL AND analise_final IS NOT NULL`).catch(() => null),
+      pool.query(`SELECT negocio_id, rubrica_analise, fase_id, custo_mensal FROM despesas WHERE negocio_id IS NOT NULL`).catch(() => ({ rows: [] as any[] })),
     ]);
     // Tipo explícito: sem ele o deno check rejeitava cada filter/map sobre a lista.
     const imoveisAll: any[] = imoveisRaw;
@@ -1569,6 +1572,7 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
         fases: resumoFases(fasesRes.rows.filter((f: any) => idsNegocios.has(f.negocio_id))),
         projetos: resumoProjetos(negocios, fasesRes.rows, despesas),
         bloqueios: bloqueiosRes ? resumoBloqueios(bloqueiosRes.rows) : null,
+        custoFinal: custoRes ? custoFinalProjetos(custoRes.rows, despesasProjetoRes.rows, new Set(negocios.filter((n: any) => !negocioFechado(n)).map((n: any) => n.id))) : null,
       },
       funil: {
         atividade: atividadeImoveis,
