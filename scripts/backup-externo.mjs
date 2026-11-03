@@ -33,6 +33,14 @@ const PG_BIN = process.env.PG_BIN || '/opt/homebrew/opt/postgresql@17/bin'
 // Data de Lisboa (às 00:30 locais o UTC ainda está no dia anterior).
 const hoje = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Lisbon' })
 const estado = { inicio: new Date().toISOString(), ok: false, passos: {} }
+const TENTATIVAS_DUMP = 3
+const LIMITE_DUMP_MS = 15 * 60000
+// Rede de segurança: uma execução presa impede o launchd de arrancar as seguintes
+// (a de 26/10/2026 ficou presa uma semana e parou os backups sem ninguém saber).
+const LIMITE_TOTAL_MS = 60 * 60000
+
+// Nunca deixar credenciais em erros, logs ou no estado.json.
+const semCredenciais = (t) => String(t).replace(/postgres(ql)?:\/\/[^\s"']+/g, '<ligação à BD>')
 
 function log(msg) { console.log(`[backup-externo] ${new Date().toISOString()} ${msg}`) }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -44,12 +52,31 @@ async function main() {
   // pg_dump não funciona no pooler em modo transação (6543): usa o modo sessão (5432).
   const urlSessao = new URL(process.env.DATABASE_URL)
   if (urlSessao.port === '6543') urlSessao.port = '5432'
-  const env = { ...process.env, PGSSLMODE: 'require', LC_ALL: 'en_US.UTF-8' }
+  // Credenciais por variáveis de ambiente, não na linha de comando (visível no `ps`).
+  const env = {
+    ...process.env, PGSSLMODE: 'require', LC_ALL: 'en_US.UTF-8', PGCONNECT_TIMEOUT: '30',
+    PGHOST: urlSessao.hostname, PGPORT: urlSessao.port, PGUSER: decodeURIComponent(urlSessao.username),
+    PGPASSWORD: decodeURIComponent(urlSessao.password), PGDATABASE: urlSessao.pathname.slice(1),
+  }
 
   // 1–2. Dump da base de dados e verificação de legibilidade
   const dump = path.join(DESTINO, 'db', `${hoje}.dump`)
-  execFileSync(path.join(PG_BIN, 'pg_dump'), [urlSessao.toString(), '-Fc', '-n', 'public', '--no-owner', '--no-privileges', '-f', dump], { env, stdio: ['ignore', 'ignore', 'pipe'] })
-  fs.chmodSync(dump, 0o600)
+  // Escreve num temporário: uma falha nunca deixa um dump vazio ou incompleto com o nome final.
+  const temporario = `${dump}.parcial`
+  for (let tentativa = 1; ; tentativa++) {
+    try {
+      execFileSync(path.join(PG_BIN, 'pg_dump'), ['-Fc', '-n', 'public', '--no-owner', '--no-privileges', '-f', temporario], { env, stdio: ['ignore', 'ignore', 'pipe'], timeout: LIMITE_DUMP_MS })
+      if (!fs.statSync(temporario).size) throw new Error('pg_dump gerou um ficheiro vazio')
+      break
+    } catch (e) {
+      fs.rmSync(temporario, { force: true })
+      log(`pg_dump falhou (tentativa ${tentativa}/${TENTATIVAS_DUMP}): ${semCredenciais(e.message).slice(0, 300)}`)
+      if (tentativa === TENTATIVAS_DUMP) throw e
+      await sleep(60000 * tentativa)
+    }
+  }
+  fs.chmodSync(temporario, 0o600)
+  fs.renameSync(temporario, dump)
   const lista = execFileSync(path.join(PG_BIN, 'pg_restore'), ['--list', dump], { env }).toString()
   const tabelasNoDump = (lista.match(/ TABLE DATA public /g) || []).length
 
@@ -103,7 +130,8 @@ async function main() {
   // 4. Retenção dos dumps (nunca apaga o de hoje nem o mais recente)
   const limite = Date.now() - RETENCAO_DIAS * 86400000
   const dumps = fs.readdirSync(path.join(DESTINO, 'db')).filter((n) => /^\d{4}-\d{2}-\d{2}\.(dump|contagens\.json)$/.test(n)).sort()
-  const maisRecente = dumps.filter((n) => n.endsWith('.dump')).pop()
+  // Um dump vazio de uma falha antiga nunca conta como o mais recente.
+  const maisRecente = dumps.filter((n) => n.endsWith('.dump') && fs.statSync(path.join(DESTINO, 'db', n)).size > 0).pop()
   const apagados = []
   for (const n of dumps) {
     const data = Date.parse(n.slice(0, 10))
@@ -114,9 +142,21 @@ async function main() {
   estado.ok = true
 }
 
+function concluir() {
+  estado.fim = new Date().toISOString()
+  try { fs.writeFileSync(path.join(DESTINO, 'estado.json'), JSON.stringify(estado, null, 1), { mode: 0o600 }) } catch {}
+  if (!estado.ok) {
+    try { execFileSync('osascript', ['-e', 'display notification "O backup diário falhou. Ver ~/Backups/Somnium/estado.json" with title "Somnium Properties"']) } catch {}
+  }
+}
+
+setTimeout(() => {
+  estado.erro = `execução interrompida após ${LIMITE_TOTAL_MS / 60000} minutos`
+  log(`ERRO: ${estado.erro}`)
+  concluir()
+  process.exit(1)
+}, LIMITE_TOTAL_MS).unref()
+
 main()
-  .catch((e) => { estado.erro = e.message; log(`ERRO: ${e.message}`); process.exitCode = 1 })
-  .finally(() => {
-    estado.fim = new Date().toISOString()
-    try { fs.writeFileSync(path.join(DESTINO, 'estado.json'), JSON.stringify(estado, null, 1), { mode: 0o600 }) } catch {}
-  })
+  .catch((e) => { estado.erro = semCredenciais(e.message); log(`ERRO: ${estado.erro}`); process.exitCode = 1 })
+  .finally(concluir)
