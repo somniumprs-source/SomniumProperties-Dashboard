@@ -101,9 +101,9 @@ export async function falharIA(pool, id, erro) {
 export async function concluirIA(pool, id, texto, aplicadores) {
   const { rows: [p] } = await pool.query('SELECT * FROM ia_fila WHERE id = $1', [id])
   if (!p) throw new Error('Pedido nao encontrado')
-  const aplicar = aplicadores[p.tipo]
-  if (!aplicar) throw new Error(`Tipo de pedido desconhecido: ${p.tipo}`)
   try {
+    const aplicar = aplicadores[p.tipo]
+    if (!aplicar) throw new Error(`Tipo de pedido desconhecido: ${p.tipo}`)
     const resultado = await aplicar(p, texto)
     await pool.query(`UPDATE ia_fila SET estado = 'concluido', resultado = $2, erro = NULL, updated_at = $3 WHERE id = $1`,
       [id, JSON.stringify(resultado ?? null), agora()])
