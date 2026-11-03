@@ -268,3 +268,13 @@ test('custo final previsto: previsão manual só em rubricas que acumulam', asyn
   assert.deepEqual(e, { lucroReferencia: 35000, lucroPrevisto: 20500, erosao: 14500 })
   assert.equal(erosaoLucro(null, analise, comPrevisao), null)
 })
+
+// O build do Vite não lê o servidor: um erro de sintaxe em routes.js só
+// aparecia ao arrancar, com a API do CRM desligada.
+test('servidor: ficheiros sem erros de sintaxe', async () => {
+  const { spawnSync } = await import('node:child_process')
+  for (const f of ['server.js', 'src/db/routes.js', 'src/db/contactoPessoa.js', 'src/db/queries.js', 'src/db/analiseRoutes.js']) {
+    const r = spawnSync(process.execPath, ['--check', f], { encoding: 'utf8' })
+    assert.equal(r.status, 0, `${f}: ${r.stderr}`)
+  }
+})
