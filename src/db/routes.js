@@ -32,7 +32,9 @@ import { createImovelFolder, moveImovelFolder, uploadDocToFolder, uploadUserFile
 import { docEmbedeLocalizacao } from './pdfImovelDocs.js'
 import { listDocumentos, persistDocumento, streamPdfToResAndPersist, urlAssinadaDocumento, apagarDocumentosDoImovel, apagarFotosDoImovel } from './documentLifecycle.js'
 import { ensureOportunidadesScraperTable } from './oportunidadesScraper.js'
-import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
+import { analyzeReuniao, pedirAnaliseReuniao, aplicarAnaliseReuniao } from './meetingAnalysis.js'
+import { estadoIA, emFilaIA, enfileirarIA, jsonDaResposta, pedidosIAPendentes, iniciarIA, concluirIA, falharIA } from './filaIA.js'
+import { aplicarRelatorioSemanal } from './relatorioSemanalAggregator.js'
 import { generateMeetingPDF } from './pdfMeetingReport.js'
 import { generateChamadasInvestidoresPDF } from './pdfChamadasInvestidores.js'
 import {
@@ -49,7 +51,7 @@ import { runEstudoLocalizacao } from '../lib/estudoLocalizacao.js'
 import { FASES_FIX_FLIP, FASES_POR_CATEGORIA, getTemplateFases, getFaseConfigGlobal } from './fasesFixFlip.js'
 import { avaliarEntrada, painelRequisitos, carregarDadosEntrada } from './dealBreakers.js'
 import { carregarChecklist, gravarManual } from './checklistImovel.js'
-import { extrairDocumento, contextoImovel, paraAnalise, camposParaFicha, nomesPreenchidos, contextoDespesa, leituraDaFatura, camposDaDespesa, nomesDaDespesa, avisoDeValor } from './extratorDocumentos.js'
+import { PROMPT_EXTRATOR, MODELO_EXTRATOR, lerExtracao, contextoImovel, paraAnalise, camposParaFicha, nomesPreenchidos, contextoDespesa, leituraDaFatura, camposDaDespesa, nomesDaDespesa, avisoDeValor } from './extratorDocumentos.js'
 import { documentosDe, temDocumento, anteriorARegra } from '../constants/regrasDespesas.js'
 import { validarModeloImovel, validarCategoriaNegocio } from './modeloNegocio.js'
 import { donosDasRegioes } from './responsavelRegiao.js'
@@ -72,7 +74,7 @@ import {
   semaforoDesvio,
 } from './pdfProjectoFixFlip.js'
 import { generateRelatorioExpansaoGaia } from './pdfRelatorioExpansaoGaia.js'
-import { gerarResumoProjeto, invalidarCacheAi, isConfigured as aiConfigured } from './projetoAiAssistant.js'
+import { gerarResumoProjeto, invalidarCacheAi, aplicarResumoProjeto } from './projetoAiAssistant.js'
 import { audit, descreverMudanca } from './projetoAuditLog.js'
 import { calcAnalise, calcStressTests } from './calcEngine.js'
 import rateLimit from 'express-rate-limit'
@@ -1961,6 +1963,60 @@ router.post('/gravacoes/:id/analise-consultor', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// ── Fila IA (worker no Mac) ──
+// Pedidos de várias funcionalidades corridos no Claude Code do Mac. Cada tipo
+// tem um aplicador que grava o resultado onde a funcionalidade o espera.
+const APLICADORES_IA = {
+  reuniao_investidor: aplicarAnaliseReuniao,
+  reuniao_consultor: aplicarAnaliseReuniao,
+  relatorio_semanal: aplicarRelatorioSemanal,
+  resumo_projeto: aplicarResumoProjeto,
+  documento_imovel: (p, t) => aplicarDocumentoImovel(p, t),
+  fatura_despesa: (p, t) => aplicarFaturaDespesa(p, t),
+  predicoes_portfolio: async (pedido, texto) => ({
+    predicoes: jsonDaResposta(texto).predicoes || [],
+    gerado_em: new Date().toISOString(),
+    modelo: pedido.modelo,
+    total_analisados: pedido.contexto?.total_analisados ?? null,
+  }),
+}
+
+router.get('/ia-fila/pendentes', async (req, res) => {
+  try {
+    const rows = await pedidosIAPendentes(pool)
+    const out = []
+    for (const r of rows) {
+      let ficheiro_url = null
+      if (r.ficheiro?.bucket && r.ficheiro?.path && supabaseStorage) {
+        const { data } = await supabaseStorage.storage.from(r.ficheiro.bucket).createSignedUrl(r.ficheiro.path, 60 * 60)
+        ficheiro_url = data?.signedUrl || null
+      }
+      out.push({ ...r, ficheiro_url })
+    }
+    res.json(out)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/ia-fila/:id/iniciar', async (req, res) => {
+  try { res.json({ ok: await iniciarIA(pool, req.params.id) }) } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/ia-fila/:id/resposta', async (req, res) => {
+  const id = req.params.id
+  try {
+    try {
+      if (req.body?.erro || req.body?.resposta == null) { await falharIA(pool, id, req.body?.erro || 'Sem resposta'); return res.json({ ok: true }) }
+      res.json(await concluirIA(pool, id, String(req.body.resposta), APLICADORES_IA))
+    } finally {
+      // Ficheiros copiados só para a IA ler saem do Storage depois da resposta.
+      const { rows: [p] } = await pool.query('SELECT ficheiro FROM ia_fila WHERE id = $1', [id])
+      if (p?.ficheiro?.temporario && p.ficheiro.bucket && p.ficheiro.path && supabaseStorage) {
+        await supabaseStorage.storage.from(p.ficheiro.bucket).remove([p.ficheiro.path]).catch(() => {})
+      }
+    }
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 // Worker: análises SOP 4 das chamadas com investidores e sínteses do período,
 // também corridas no Mac. Sem `resposta` devolve { pedido }; com ela grava.
 router.get('/gravacoes/investidores/por-analisar', async (req, res) => {
@@ -3003,9 +3059,7 @@ async function resolveDocBuffer(req) {
 
 router.post('/imoveis/:id/documentos/analise', uploadRateLimit, uploadImovel.single('ficheiro'), async (req, res) => {
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(503).json({ error: 'Análise por IA indisponível (ANTHROPIC_API_KEY não configurada).' })
-    }
+    if (!supabaseStorage) return res.status(503).json({ error: 'Análise por IA indisponível (Storage não configurado): o ficheiro tem de ir para o Storage para o Mac o ler.' })
     const imovel = await Imoveis.getById(req.params.id)
     if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
 
@@ -3027,41 +3081,60 @@ router.post('/imoveis/:id/documentos/analise', uploadRateLimit, uploadImovel.sin
     if (!meta) return res.status(400).json({ error: 'Formato não suportado. Usa PDF, JPG, JPEG, PNG ou WEBP.' })
     if (doc.buffer.length > 15 * 1024 * 1024) return res.status(400).json({ error: 'Ficheiro demasiado grande (máx. 15MB).' })
 
-    const base64 = doc.buffer.toString('base64')
-    const fileBlock = meta.kind === 'document'
-      ? { type: 'document', source: { type: 'base64', media_type: meta.media, data: base64 } }
-      : { type: 'image', source: { type: 'base64', media_type: meta.media, data: base64 } }
-
-    const Anthropic = (await import('@anthropic-ai/sdk')).default
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    // Agente «extrator-documentos» (src/db/extratorDocumentos.js), corrido no Mac
+    // (fila IA, plano Claude): o ficheiro vai para o Storage privado, o Claude
+    // só o lê e a plataforma preenche os campos vazios em aplicarDocumentoImovel.
     const tipoImovel = req.body?.tipoImovel || imovel.predio_tipo || imovel.tipologia || ''
-
-    // Agente «extrator-documentos» (src/db/extratorDocumentos.js): a IA só lê;
-    // a plataforma preenche os campos vazios da ficha a partir do documento certo.
-    const extracao = await extrairDocumento(client, fileBlock, contextoImovel(tipoImovel))
-    if (!extracao) return res.status(502).json({ error: 'A IA devolveu uma resposta ilegível. Tenta novamente.' })
-    // Volta a ler a ficha: outra análise pode ter gravado enquanto a IA lia.
-    const fresco = (await Imoveis.getById(req.params.id)) || imovel
-    const preenchidos = camposParaFicha(extracao, fresco)
-    const entry = {
-      fotoId: req.body?.fotoId || null,
-      nome_ficheiro: doc.name,
-      ...paraAnalise(extracao),
-      preenchidos: nomesPreenchidos(preenchidos),
-      analyzed_at: new Date().toISOString(),
-    }
-
-    // Upsert por fotoId (uma análise por ficheiro carregado).
-    const atual = Array.isArray(fresco.documentacao_analise) ? fresco.documentacao_analise : []
-    const next = [...atual.filter(a => !(entry.fotoId && a.fotoId === entry.fotoId)), entry]
-    await Imoveis.update(req.params.id, { documentacao_analise: JSON.stringify(next), ...preenchidos }, { regiaoActiva: req.regiaoActiva })
-
-    res.json({ ok: true, analise: entry, documentacao_analise: next, preenchidos })
+    const tmpPath = `ia-fila/${randomUUID()}${doc.ext || (meta.kind === 'document' ? '.pdf' : '.jpg')}`
+    const { error: upErr } = await supabaseStorage.storage.from(GRAVACOES_BUCKET).upload(tmpPath, doc.buffer, { contentType: meta.media, upsert: true })
+    if (upErr) throw new Error(upErr.message)
+    const fotoId = req.body?.fotoId || null
+    await enfileirarIA(pool, {
+      tipo: 'documento_imovel', ref_id: `${req.params.id}:${fotoId || tmpPath}`, modelo: MODELO_EXTRATOR,
+      prompt: `${PROMPT_EXTRATOR}\n\n${contextoImovel(tipoImovel)}`,
+      ficheiro: { bucket: GRAVACOES_BUCKET, path: tmpPath, nome: doc.name, temporario: true },
+      contexto: { imovel_id: req.params.id, fotoId, nome_ficheiro: doc.name },
+    })
+    res.json({ ok: true, em_fila: true, fotoId })
   } catch (e) {
     console.error(`[documentos/analise imovel=${req.params.id}] FALHOU:`, e.message)
     res.status(500).json({ error: e.message || 'Falha na análise do documento.' })
   }
 })
+
+// Estado da análise de um documento em fila (o frontend lê até concluir).
+router.get('/imoveis/:id/documentos/analise/estado/:fotoId', async (req, res) => {
+  try {
+    const fila = await estadoIA(pool, 'documento_imovel', `${req.params.id}:${req.params.fotoId}`)
+    const imovel = await Imoveis.getById(req.params.id)
+    res.json({
+      estado: fila?.estado || null, erro: fila?.erro || null,
+      documentacao_analise: Array.isArray(imovel?.documentacao_analise) ? imovel.documentacao_analise : [],
+    })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Aplicador da fila IA: grava a análise do documento e preenche a ficha.
+async function aplicarDocumentoImovel(pedido, texto) {
+  const { imovel_id, fotoId, nome_ficheiro } = pedido.contexto || {}
+  const extracao = lerExtracao(texto)
+  if (!extracao) throw new Error('A IA devolveu uma resposta ilegível.')
+  // Lê a ficha agora: outra análise pode ter gravado entretanto.
+  const fresco = await Imoveis.getById(imovel_id)
+  if (!fresco) throw new Error('Imóvel não encontrado')
+  const preenchidos = camposParaFicha(extracao, fresco)
+  const entry = {
+    fotoId: fotoId || null,
+    nome_ficheiro,
+    ...paraAnalise(extracao),
+    preenchidos: nomesPreenchidos(preenchidos),
+    analyzed_at: new Date().toISOString(),
+  }
+  const atual = Array.isArray(fresco.documentacao_analise) ? fresco.documentacao_analise : []
+  const next = [...atual.filter(a => !(entry.fotoId && a.fotoId === entry.fotoId)), entry]
+  await Imoveis.update(imovel_id, { documentacao_analise: JSON.stringify(next), ...preenchidos })
+  return { fotoId: entry.fotoId, preenchidos: entry.preenchidos }
+}
 
 // Remover a análise de um documento (por fotoId) — permite reanalisar do zero.
 router.delete('/imoveis/:id/documentos/analise/:fotoId', async (req, res) => {
@@ -3237,36 +3310,43 @@ router.get('/imoveis/:id/drive-files', async (req, res) => {
   }
 })
 
-// Leitura do anexo de uma despesa com o extrator (auditoria D3): guarda o
-// resumo no anexo (documentos[].leitura) e preenche os campos vazios da
-// despesa. Sem chave da IA, formato não suportado ou erro: o anexo fica, sem
-// leitura. Devolve { despesa, leitura, preenchidos } ou null.
+// Leitura do anexo de uma despesa com o extrator (auditoria D3), corrida no Mac
+// (fila IA, plano Claude): em dev o anexo é local, por isso vai uma cópia
+// temporária para o Storage. aplicarFaturaDespesa guarda o resumo no anexo
+// (documentos[].leitura) e preenche os campos vazios da despesa.
 async function lerAnexoDespesa(despesaId, docId, buffer, nome, mime) {
-  if (!process.env.ANTHROPIC_API_KEY || !buffer?.length || buffer.length > 15 * 1024 * 1024) return null
+  if (!supabaseStorage || !buffer?.length || buffer.length > 15 * 1024 * 1024) return
   const meta = resolveDocMedia(path.extname(nome || '').toLowerCase(), mime)
-  if (!meta) return null
+  if (!meta) return
   try {
-    const base64 = Buffer.from(buffer).toString('base64')
-    const fileBlock = { type: meta.kind === 'document' ? 'document' : 'image', source: { type: 'base64', media_type: meta.media, data: base64 } }
-    const Anthropic = (await import('@anthropic-ai/sdk')).default
-    const ex = await extrairDocumento(new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }), fileBlock, contextoDespesa())
-    if (!ex) return null
-    const leitura = leituraDaFatura(ex)
-    // Relê a despesa: pode ter mudado enquanto a IA lia.
-    const d = await Despesas.getById(despesaId)
-    if (!d) return null
-    const aviso = avisoDeValor(leitura, d)
-    if (aviso) leitura.avisos.push(aviso)
-    const docs = documentosDe(d).map(x => (x.id === docId ? { ...x, leitura } : x))
-    const campos = camposDaDespesa(leitura, d)
-    const sets = ['documentos = $1', ...Object.keys(campos).map((k, i) => `${k} = $${i + 2}`), 'updated_at = NOW()']
-    const { rows } = await pool.query(`UPDATE despesas SET ${sets.join(', ')} WHERE id = $${Object.keys(campos).length + 2} RETURNING *`,
-      [JSON.stringify(docs), ...Object.values(campos), despesaId])
-    return { despesa: rows[0], leitura, preenchidos: nomesDaDespesa(campos) }
-  } catch (e) {
-    console.warn('[despesas] leitura do anexo:', e.message)
-    return null
-  }
+    const tmpPath = `ia-fila/${randomUUID()}${path.extname(nome || '').toLowerCase()}`
+    const { error } = await supabaseStorage.storage.from(GRAVACOES_BUCKET).upload(tmpPath, buffer, { contentType: meta.media, upsert: true })
+    if (error) throw new Error(error.message)
+    await enfileirarIA(pool, {
+      tipo: 'fatura_despesa', ref_id: `${despesaId}:${docId}`, modelo: MODELO_EXTRATOR,
+      prompt: `${PROMPT_EXTRATOR}\n\n${contextoDespesa()}`,
+      ficheiro: { bucket: GRAVACOES_BUCKET, path: tmpPath, nome, temporario: true },
+      contexto: { despesa_id: despesaId, doc_id: docId },
+    })
+  } catch (e) { console.warn('[despesas] leitura do anexo:', e.message) }
+}
+
+async function aplicarFaturaDespesa(pedido, texto) {
+  const { despesa_id, doc_id } = pedido.contexto || {}
+  const ex = lerExtracao(texto)
+  if (!ex) throw new Error('A IA devolveu uma resposta ilegível.')
+  const leitura = leituraDaFatura(ex)
+  // Relê a despesa: pode ter mudado enquanto a IA lia.
+  const d = await Despesas.getById(despesa_id)
+  if (!d) throw new Error('Despesa não encontrada')
+  const aviso = avisoDeValor(leitura, d)
+  if (aviso) leitura.avisos.push(aviso)
+  const docs = documentosDe(d).map(x => (x.id === doc_id ? { ...x, leitura } : x))
+  const campos = camposDaDespesa(leitura, d)
+  const sets = ['documentos = $1', ...Object.keys(campos).map((k, i) => `${k} = $${i + 2}`), 'updated_at = NOW()']
+  await pool.query(`UPDATE despesas SET ${sets.join(', ')} WHERE id = $${Object.keys(campos).length + 2}`,
+    [JSON.stringify(docs), ...Object.values(campos), despesa_id])
+  return { despesa_id, preenchidos: nomesDaDespesa(campos) }
 }
 
 // ── Upload de documentos para despesas ───────────────────────
@@ -3287,8 +3367,8 @@ router.post('/despesas/:id/upload', uploadRateLimit, upload.single('file'), asyn
       uploaded_at: new Date().toISOString(),
     })
     await Despesas.update(id, { documentos: JSON.stringify(docs) })
-    const lido = await lerAnexoDespesa(id, docs[docs.length - 1].id, await readFile(req.file.path).catch(() => null), req.file.originalname, req.file.mimetype)
-    res.json({ ok: true, documentos: lido ? documentosDe(lido.despesa) : docs, leitura: lido?.leitura || null, preenchidos: lido?.preenchidos || [] })
+    await lerAnexoDespesa(id, docs[docs.length - 1].id, await readFile(req.file.path).catch(() => null), req.file.originalname, req.file.mimetype)
+    res.json({ ok: true, documentos: docs, leitura: null, preenchidos: [], leitura_em_fila: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -3436,15 +3516,31 @@ router.put('/reunioes/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// Devolve a análise guardada; sem ela (ou com ?forcar=1) põe-na na fila do Mac
+// (Claude Code, plano Claude) e o frontend lê GET /reunioes/:id/analise até chegar.
 router.post('/reunioes/:id/analisar', async (req, res) => {
   try {
-    const { rows: [r] } = await pool.query('SELECT entidade_tipo FROM reunioes WHERE id = $1', [req.params.id])
+    const { rows: [r] } = await pool.query('SELECT analise_completa FROM reunioes WHERE id = $1', [req.params.id])
     if (!r) return res.status(404).json({ error: 'Reunião não encontrada' })
-    const { autoFillConsultor } = await import('./meetingAnalysis.js')
-    const result = r.entidade_tipo === 'consultores'
-      ? await autoFillConsultor(req.params.id)
-      : await autoFillInvestidor(req.params.id)
-    res.json(result)
+    if (r.analise_completa && req.query.forcar !== '1') {
+      try { return res.json(JSON.parse(r.analise_completa)) } catch { /* análise corrompida: pede nova */ }
+    }
+    const p = await pedirAnaliseReuniao(req.params.id)
+    res.json({ em_fila: true, estado: p.estado })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/reunioes/:id/analise', async (req, res) => {
+  try {
+    const { rows: [r] } = await pool.query('SELECT entidade_tipo, analise_completa FROM reunioes WHERE id = $1', [req.params.id])
+    if (!r) return res.status(404).json({ error: 'Reunião não encontrada' })
+    const fila = await estadoIA(pool, r.entidade_tipo === 'consultores' ? 'reuniao_consultor' : 'reuniao_investidor', req.params.id)
+    if (emFilaIA(fila)) return res.json({ em_fila: true, estado: fila.estado })
+    let analise = null
+    if (fila?.estado === 'concluido' && fila.resultado) analise = fila.resultado
+    else if (r.analise_completa) { try { analise = JSON.parse(r.analise_completa) } catch { /* ignora */ } }
+    if (analise) return res.json(analise)
+    res.json({ error: fila?.erro || 'Sem análise' })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -3470,7 +3566,7 @@ router.post('/fireflies/sync', async (req, res) => {
         [result.created]
       )
       for (const r of novas) {
-        try { await autoFillInvestidor(r.id) } catch {}
+        try { await pedirAnaliseReuniao(r.id) } catch {}
       }
       result.analyzed = novas.length
     }
@@ -6295,8 +6391,8 @@ router.post('/projetos/despesas/:despesaId/comprovativo', uploadRateLimit, uploa
         await uploadComprovativoToFolder(despesaId, fileBuffer, req.file.originalname, req.file.mimetype)
       } catch (e) { console.error('[drive] espelho comprovativo:', e.message) }
     }
-    const lido = await lerAnexoDespesa(despesaId, docs[docs.length - 1].id, await readFile(req.file.path).catch(() => null), req.file.originalname, req.file.mimetype)
-    res.json({ ...(lido?.despesa || rows[0]), leitura: lido?.leitura || null, preenchidos: lido?.preenchidos || [] })
+    await lerAnexoDespesa(despesaId, docs[docs.length - 1].id, await readFile(req.file.path).catch(() => null), req.file.originalname, req.file.mimetype)
+    res.json({ ...rows[0], leitura: null, preenchidos: [], leitura_em_fila: true })
   } catch (e) { console.error('[comprovativo]', e.message); res.status(500).json({ error: e.message }) }
 })
 
@@ -7005,19 +7101,17 @@ async function disparoVendaFracaoAutomatico(fracaoId) {
 // ── P4.8: IA preditiva — análise de atrasos e recomendações ─
 // Usa Claude Sonnet para analisar TODOS os projectos activos e sinalizar
 // os que estão em risco de atraso baseado em padrões (data prevista vs progresso)
-// Cache em memória das predições (30min)
-let _predicoesCache = null
-let _predicoesExpires = 0
+// Corre no Mac (fila IA, plano Claude). A última previsão fica guardada; com
+// mais de 30 min (ou ?fresh=1) pede-se uma nova e mostra-se a anterior.
 router.get('/projetos/portfolio/ia-predicoes', aiRateLimit, async (req, res) => {
   try {
-    if (!aiConfigured()) return res.status(503).json({ error: 'AI não configurada' })
-    // Cache
-    if (req.query.fresh !== '1' && _predicoesCache && _predicoesExpires > Date.now()) {
-      return res.json({ ..._predicoesCache, cached: true })
-    }
-    const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY
-    const Anthropic = (await import('@anthropic-ai/sdk')).default
-    const client = new Anthropic({ apiKey: ANTHROPIC_KEY })
+    const ultimo = await estadoIA(pool, 'predicoes_portfolio', 'portfolio')
+    const { rows: [ant] } = await pool.query(
+      `SELECT resultado FROM ia_fila WHERE tipo = 'predicoes_portfolio' AND estado = 'concluido' ORDER BY updated_at DESC LIMIT 1`)
+    const anterior = ant?.resultado || null
+    if (emFilaIA(ultimo)) return res.json({ ...(anterior || { predicoes: [] }), em_fila: true })
+    const fresco = ultimo?.estado === 'concluido' && Date.now() - new Date(ultimo.updated_at).getTime() < 30 * 60 * 1000
+    if (anterior && fresco && req.query.fresh !== '1') return res.json({ ...anterior, cached: true })
 
     // Carregar projectos activos com dados resumidos — roles restritos (parceiro/
     // investidor) só veem os negócios a que têm acesso via `acessos` (mesma
@@ -7074,28 +7168,8 @@ Regras:
 - Apenas inclui projectos onde haja efectivamente risco. NÃO listes projectos saudáveis.
 - Máximo 10 entradas. Devolve APENAS o JSON, sem texto à volta.`
 
-    const t0 = Date.now()
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2000,
-      messages: [{ role: 'user', content: prompt }],
-    })
-    const text = response.content[0]?.text || '{}'
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    let parsed
-    try { parsed = JSON.parse(jsonMatch ? jsonMatch[0] : text) }
-    catch { return res.status(500).json({ error: 'Resposta IA inválida' }) }
-
-    const result = {
-      predicoes: parsed.predicoes || [],
-      gerado_em: new Date().toISOString(),
-      ms: Date.now() - t0,
-      modelo: 'claude-sonnet-4-6',
-      total_analisados: contextos.length,
-    }
-    _predicoesCache = result
-    _predicoesExpires = Date.now() + 30 * 60 * 1000
-    res.json(result)
+    await enfileirarIA(pool, { tipo: 'predicoes_portfolio', ref_id: 'portfolio', prompt, contexto: { total_analisados: contextos.length } })
+    res.json({ ...(anterior || { predicoes: [] }), em_fila: true })
   } catch (e) { console.error('[ia-predicoes]', e.message); res.status(500).json({ error: e.message }) }
 })
 
@@ -7385,7 +7459,6 @@ router.get('/projetos/calendario', async (req, res) => {
 // ── P3.18 — AI assistant: resumo do projecto ────────────────
 router.get('/projetos/:negocioId/ai-resumo', aiRateLimit, async (req, res) => {
   try {
-    if (!aiConfigured()) return res.status(503).json({ error: 'AI não configurada (ANTHROPIC_API_KEY)' })
     const ignorarCache = req.query.fresh === '1'
     const r = await gerarResumoProjeto(req.params.negocioId, { ignorarCache })
     if (!r.ok) return res.status(500).json({ error: r.error })

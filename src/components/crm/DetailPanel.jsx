@@ -1456,6 +1456,19 @@ function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onC
     setAnalyzing(null)
   }
 
+  // Análises em fila no Mac (Claude Code): volta a ler até chegarem.
+  const emFila = Object.entries(analises).filter(([, a]) => a?.em_fila).map(([id]) => id)
+  useEffect(() => {
+    if (!emFila.length) return
+    const t = setInterval(() => {
+      for (const id of emFila) {
+        apiFetch(`/api/crm/reunioes/${id}/analise`).then(r => r.json())
+          .then(d => { if (!d?.em_fila) setAnalises(prev => ({ ...prev, [id]: d })) }).catch(() => {})
+      }
+    }, 15000)
+    return () => clearInterval(t)
+  }, [emFila.join(',')])
+
   function toggleExpand(id) {
     if (expanded === id) { setExpanded(null); return }
     setExpanded(id)
@@ -1607,7 +1620,11 @@ function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onC
                   </div>
                 )}
 
-                {ana && !ana.error && (
+                {ana?.em_fila && (
+                  <p className="text-xs text-ink-muted py-2">A análise está em fila no Mac (Claude Code no plano). Fica pronta no próximo ciclo, até 3 minutos.</p>
+                )}
+
+                {ana && !ana.error && !ana.em_fila && (
                   <>
                     {/* Dados extraídos */}
                     {ana.investidor_dados && (

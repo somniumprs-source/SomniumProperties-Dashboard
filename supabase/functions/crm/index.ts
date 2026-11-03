@@ -35,7 +35,8 @@ import {
   pedirAnaliseInvestidor, investidorGravacoesPorAnalisar, passoAnaliseInvestidor, falhaAnaliseInvestidor,
   lerSinteseInvestidores, pedirSinteseInvestidores, sintesesInvestidoresPorGerar, passoSinteseInvestidores, falhaSinteseInvestidores,
 } from "../_shared/chamadasInvestidor.ts";
-import { analyzeReuniao, autoFillConsultor, autoFillInvestidor } from "../_shared/meetingAnalysis.ts";
+import { analyzeReuniao, pedirAnaliseReuniao, aplicarAnaliseReuniao } from "../_shared/meetingAnalysis.ts";
+import { estadoIA, emFilaIA, enfileirarIA, jsonDaResposta, pedidosIAPendentes, iniciarIA, concluirIA, falharIA } from "../_shared/filaIA.ts";
 import { isConfigured as firefliesConfigured, syncFireflies } from "../_shared/firefliesSync.ts";
 import { runEstudoLocalizacao } from "../_shared/estudoLocalizacao.ts";
 import { streamToBuffer } from "../_shared/pdfkitGuard.ts";
@@ -43,7 +44,7 @@ import { removeFromStorage, supabase, uploadPublic, uploadPrivate } from "../_sh
 import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
 import { isWholesaling } from "../_shared/modelos.ts";
 import { avaliarEntrada, painelRequisitos, carregarDadosEntrada } from "../_shared/dealBreakers.ts";
-import { extrairDocumento, contextoImovel, paraAnalise, camposParaFicha, nomesPreenchidos, contextoDespesa, leituraDaFatura, camposDaDespesa, nomesDaDespesa, avisoDeValor } from "../_shared/extratorDocumentos.ts";
+import { PROMPT_EXTRATOR, MODELO_EXTRATOR, lerExtracao, contextoImovel, paraAnalise, camposParaFicha, nomesPreenchidos, contextoDespesa, leituraDaFatura, camposDaDespesa, nomesDaDespesa, avisoDeValor } from "../_shared/extratorDocumentos.ts";
 import { documentosDe, temDocumento, anteriorARegra } from "../_shared/regrasDespesas.ts";
 import { validarModeloImovel, validarCategoriaNegocio } from "../_shared/modeloNegocio.ts";
 import { donosDasRegioes } from "../_shared/responsavelRegiao.ts";
@@ -68,7 +69,6 @@ import {
 import {
   autoOrganize, ensureLabels, isConfigured as gmailConfigured, organizeBatch, organizeMessage,
 } from "../_shared/gmailSync.ts";
-import Anthropic from "@anthropic-ai/sdk";
 import { registerRegiaoRoutes } from "./regiaoRoutes.ts";
 import { registerAnaliseRoutes, propagarParaImovel, resyncCaepInvestidores } from "./analiseRoutes.ts";
 import { registerOrcamentoRoutes } from "./orcamentoRoutes.ts";
@@ -83,11 +83,11 @@ import {
 } from "../_shared/pdfProjectoFixFlip.ts";
 import { exportProjetoExcel } from "../_shared/projetoExcelExport.ts";
 import { audit } from "../_shared/projetoAuditLog.ts";
-import { gerarResumoProjeto, isConfigured as aiConfigured } from "../_shared/projetoAiAssistant.ts";
+import { gerarResumoProjeto, aplicarResumoProjeto } from "../_shared/projetoAiAssistant.ts";
 import { sendEmail, isConfigured as emailConfigured } from "../_shared/emailService.ts";
 // ── Subsistema RELATORIOS / EXPORTS / AUTOMATION (ultimo lote de stubs) ──
 import {
-  autoGerarRelatoriosSemanaisPendentes, gerarRelatorioSemanal,
+  autoGerarRelatoriosSemanaisPendentes, gerarRelatorioSemanal, aplicarRelatorioSemanal,
 } from "../_shared/relatorioSemanalAggregator.ts";
 import { generateRelatorioSemanalPDF } from "../_shared/pdfRelatorioSemanal.ts";
 import { generateRelatorioExpansaoGaia } from "../_shared/pdfRelatorioExpansaoGaia.ts";
@@ -579,7 +579,7 @@ app.use("*", async (c, next) => {
   // Worker de transcricao (launchd) autentica por INTERNAL_API_KEY (x-api-key)
   // nas rotas /gravacoes/* — nao tem sessao Supabase. requireInternalKey devolve
   // true em dev (sem key configurada). Demais rotas exigem JWT como sempre.
-  if (c.req.path.includes("/gravacoes") && requireInternalKey(c)) return await next();
+  if ((c.req.path.includes("/gravacoes") || c.req.path.includes("/ia-fila/")) && requireInternalKey(c)) return await next();
   return await requireAuth(c, next);
 });
 
@@ -2640,6 +2640,60 @@ app.post("/gravacoes/:id/analise-investidor", async (c: any) => {
   }
 });
 
+// ── Fila IA (worker no Mac) ──
+// Pedidos de várias funcionalidades corridos no Claude Code do Mac. Cada tipo
+// tem um aplicador que grava o resultado onde a funcionalidade o espera.
+const APLICADORES_IA: Record<string, (pedido: any, texto: string) => Promise<any>> = {
+  reuniao_investidor: aplicarAnaliseReuniao,
+  reuniao_consultor: aplicarAnaliseReuniao,
+  relatorio_semanal: aplicarRelatorioSemanal,
+  resumo_projeto: aplicarResumoProjeto,
+  documento_imovel: aplicarDocumentoImovel,
+  fatura_despesa: aplicarFaturaDespesa,
+  predicoes_portfolio: async (pedido: any, texto: string) => ({
+    predicoes: jsonDaResposta(texto).predicoes || [],
+    gerado_em: new Date().toISOString(),
+    modelo: pedido.modelo,
+    total_analisados: pedido.contexto?.total_analisados ?? null,
+  }),
+};
+
+app.get("/ia-fila/pendentes", async (c: any) => {
+  try {
+    const rows = await pedidosIAPendentes(pool);
+    const out: any[] = [];
+    for (const r of rows) {
+      let ficheiro_url = null;
+      if (r.ficheiro?.bucket && r.ficheiro?.path && supabase) {
+        const { data } = await supabase.storage.from(r.ficheiro.bucket).createSignedUrl(r.ficheiro.path, 60 * 60);
+        ficheiro_url = data?.signedUrl || null;
+      }
+      out.push({ ...r, ficheiro_url });
+    }
+    return c.json(out);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/ia-fila/:id/iniciar", async (c: any) => {
+  try { return c.json({ ok: await iniciarIA(pool, c.req.param("id")) }); }
+  catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/ia-fila/:id/resposta", async (c: any) => {
+  const id = c.req.param("id");
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    try {
+      if (body?.erro || body?.resposta == null) { await falharIA(pool, id, body?.erro || "Sem resposta"); return c.json({ ok: true }); }
+      return c.json(await concluirIA(pool, id, String(body.resposta), APLICADORES_IA));
+    } finally {
+      // Ficheiros copiados só para a IA ler saem do Storage depois da resposta.
+      const { rows: [p] } = await pool.query("SELECT ficheiro FROM ia_fila WHERE id = $1", [id]);
+      if (p?.ficheiro?.temporario && p.ficheiro.bucket && p.ficheiro.path) await removeFromStorage(p.ficheiro.bucket, p.ficheiro.path);
+    }
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
 app.get("/gravacoes/sinteses-investidores/por-gerar", async (c: any) => {
   try { return c.json(await sintesesInvestidoresPorGerar(pool)); } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
@@ -3606,10 +3660,7 @@ async function resolveDocBuffer(
 app.post("/imoveis/:id/documentos/analise", async (c: any) => {
   const id = c.req.param("id");
   try {
-    const _rl = await checkUploadLimit(c, 15, 60 * 60 * 1000); if (_rl) return _rl; // cada chamada custa API de IA
-    if (!Deno.env.get("ANTHROPIC_API_KEY")) {
-      return c.json({ error: "Análise por IA indisponível (ANTHROPIC_API_KEY não configurada)." }, 503);
-    }
+    const _rl = await checkUploadLimit(c, 60, 60 * 60 * 1000); if (_rl) return _rl; // protege a fila do Mac
     const imovel = await Imoveis.getById(id);
     if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
 
@@ -3660,43 +3711,61 @@ app.post("/imoveis/:id/documentos/analise", async (c: any) => {
     if (!meta) return c.json({ error: "Formato não suportado. Usa PDF, JPG, JPEG, PNG ou WEBP." }, 400);
     if (doc.bytes.length > 15 * 1024 * 1024) return c.json({ error: "Ficheiro demasiado grande (máx. 15MB)." }, 400);
 
-    let bin = "";
-    for (let i = 0; i < doc.bytes.length; i++) bin += String.fromCharCode(doc.bytes[i]);
-    const base64 = btoa(bin);
-    const fileBlock = meta.kind === "document"
-      ? { type: "document", source: { type: "base64", media_type: meta.media, data: base64 } }
-      : { type: "image", source: { type: "base64", media_type: meta.media, data: base64 } };
-
-    const client = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") });
+    // Agente «extrator-documentos» (_shared/extratorDocumentos.ts), corrido no Mac
+    // (fila IA, plano Claude): o ficheiro vai para o Storage privado, o Claude
+    // só o lê e a plataforma preenche os campos vazios em aplicarDocumentoImovel.
     const tipoImovel = bodyTipoImovel || imovel.predio_tipo || imovel.tipologia || "";
-
-    // Agente «extrator-documentos» (_shared/extratorDocumentos.ts): a IA só lê;
-    // a plataforma preenche os campos vazios da ficha a partir do documento certo.
-    const extracao = await extrairDocumento(client, fileBlock, contextoImovel(tipoImovel));
-    if (!extracao) return c.json({ error: "A IA devolveu uma resposta ilegível. Tenta novamente." }, 502);
-    // Volta a ler a ficha: outra análise pode ter gravado enquanto a IA lia.
-    const fresco = (await Imoveis.getById(id)) || imovel;
-    const preenchidos = camposParaFicha(extracao, fresco);
-    const entry = {
-      fotoId: bodyFotoId || null,
-      nome_ficheiro: doc.name,
-      ...paraAnalise(extracao),
-      preenchidos: nomesPreenchidos(preenchidos),
-      analyzed_at: new Date().toISOString(),
-    };
-
-    // Upsert por fotoId (uma análise por ficheiro carregado).
-    await ensureColumn("imoveis", "documentacao_analise JSONB DEFAULT '[]'");
-    const atual = Array.isArray(fresco.documentacao_analise) ? fresco.documentacao_analise : [];
-    const next = [...atual.filter((a: any) => !(entry.fotoId && a.fotoId === entry.fotoId)), entry];
-    await Imoveis.update(id, { documentacao_analise: JSON.stringify(next), ...preenchidos }, { regiaoActiva: c.get("regiaoActiva") });
-
-    return c.json({ ok: true, analise: entry, documentacao_analise: next, preenchidos });
+    const tmpPath = `ia-fila/${crypto.randomUUID()}${doc.ext || (meta.kind === "document" ? ".pdf" : ".jpg")}`;
+    await uploadPrivate(GRAVACOES_BUCKET, tmpPath, doc.bytes, meta.media);
+    const fotoId = bodyFotoId || null;
+    await enfileirarIA(pool, {
+      tipo: "documento_imovel", ref_id: `${id}:${fotoId || tmpPath}`, modelo: MODELO_EXTRATOR,
+      prompt: `${PROMPT_EXTRATOR}\n\n${contextoImovel(tipoImovel)}`,
+      ficheiro: { bucket: GRAVACOES_BUCKET, path: tmpPath, nome: doc.name, temporario: true },
+      contexto: { imovel_id: id, fotoId, nome_ficheiro: doc.name },
+    });
+    return c.json({ ok: true, em_fila: true, fotoId });
   } catch (e) {
     console.error(`[documentos/analise imovel=${id}] FALHOU:`, (e as Error).message);
     return c.json({ error: (e as Error).message || "Falha na análise do documento." }, 500);
   }
 });
+
+// Estado da análise de um documento em fila (o frontend lê até concluir).
+app.get("/imoveis/:id/documentos/analise/estado/:fotoId", async (c: any) => {
+  try {
+    const id = c.req.param("id");
+    const fila = await estadoIA(pool, "documento_imovel", `${id}:${c.req.param("fotoId")}`);
+    const imovel = await Imoveis.getById(id);
+    return c.json({
+      estado: fila?.estado || null, erro: fila?.erro || null,
+      documentacao_analise: Array.isArray(imovel?.documentacao_analise) ? imovel.documentacao_analise : [],
+    });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// Aplicador da fila IA: grava a análise do documento e preenche a ficha.
+async function aplicarDocumentoImovel(pedido: any, texto: string) {
+  const { imovel_id, fotoId, nome_ficheiro } = pedido.contexto || {};
+  const extracao = lerExtracao(texto);
+  if (!extracao) throw new Error("A IA devolveu uma resposta ilegível.");
+  // Lê a ficha agora: outra análise pode ter gravado entretanto.
+  const fresco = await Imoveis.getById(imovel_id);
+  if (!fresco) throw new Error("Imóvel não encontrado");
+  const preenchidos = camposParaFicha(extracao, fresco);
+  const entry = {
+    fotoId: fotoId || null,
+    nome_ficheiro,
+    ...paraAnalise(extracao),
+    preenchidos: nomesPreenchidos(preenchidos),
+    analyzed_at: new Date().toISOString(),
+  };
+  await ensureColumn("imoveis", "documentacao_analise JSONB DEFAULT '[]'");
+  const atual = Array.isArray(fresco.documentacao_analise) ? fresco.documentacao_analise : [];
+  const next = [...atual.filter((a: any) => !(entry.fotoId && a.fotoId === entry.fotoId)), entry];
+  await Imoveis.update(imovel_id, { documentacao_analise: JSON.stringify(next), ...preenchidos });
+  return { fotoId: entry.fotoId, preenchidos: entry.preenchidos };
+}
 
 // ── Remover analise documental (Imoveis CRUD + JSON) — port de routes.js 1373-1382 ──
 app.delete("/imoveis/:id/documentos/analise/:fotoId", async (c: any) => {
@@ -3823,37 +3892,39 @@ app.get("/imoveis/:id/drive-files", async (c: any) => {
   }
 });
 
-// Leitura do anexo de uma despesa com o extrator (auditoria D3): guarda o
-// resumo no anexo (documentos[].leitura) e preenche os campos vazios da
-// despesa. Sem chave da IA, formato não suportado ou erro: o anexo fica, sem
-// leitura. Devolve { despesa, leitura, preenchidos } ou null.
-async function lerAnexoDespesa(despesaId: string, docId: string, bytes: Uint8Array, nome: string, mime: string) {
-  const key = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!key || !bytes?.length || bytes.length > 15 * 1024 * 1024) return null;
-  const meta = resolveDocMedia((nome.match(/\.[a-z0-9]+$/i)?.[0] || "").toLowerCase(), mime);
-  if (!meta) return null;
+// Leitura do anexo de uma despesa com o extrator (auditoria D3), corrida no Mac
+// (fila IA, plano Claude): guarda o resumo no anexo (documentos[].leitura) e
+// preenche os campos vazios da despesa em aplicarFaturaDespesa. Formato não
+// suportado: o anexo fica, sem leitura.
+async function lerAnexoDespesa(despesaId: string, docId: string, bucket: string, storagePath: string, nome: string, mime: string, tamanho: number) {
+  if (!tamanho || tamanho > 15 * 1024 * 1024) return;
+  if (!resolveDocMedia((nome.match(/\.[a-z0-9]+$/i)?.[0] || "").toLowerCase(), mime)) return;
   try {
-    let bin = "";
-    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-    const fileBlock = { type: meta.kind === "document" ? "document" : "image", source: { type: "base64", media_type: meta.media, data: btoa(bin) } };
-    const ex = await extrairDocumento(new Anthropic({ apiKey: key }), fileBlock, contextoDespesa());
-    if (!ex) return null;
-    const leitura = leituraDaFatura(ex);
-    // Relê a despesa: pode ter mudado enquanto a IA lia.
-    const d = await Despesas.getById(despesaId);
-    if (!d) return null;
-    const aviso = avisoDeValor(leitura, d);
-    if (aviso) leitura.avisos.push(aviso);
-    const docs = documentosDe(d).map((x: any) => (x.id === docId ? { ...x, leitura } : x));
-    const campos = camposDaDespesa(leitura, d);
-    const sets = ["documentos = $1", ...Object.keys(campos).map((k, i) => `${k} = $${i + 2}`), "updated_at = NOW()"];
-    const { rows } = await pool.query(`UPDATE despesas SET ${sets.join(", ")} WHERE id = $${Object.keys(campos).length + 2} RETURNING *`,
-      [JSON.stringify(docs), ...Object.values(campos), despesaId]);
-    return { despesa: rows[0], leitura, preenchidos: nomesDaDespesa(campos) };
-  } catch (e) {
-    console.warn("[despesas] leitura do anexo:", (e as Error).message);
-    return null;
-  }
+    await enfileirarIA(pool, {
+      tipo: "fatura_despesa", ref_id: `${despesaId}:${docId}`, modelo: MODELO_EXTRATOR,
+      prompt: `${PROMPT_EXTRATOR}\n\n${contextoDespesa()}`,
+      ficheiro: { bucket, path: storagePath, nome },
+      contexto: { despesa_id: despesaId, doc_id: docId },
+    });
+  } catch (e) { console.warn("[despesas] leitura do anexo:", (e as Error).message); }
+}
+
+async function aplicarFaturaDespesa(pedido: any, texto: string) {
+  const { despesa_id, doc_id } = pedido.contexto || {};
+  const ex = lerExtracao(texto);
+  if (!ex) throw new Error("A IA devolveu uma resposta ilegível.");
+  const leitura = leituraDaFatura(ex);
+  // Relê a despesa: pode ter mudado enquanto a IA lia.
+  const d = await Despesas.getById(despesa_id);
+  if (!d) throw new Error("Despesa não encontrada");
+  const aviso = avisoDeValor(leitura, d);
+  if (aviso) leitura.avisos.push(aviso);
+  const docs = documentosDe(d).map((x: any) => (x.id === doc_id ? { ...x, leitura } : x));
+  const campos = camposDaDespesa(leitura, d);
+  const sets = ["documentos = $1", ...Object.keys(campos).map((k, i) => `${k} = $${i + 2}`), "updated_at = NOW()"];
+  await pool.query(`UPDATE despesas SET ${sets.join(", ")} WHERE id = $${Object.keys(campos).length + 2}`,
+    [JSON.stringify(docs), ...Object.values(campos), despesa_id]);
+  return { despesa_id, preenchidos: nomesDaDespesa(campos) };
 }
 
 // ── Upload de documentos para despesas (multer/Storage) — port de routes.js 1523-1542 ──
@@ -3889,8 +3960,8 @@ app.post("/despesas/:id/upload", async (c: any) => {
       uploaded_at: new Date().toISOString(),
     });
     await Despesas.update(id, { documentos: JSON.stringify(docs) });
-    const lido = await lerAnexoDespesa(id, docs[docs.length - 1].id, bytes, file.name, file.type);
-    return c.json({ ok: true, documentos: lido ? documentosDe(lido.despesa) : docs, leitura: lido?.leitura || null, preenchidos: lido?.preenchidos || [] });
+    await lerAnexoDespesa(id, docs[docs.length - 1].id, "despesas", storagePath, file.name, file.type, bytes.length);
+    return c.json({ ok: true, documentos: docs, leitura: null, preenchidos: [], leitura_em_fila: true });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
@@ -4058,16 +4129,36 @@ app.put("/reunioes/:id", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── Analisar reuniao — port de routes.js 1642-1652 ──
+// ── Analisar reuniao — port de routes.js ──
+// Devolve a análise guardada; sem ela (ou com ?forcar=1) põe-na na fila do Mac
+// (Claude Code, plano Claude) e o frontend lê GET /reunioes/:id/analise até chegar.
 app.post("/reunioes/:id/analisar", async (c: any) => {
   const id = c.req.param("id");
   try {
-    const { rows: [r] } = await pool.query("SELECT entidade_tipo FROM reunioes WHERE id = $1", [id]);
+    const { rows: [r] } = await pool.query("SELECT analise_completa FROM reunioes WHERE id = $1", [id]);
     if (!r) return c.json({ error: "Reunião não encontrada" }, 404);
-    const result = r.entidade_tipo === "consultores"
-      ? await autoFillConsultor(id)
-      : await autoFillInvestidor(id);
-    return c.json(result);
+    if (r.analise_completa && c.req.query("forcar") !== "1") {
+      try { return c.json(JSON.parse(r.analise_completa)); } catch { /* análise corrompida: pede nova */ }
+    }
+    const p = await pedirAnaliseReuniao(id);
+    return c.json({ em_fila: true, estado: p.estado });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+app.get("/reunioes/:id/analise", async (c: any) => {
+  const id = c.req.param("id");
+  try {
+    const { rows: [r] } = await pool.query("SELECT entidade_tipo, analise_completa FROM reunioes WHERE id = $1", [id]);
+    if (!r) return c.json({ error: "Reunião não encontrada" }, 404);
+    const fila = await estadoIA(pool, r.entidade_tipo === "consultores" ? "reuniao_consultor" : "reuniao_investidor", id);
+    let analise: any = null;
+    if (emFilaIA(fila)) return c.json({ em_fila: true, estado: fila.estado });
+    if (fila?.estado === "concluido" && fila.resultado) analise = fila.resultado;
+    else if (r.analise_completa) { try { analise = JSON.parse(r.analise_completa); } catch { /* ignora */ } }
+    if (analise) return c.json(analise);
+    return c.json({ error: fila?.erro || "Sem análise" });
   } catch (e) {
     return c.json({ error: (e as Error).message }, 500);
   }
@@ -4097,7 +4188,7 @@ app.post("/fireflies/sync", async (c: any) => {
         [result.created],
       );
       for (const r of novas) {
-        try { await autoFillInvestidor(r.id); } catch { /* ignora falhas individuais */ }
+        try { await pedirAnaliseReuniao(r.id); } catch { /* ignora falhas individuais */ }
       }
       result.analyzed = novas.length;
     }
@@ -6761,8 +6852,8 @@ app.post("/projetos/despesas/:despesaId/comprovativo", async (c: any) => {
         await uploadComprovativoToFolder(despesaId, bytes, file.name, file.type || "application/octet-stream");
       } catch (e) { console.error("[drive] espelho comprovativo:", (e as Error).message); }
     }
-    const lido = await lerAnexoDespesa(despesaId, docs[docs.length - 1].id, bytes, file.name, file.type);
-    return c.json({ ...(lido?.despesa || rows[0]), leitura: lido?.leitura || null, preenchidos: lido?.preenchidos || [] });
+    await lerAnexoDespesa(despesaId, docs[docs.length - 1].id, "projetos", storagePath, file.name, file.type, bytes.length);
+    return c.json({ ...rows[0], leitura: null, preenchidos: [], leitura_em_fila: true });
   } catch (e) { console.error("[comprovativo]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
 });
 
@@ -7391,16 +7482,17 @@ app.get("/projetos/:negocioId/forecast", async (c: any) => {
 });
 
 // ── IA preditiva de portfolio — port de routes.js 4611-4689 ──
-let _predicoesCache: any = null;
-let _predicoesExpires = 0;
+// Corre no Mac (fila IA, plano Claude). A última previsão fica guardada; com
+// mais de 30 min (ou ?fresh=1) pede-se uma nova e mostra-se a anterior.
 app.get("/projetos/portfolio/ia-predicoes", async (c: any) => {
   try {
-    const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!ANTHROPIC_KEY) return c.json({ error: "AI não configurada" }, 503);
-    if (c.req.query("fresh") !== "1" && _predicoesCache && _predicoesExpires > Date.now()) {
-      return c.json({ ..._predicoesCache, cached: true });
-    }
-    const client = new Anthropic({ apiKey: ANTHROPIC_KEY });
+    const ultimo = await estadoIA(pool, "predicoes_portfolio", "portfolio");
+    const { rows: [ant] } = await pool.query(
+      `SELECT resultado FROM ia_fila WHERE tipo = 'predicoes_portfolio' AND estado = 'concluido' ORDER BY updated_at DESC LIMIT 1`);
+    const anterior = ant?.resultado || null;
+    if (emFilaIA(ultimo)) return c.json({ ...(anterior || { predicoes: [] }), em_fila: true });
+    const fresco = ultimo?.estado === "concluido" && Date.now() - new Date(ultimo.updated_at).getTime() < 30 * 60 * 1000;
+    if (anterior && fresco && c.req.query("fresh") !== "1") return c.json({ ...anterior, cached: true });
 
     const { rows: projectos } = await pool.query(
       `SELECT n.id, n.movimento, n.categoria, n.data_compra, n.data_estimada_venda
@@ -7445,28 +7537,8 @@ Regras:
 - Apenas inclui projectos onde haja efectivamente risco. NÃO listes projectos saudáveis.
 - Máximo 10 entradas. Devolve APENAS o JSON, sem texto à volta.`;
 
-    const t0 = Date.now();
-    const response = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 2000,
-      messages: [{ role: "user", content: prompt }],
-    });
-    const text = (response.content[0] as any)?.text || "{}";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    let parsed;
-    try { parsed = JSON.parse(jsonMatch ? jsonMatch[0] : text); }
-    catch { return c.json({ error: "Resposta IA inválida" }, 500); }
-
-    const result = {
-      predicoes: parsed.predicoes || [],
-      gerado_em: new Date().toISOString(),
-      ms: Date.now() - t0,
-      modelo: "claude-sonnet-4-6",
-      total_analisados: contextos.length,
-    };
-    _predicoesCache = result;
-    _predicoesExpires = Date.now() + 30 * 60 * 1000;
-    return c.json(result);
+    await enfileirarIA(pool, { tipo: "predicoes_portfolio", ref_id: "portfolio", prompt, contexto: { total_analisados: contextos.length } });
+    return c.json({ ...(anterior || { predicoes: [] }), em_fila: true });
   } catch (e) { console.error("[ia-predicoes]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
 });
 
@@ -7729,7 +7801,6 @@ app.get("/projetos/calendario", async (c: any) => {
 // ── P3.18 — AI assistant: resumo do projecto — port de routes.js 4974-4982 ──
 app.get("/projetos/:negocioId/ai-resumo", async (c: any) => {
   try {
-    if (!aiConfigured()) return c.json({ error: "AI não configurada (ANTHROPIC_API_KEY)" }, 503);
     const ignorarCache = c.req.query("fresh") === "1";
     const r = await gerarResumoProjeto(c.req.param("negocioId"), { ignorarCache });
     if (!r.ok) return c.json({ error: r.error }, 500);

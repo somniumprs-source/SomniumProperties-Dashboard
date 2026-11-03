@@ -93,11 +93,8 @@ function RelatoriosAdministrativos() {
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || 'Erro ao gerar relatório')
       setShowForm(false)
-      toast('Relatório gerado.', 'success')
+      toast('Relatório criado. O conteúdo da IA é gerado no Mac no próximo ciclo (até 3 minutos).', 'success')
       await load()
-      if (data.id) {
-        await abrirPdf(data.id)
-      }
     } catch (e) {
       toast(friendlyError(e.message), 'error')
     }
@@ -115,7 +112,7 @@ function RelatoriosAdministrativos() {
       })
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || 'Erro ao sincronizar')
-      setSyncStatus(`${data.criados} criados · ${data.actualizados} atualizados · €${data.custoEur.toFixed(2)} (${data.semanasProcessadas} semanas)`)
+      setSyncStatus(`${data.criados} criados · ${data.actualizados} atualizados (${data.semanasProcessadas} semanas) · conteúdo da IA em fila no Mac`)
       await load()
     } catch (e) {
       toast(friendlyError(e.message), 'error')
@@ -658,7 +655,7 @@ function RelatoriosAdministrativos() {
                             body: JSON.stringify({ semana_iso: r.semana_iso, regenerar: true }),
                           })
                           if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Não foi possível regenerar o relatório.')
-                          toast('Relatório regenerado.', 'success')
+                          toast('Regeneração em fila no Mac. Fica pronta no próximo ciclo (até 3 minutos).', 'success')
                           await load()
                         } catch (e) { toast(friendlyError(e.message), 'error') }
                         setGenerating(false)

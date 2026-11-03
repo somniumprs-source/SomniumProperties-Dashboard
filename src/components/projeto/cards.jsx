@@ -27,6 +27,19 @@ export function AiResumoCard({ negocioId }) {
     finally { setLoading(false) }
   }
 
+  // O resumo é gerado no Mac (Claude Code, plano Claude): enquanto está em fila,
+  // volta a ler de 15 em 15 segundos.
+  useEffect(() => {
+    if (!data?.em_fila) return
+    const t = setInterval(async () => {
+      try {
+        const r = await apiFetch(`/api/crm/projetos/${negocioId}/ai-resumo`)
+        if (r.ok) setData(await r.json())
+      } catch { /* tenta no próximo intervalo */ }
+    }, 15000)
+    return () => clearInterval(t)
+  }, [data?.em_fila, negocioId])
+
   const sinalCor = {
     verde:    { bg: 'bg-success/10', border: 'border-success/30', text: 'text-success', dot: 'bg-success' },
     amarelo:  { bg: 'bg-warning/10', border: 'border-warning/30', text: 'text-warning', dot: 'bg-warning' },
@@ -50,6 +63,15 @@ export function AiResumoCard({ negocioId }) {
       <div className="rounded-2xl border border-line p-4 bg-surface text-center">
         <div className="inline-flex items-center gap-2 text-xs text-ink-muted">
           <RefreshCw className="w-3.5 h-3.5 animate-spin" /> A pensar...
+        </div>
+      </div>
+    )
+  }
+  if (data?.em_fila && !data.resumo) {
+    return (
+      <div className="rounded-2xl border border-line p-4 bg-surface text-center">
+        <div className="inline-flex items-center gap-2 text-xs text-ink-muted">
+          <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Em fila no Mac. O resumo fica pronto no próximo ciclo (até 3 minutos).
         </div>
       </div>
     )
@@ -106,7 +128,7 @@ export function AiResumoCard({ negocioId }) {
       )}
 
       <p className="text-[9px] text-ink-muted mt-3 text-right">
-        {data.cached ? 'Cache · ' : ''}{data.modelo} · {data.ms}ms
+        {data.em_fila ? 'A gerar um resumo novo no Mac · ' : ''}{data.gerado_em ? new Date(data.gerado_em).toLocaleString('pt-PT') : ''}
       </p>
     </div>
   )

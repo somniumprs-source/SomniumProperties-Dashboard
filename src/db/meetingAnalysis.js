@@ -1,11 +1,15 @@
 /**
  * Análise de reuniões com investidores.
  * Extrai informação da transcrição + gera sugestões de melhoria.
- * Usa Claude API se disponível, senão usa análise por padrões.
+ * A análise pelo Claude corre no Mac do worker (fila IA, plano Claude, sem API
+ * paga): pedirAnaliseReuniao põe o prompt na fila e aplicarAnaliseReuniao grava
+ * o resultado. analyzeReuniao (análise por padrões) fica para o PDF sem análise.
+ *
+ * Gémeo Deno em supabase/functions/_shared/meetingAnalysis.ts — o código é o
+ * mesmo, só mudam os imports. Portar qualquer alteração para os dois.
  */
 import pool from './pg.js'
-
-const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || ''
+import { enfileirarIA, jsonDaResposta } from './filaIA.js'
 
 /**
  * Analisa uma reunião e retorna:
@@ -17,28 +21,34 @@ export async function analyzeReuniao(reuniaoId) {
   const { rows: [reuniao] } = await pool.query('SELECT * FROM reunioes WHERE id = $1', [reuniaoId])
   if (!reuniao) throw new Error('Reunião não encontrada')
 
-  const transcricao = reuniao.transcricao || ''
-  const resumo = reuniao.resumo || ''
-
-  if (ANTHROPIC_KEY) {
-    return analyzeWithClaude(reuniao, transcricao, resumo)
-  }
-  return analyzeWithPatterns(reuniao, transcricao, resumo)
+  return analyzeWithPatterns(reuniao, reuniao.transcricao || '', reuniao.resumo || '')
 }
 
-/**
- * Análise com Claude API
- */
-async function analyzeWithClaude(reuniao, transcricao, resumo) {
-  const Anthropic = (await import('@anthropic-ai/sdk')).default
-  const client = new Anthropic({ apiKey: ANTHROPIC_KEY })
+// Põe a análise da reunião na fila do Mac (investidor ou consultor).
+export async function pedirAnaliseReuniao(reuniaoId) {
+  const { rows: [reuniao] } = await pool.query('SELECT * FROM reunioes WHERE id = $1', [reuniaoId])
+  if (!reuniao) throw new Error('Reunião não encontrada')
+  const consultor = reuniao.entidade_tipo === 'consultores'
+  return enfileirarIA(pool, {
+    tipo: consultor ? 'reuniao_consultor' : 'reuniao_investidor',
+    ref_id: reuniaoId,
+    prompt: consultor ? promptReuniaoConsultor(reuniao) : promptReuniaoInvestidor(reuniao),
+  })
+}
 
-  const message = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 2000,
-    messages: [{
-      role: 'user',
-      content: `Analisa esta transcrição de uma reunião com um potencial investidor imobiliário da Somnium Properties (empresa portuguesa de investimento imobiliário com operações em Coimbra e na Área Metropolitana do Porto — Porto, Vila Nova de Gaia, Santa Maria da Feira).
+// Aplicador da fila IA: preenche a ficha e guarda a análise na reunião.
+export async function aplicarAnaliseReuniao(pedido, texto) {
+  const analise = jsonDaResposta(texto)
+  return pedido.tipo === 'reuniao_consultor'
+    ? autoFillConsultor(pedido.ref_id, analise)
+    : autoFillInvestidor(pedido.ref_id, analise)
+}
+
+// Prompt da análise de reunião com investidor.
+function promptReuniaoInvestidor(reuniao) {
+  const transcricao = reuniao.transcricao || ''
+  const resumo = reuniao.resumo || ''
+  return `Analisa esta transcrição de uma reunião com um potencial investidor imobiliário da Somnium Properties (empresa portuguesa de investimento imobiliário com operações em Coimbra e na Área Metropolitana do Porto — Porto, Vila Nova de Gaia, Santa Maria da Feira).
 
 TÍTULO: ${reuniao.titulo}
 DATA: ${reuniao.data}
@@ -86,16 +96,6 @@ Responde APENAS em JSON válido com esta estrutura:
     "c5_notas": "justificação breve"
   }
 }`
-    }]
-  })
-
-  try {
-    const text = message.content[0].text
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    return JSON.parse(jsonMatch[0])
-  } catch {
-    return { error: 'Erro ao processar resposta da AI', raw: message.content[0].text }
-  }
 }
 
 /**
@@ -228,10 +228,7 @@ function analyzeWithPatterns(reuniao, transcricao, resumo) {
 /**
  * Auto-preenche campos do investidor com dados extraídos da reunião
  */
-export async function autoFillInvestidor(reuniaoId) {
-  const analise = await analyzeReuniao(reuniaoId)
-  if (analise.error) return analise
-
+async function autoFillInvestidor(reuniaoId, analise) {
   // Buscar a reunião para saber o investidor
   const { rows: [reuniao] } = await pool.query('SELECT * FROM reunioes WHERE id = $1', [reuniaoId])
   if (!reuniao?.entidade_id || reuniao.entidade_tipo !== 'investidores') {
@@ -243,7 +240,7 @@ export async function autoFillInvestidor(reuniaoId) {
 
   // Só preencher campos que estão vazios
   const updates = {}
-  const dados = analise.investidor_dados
+  const dados = analise.investidor_dados || {}
 
   if (!inv.capital_min && dados.capital_min) updates.capital_min = dados.capital_min
   if (!inv.capital_max && dados.capital_max) updates.capital_max = dados.capital_max
@@ -285,8 +282,7 @@ export async function autoFillInvestidor(reuniaoId) {
       const ponderado = Math.round((c1 * pesos.c1 + c2 * pesos.c2 + c3 * pesos.c3 + c4 * pesos.c4 + c5 * pesos.c5) * 20 * 100) / 100
       const classificacao = ponderado >= 88 ? 'A' : ponderado >= 72 ? 'B' : ponderado >= 56 ? 'C' : 'D'
 
-      const { randomUUID } = await import('crypto')
-      const scId = randomUUID()
+      const scId = crypto.randomUUID()
       const now = new Date().toISOString()
 
       await pool.query(
@@ -318,7 +314,7 @@ export async function autoFillInvestidor(reuniaoId) {
         `INSERT INTO classificacao_historico (id, investidor_id, classificacao_anterior, classificacao_nova,
           pontuacao_anterior, pontuacao_nova, motivo, tipo, scorecard_id, created_at)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [randomUUID(), inv.id, inv.classificacao || null, classificacao,
+        [crypto.randomUUID(), inv.id, inv.classificacao || null, classificacao,
           inv.pontuacao || 0, ponderado, 'Scorecard automático via transcrição de reunião', 'transcricao_automatica', scId, now]
       )
 
@@ -353,16 +349,10 @@ export async function autoFillInvestidor(reuniaoId) {
  * Não usa scorecard 5C (esse é para investidores). Foca em qualidade de lead,
  * disponibilidade e alinhamento estratégico para parceria.
  */
-async function analyzeConsultorWithClaude(reuniao, transcricao, resumo) {
-  const Anthropic = (await import('@anthropic-ai/sdk')).default
-  const client = new Anthropic({ apiKey: ANTHROPIC_KEY })
-
-  const message = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 2000,
-    messages: [{
-      role: 'user',
-      content: `Analisa esta transcrição de uma reunião com um consultor imobiliário (potencial parceiro da Somnium Properties, empresa portuguesa de investimento imobiliário com operações em Coimbra e na Área Metropolitana do Porto).
+function promptReuniaoConsultor(reuniao) {
+  const transcricao = reuniao.transcricao || ''
+  const resumo = reuniao.resumo || ''
+  return `Analisa esta transcrição de uma reunião com um consultor imobiliário (potencial parceiro da Somnium Properties, empresa portuguesa de investimento imobiliário com operações em Coimbra e na Área Metropolitana do Porto).
 
 TÍTULO: ${reuniao.titulo}
 DATA: ${reuniao.data}
@@ -401,23 +391,13 @@ Responde APENAS em JSON válido com esta estrutura:
   },
   "notas_adicionais": "informação relevante adicional"
 }`
-    }]
-  })
-
-  try {
-    const text = message.content[0].text
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    return JSON.parse(jsonMatch[0])
-  } catch {
-    return { error: 'Erro ao processar resposta da AI', raw: message.content[0].text }
-  }
 }
 
 /**
  * Auto-preenche campos do consultor com dados extraídos da reunião.
  * Espelha autoFillInvestidor mas para a tabela consultores.
  */
-export async function autoFillConsultor(reuniaoId) {
+async function autoFillConsultor(reuniaoId, analise) {
   const { rows: [reuniao] } = await pool.query('SELECT * FROM reunioes WHERE id = $1', [reuniaoId])
   if (!reuniao) throw new Error('Reunião não encontrada')
   if (!reuniao.entidade_id || reuniao.entidade_tipo !== 'consultores') {
@@ -427,16 +407,6 @@ export async function autoFillConsultor(reuniaoId) {
   const { rows: [cons] } = await pool.query('SELECT * FROM consultores WHERE id = $1', [reuniao.entidade_id])
   if (!cons) return { autoFilled: false, reason: 'Consultor não encontrado' }
 
-  const transcricao = reuniao.transcricao || ''
-  const resumo = reuniao.resumo || ''
-
-  const analise = ANTHROPIC_KEY
-    ? await analyzeConsultorWithClaude(reuniao, transcricao, resumo)
-    : { error: 'ANTHROPIC_API_KEY não configurada' }
-
-  if (analise.error) {
-    return { ...analise, autoFilled: false }
-  }
 
   const updates = {}
   const dados = analise.consultor_dados || {}

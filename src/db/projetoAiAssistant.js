@@ -1,21 +1,23 @@
 /**
  * AI assistant para resumos de projecto Fix and Flip.
- * Usa Claude Haiku 4.5 (rápido + económico) para gerar:
+ * Gera, pelo Claude:
  *  - Resumo executivo do estado do projecto
  *  - 3-5 sugestões priorizadas para o próximo passo
  *
- * Cache em memória de 5 minutos por projecto para evitar gastos repetidos.
+ * O Claude corre no Mac do worker (fila IA, plano Claude, sem API paga). O
+ * último resumo fica guardado na fila; com mais de 24h pede-se um novo e
+ * mostra-se o anterior entretanto.
+ * Gémeo Deno em supabase/functions/_shared/projetoAiAssistant.ts — portar
+ * alterações para os dois.
  */
 import pool from './pg.js'
+import { enfileirarIA, estadoIA, emFilaIA, jsonDaResposta } from './filaIA.js'
 
-const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || ''
-const MODEL = process.env.AI_MODEL || 'claude-haiku-4-5-20251001'
-const CACHE_TTL_MS = 5 * 60 * 1000
-
-const _cache = new Map() // negocioId → { data, expires }
+const MODEL = 'haiku'
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000
 
 export function isConfigured() {
-  return !!ANTHROPIC_KEY
+  return true
 }
 
 const EUR = v => v == null ? '—' : new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Number(v) || 0)
@@ -115,63 +117,35 @@ function montarPrompt(ctx) {
 }
 
 export async function gerarResumoProjeto(negocioId, { ignorarCache = false } = {}) {
-  if (!ANTHROPIC_KEY) {
-    return { ok: false, error: 'ANTHROPIC_API_KEY não configurada' }
-  }
-
-  // Cache
-  if (!ignorarCache) {
-    const cached = _cache.get(negocioId)
-    if (cached && cached.expires > Date.now()) {
-      return { ok: true, ...cached.data, cached: true }
-    }
-  }
+  const ultimo = await estadoIA(pool, 'resumo_projeto', negocioId)
+  const anterior = ultimo?.estado === 'concluido' ? ultimo.resultado : null
+  if (emFilaIA(ultimo)) return { ok: true, em_fila: true, ...(anterior || {}) }
+  const fresco = anterior && Date.now() - new Date(ultimo.updated_at).getTime() < CACHE_TTL_MS
+  if (anterior && fresco && !ignorarCache) return { ok: true, ...anterior, cached: true }
 
   const ctx = await carregarContexto(negocioId)
   if (!ctx) return { ok: false, error: 'Projecto não encontrado' }
+  await enfileirarIA(pool, { tipo: 'resumo_projeto', ref_id: negocioId, prompt: montarPrompt(ctx), modelo: MODEL })
+  // Mostra o resumo anterior (se houver) enquanto o novo é gerado.
+  const { rows: [ant] } = await pool.query(
+    `SELECT resultado FROM ia_fila WHERE tipo = 'resumo_projeto' AND ref_id = $1 AND estado = 'concluido' ORDER BY updated_at DESC LIMIT 1`, [String(negocioId)])
+  return { ok: true, em_fila: true, ...(ant?.resultado || {}) }
+}
 
-  const prompt = montarPrompt(ctx)
-
-  try {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default
-    const client = new Anthropic({ apiKey: ANTHROPIC_KEY })
-
-    const t0 = Date.now()
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 800,
-      messages: [{ role: 'user', content: prompt }],
-    })
-    const ms = Date.now() - t0
-    const text = response.content[0]?.text || '{}'
-
-    // Extrair JSON (defensivo — modelo pode incluir texto)
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    let parsed
-    try { parsed = JSON.parse(jsonMatch ? jsonMatch[0] : text) }
-    catch { return { ok: false, error: 'Resposta IA inválida', raw: text } }
-
-    const result = {
-      resumo: parsed.resumo || '',
-      sinal: parsed.sinal || 'amarelo',
-      destaques: Array.isArray(parsed.destaques) ? parsed.destaques : [],
-      proximos_passos: Array.isArray(parsed.proximos_passos) ? parsed.proximos_passos : [],
-      gerado_em: new Date().toISOString(),
-      ms,
-      tokens_input: response.usage?.input_tokens,
-      tokens_output: response.usage?.output_tokens,
-      modelo: MODEL,
-    }
-
-    _cache.set(negocioId, { data: result, expires: Date.now() + CACHE_TTL_MS })
-    return { ok: true, ...result }
-  } catch (e) {
-    console.error('[ai-resumo]', e.message)
-    return { ok: false, error: e.message }
+// Aplicador da fila IA: o resultado fica guardado no próprio pedido.
+export async function aplicarResumoProjeto(pedido, texto) {
+  const parsed = jsonDaResposta(texto)
+  return {
+    resumo: parsed.resumo || '',
+    sinal: parsed.sinal || 'amarelo',
+    destaques: Array.isArray(parsed.destaques) ? parsed.destaques : [],
+    proximos_passos: Array.isArray(parsed.proximos_passos) ? parsed.proximos_passos : [],
+    gerado_em: new Date().toISOString(),
+    modelo: pedido.modelo || MODEL,
   }
 }
 
 // Invalidar cache (chamar quando um projecto muda significativamente)
 export function invalidarCacheAi(negocioId) {
-  _cache.delete(negocioId)
+  // Sem cache em memória: o próximo pedido com ?fresh=1 gera um resumo novo.
 }

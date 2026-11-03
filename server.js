@@ -4563,7 +4563,7 @@ try {
       _ffRunning = true
       try {
         const { syncFireflies } = await import('./src/db/firefliesSync.js')
-        const { autoFillInvestidor, autoFillConsultor } = await import('./src/db/meetingAnalysis.js')
+        const { pedirAnaliseReuniao } = await import('./src/db/meetingAnalysis.js')
         const pgPool = (await import('./src/db/pg.js')).default
 
         const result = await syncFireflies()
@@ -4577,8 +4577,8 @@ try {
           )
           let invFill = 0, consFill = 0
           const fillResults = await Promise.allSettled(novas.map(r => {
-            if (r.entidade_tipo === 'investidores') return autoFillInvestidor(r.id).then(() => 'inv')
-            if (r.entidade_tipo === 'consultores') return autoFillConsultor(r.id).then(() => 'cons')
+            if (r.entidade_tipo === 'investidores') return pedirAnaliseReuniao(r.id).then(() => 'inv')
+            if (r.entidade_tipo === 'consultores') return pedirAnaliseReuniao(r.id).then(() => 'cons')
             return Promise.resolve(null)
           }))
           fillResults.forEach((res, i) => {

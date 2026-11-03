@@ -1,13 +1,14 @@
 /**
  * Agregador de Relatorios Semanais Administracao.
  * Pega em N reunioes com titulo "Reuniao Semanal" da semana indicada,
- * concatena transcricoes e usa Claude Sonnet 4 para gerar JSON estruturado
- * compativel com pdfRelatorioSemanal.js.
+ * concatena transcricoes e pede ao Claude o JSON estruturado compativel com
+ * pdfRelatorioSemanal.ts. O Claude corre no Mac do worker (fila IA, plano
+ * Claude, sem API paga): o relatorio fica logo criado com a compilacao simples
+ * e o conteudo da IA substitui-o quando chega (aplicarRelatorioSemanal).
  */
 import pool from './pg.js'
 import { randomUUID } from 'crypto'
-
-const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || ''
+import { enfileirarIA, jsonDaResposta } from './filaIA.js'
 
 export async function gerarRelatorioSemanal({ semana_iso, data_inicio, data_fim, regenerar = false }) {
   // Determinar janela
@@ -34,10 +35,8 @@ export async function gerarRelatorioSemanal({ semana_iso, data_inicio, data_fim,
     throw new Error(`Sem reunioes "Reuniao Semanal" na semana ${range.semana_iso} (${range.data_inicio} a ${range.data_fim})`)
   }
 
-  // Gerar conteudo via Claude
-  const conteudo = ANTHROPIC_KEY
-    ? await aggregateWithClaude(reunioes, range)
-    : aggregateFallback(reunioes, range)
+  // Conteudo da IA vem pela fila; um relatorio novo fica ja com a compilacao simples.
+  const conteudo = aggregateFallback(reunioes, range)
 
   const id = existing?.id || randomUUID()
   const now = new Date().toISOString()
@@ -49,9 +48,9 @@ export async function gerarRelatorioSemanal({ semana_iso, data_inicio, data_fim,
     await pool.query(
       `UPDATE relatorios_semanais
        SET data_inicio=$1, data_fim=$2, titulo=$3, subtitulo=$4,
-           reuniao_ids=$5, conteudo_json=$6, updated_at=$7
-       WHERE id=$8`,
-      [range.data_inicio, range.data_fim, titulo, subtitulo, reuniao_ids, JSON.stringify(conteudo), now, existing.id]
+           reuniao_ids=$5, updated_at=$6
+       WHERE id=$7`,
+      [range.data_inicio, range.data_fim, titulo, subtitulo, reuniao_ids, now, existing.id]
     )
   } else {
     await pool.query(
@@ -62,12 +61,15 @@ export async function gerarRelatorioSemanal({ semana_iso, data_inicio, data_fim,
     )
   }
 
+  await enfileirarIA(pool, { tipo: 'relatorio_semanal', ref_id: id, prompt: promptRelatorioSemanal(reunioes, range) })
+
   return {
     id,
     semana_iso: range.semana_iso,
     status: existing ? 'regenerated' : 'created',
     reunioes: reunioes.length,
-    custo_estimado_eur: ANTHROPIC_KEY ? 0.10 : 0,
+    em_fila: true,
+    custo_estimado_eur: 0,
   }
 }
 
@@ -107,28 +109,19 @@ export async function autoGerarRelatoriosSemanaisPendentes({ apenas_pendentes = 
     semanasProcessadas: semanas.length,
     criados,
     actualizados,
-    custoEur: Number(((criados + actualizados) * 0.10).toFixed(2)),
+    custoEur: 0,
     erros,
   }
 }
 
-// ─── Claude aggregation ─────────────────────────────────────────────
-async function aggregateWithClaude(reunioes, range) {
-  const Anthropic = (await import('@anthropic-ai/sdk')).default
-  const client = new Anthropic({ apiKey: ANTHROPIC_KEY })
-
+// ─── Claude aggregation (fila IA) ───────────────────────────────────
+function promptRelatorioSemanal(reunioes, range) {
   const concat = reunioes.map(r =>
     `=== REUNIÃO: ${r.titulo} (${r.data}) ===\nDuração: ${r.duracao_min || '?'} min\n\n${r.transcricao || r.resumo || ''}`
   ).join('\n\n')
   const slice = concat.slice(0, 30000)
   const participantes = collectParticipantes(reunioes)
-
-  const message = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 4500,
-    messages: [{
-      role: 'user',
-      content: `Es analista executivo da Somnium Properties (empresa portuguesa de investimento imobiliário com operações em Coimbra e na Área Metropolitana do Porto — Porto, Vila Nova de Gaia, Santa Maria da Feira).
+  return `Es analista executivo da Somnium Properties (empresa portuguesa de investimento imobiliário com operações em Coimbra e na Área Metropolitana do Porto — Porto, Vila Nova de Gaia, Santa Maria da Feira).
 Recebes transcrições de reuniões internas semanais (sócios Alexandre Mendes, João Abreu e Luís Pedro).
 Compõe um relatório executivo CORPORATIVO em PT-PT formal, estruturado para PDF institucional.
 
@@ -224,17 +217,14 @@ REGRAS:
 - Quando algo não é mencionado, omite a secção/bullet em vez de inventar.
 - "decisao_chave" deve ser uma única frase, não bullet list.
 - "participantes" são apenas os primeiros nomes ou "Nome Apelido" curto.`
-    }]
-  })
+}
 
-  try {
-    const text = message.content[0].text
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    return JSON.parse(jsonMatch[0])
-  } catch (e) {
-    console.error('[relatorioSemanal] erro parse JSON Claude:', e.message)
-    return aggregateFallback(reunioes, range)
-  }
+// Aplicador da fila IA: substitui o conteudo do relatorio pelo da IA.
+export async function aplicarRelatorioSemanal(pedido, texto) {
+  const conteudo = jsonDaResposta(texto)
+  await pool.query('UPDATE relatorios_semanais SET conteudo_json = $1, updated_at = $2 WHERE id = $3',
+    [JSON.stringify(conteudo), new Date().toISOString(), pedido.ref_id])
+  return { id: pedido.ref_id }
 }
 
 // ─── Fallback sem Claude ────────────────────────────────────────────

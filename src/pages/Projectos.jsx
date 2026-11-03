@@ -211,6 +211,14 @@ export function Projectos() {
   const [filterAtraso, setFilterAtraso] = useState(false)
   const [predicoes, setPredicoes] = useState(null)
   const [predicoesLoading, setPredicoesLoading] = useState(false)
+  // A análise IA corre no Mac (Claude Code, plano Claude): em fila, volta a ler.
+  useEffect(() => {
+    if (!predicoes?.em_fila) return
+    const t = setInterval(async () => {
+      try { const r = await apiFetch('/api/crm/projetos/portfolio/ia-predicoes'); if (r.ok) setPredicoes(await r.json()) } catch {}
+    }, 15000)
+    return () => clearInterval(t)
+  }, [predicoes?.em_fila])
 
   // Migrado para React Query (Problema 23 da auditoria) — ver Financeiro.jsx/CRM.jsx.
   // syntheticKpisRef substitui o antigo guard `isReadOnly && !kpis` (que lia o
@@ -473,7 +481,7 @@ export function Projectos() {
                   } finally { setPredicoesLoading(false) }
                 }}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-caption font-medium text-ink border border-line bg-surface-raised hover:bg-surface-muted transition-colors duration-fast">
-                  <Sparkles className="w-3.5 h-3.5" /> {predicoesLoading ? 'A analisar...' : 'Análise IA'}
+                  <Sparkles className="w-3.5 h-3.5" /> {predicoesLoading ? 'A analisar...' : predicoes?.em_fila ? 'Em fila no Mac…' : 'Análise IA'}
                 </button>
               )}
             </div>

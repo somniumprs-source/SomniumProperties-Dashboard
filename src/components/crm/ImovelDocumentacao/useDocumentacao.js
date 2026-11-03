@@ -107,7 +107,8 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
     setUploading(false)
   }, [imovelId, load])
 
-  // Analisa um documento via IA (endpoint backend → Claude). Opt-in, por ficheiro.
+  // Analisa um documento via IA. Opt-in, por ficheiro. A IA corre no Mac
+  // (Claude Code, plano Claude): o pedido fica em fila e lê-se o estado até concluir.
   const analisar = useCallback(async (doc) => {
     setErros(prev => { const n = { ...prev }; delete n[doc.id]; return n })
     setAnalyzing(prev => new Set(prev).add(doc.id))
@@ -123,6 +124,16 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || 'Falha na análise')
       if (Array.isArray(data.documentacao_analise)) setAnalises(data.documentacao_analise)
+      if (data.em_fila) {
+        // Até 30 minutos (o worker corre de 3 em 3 minutos).
+        for (let i = 0; i < 120; i++) {
+          await new Promise(res => setTimeout(res, 15000))
+          const e = await apiFetch(`/api/crm/imoveis/${imovelId}/documentos/analise/estado/${encodeURIComponent(doc.id)}`).then(x => x.json()).catch(() => null)
+          if (!e) continue
+          if (e.estado === 'erro') throw new Error(e.erro || 'Falha na análise')
+          if (e.estado === 'concluido') { if (Array.isArray(e.documentacao_analise)) setAnalises(e.documentacao_analise); break }
+        }
+      }
     } catch (e) {
       setErros(prev => ({ ...prev, [doc.id]: e.message || 'Erro na análise' }))
     } finally {
@@ -132,11 +143,10 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
 
   analisarRef.current = analisar
 
+  // Põe todos em fila de uma vez; o Mac processa-os pela ordem.
   const analisarTodos = useCallback(async () => {
     const analisados = new Set(analises.map(a => a.fotoId).filter(Boolean))
-    for (const d of docs) {
-      if (!analisados.has(d.id)) await analisar(d)
-    }
+    await Promise.all(docs.filter(d => !analisados.has(d.id)).map(d => analisar(d)))
   }, [docs, analises, analisar])
 
   // Remove um ficheiro da coluna fotos (e a análise associada, se existir).

@@ -165,16 +165,8 @@ export function lerExtracao(texto) {
   } catch { return null }
 }
 
-// Chama a IA com o documento (bloco document/image da API). Devolve a extração.
-export async function extrairDocumento(client, fileBlock, contexto) {
-  const r = await client.messages.create({
-    model: MODELO_EXTRATOR,
-    max_tokens: 4096,
-    system: PROMPT_EXTRATOR,
-    messages: [{ role: 'user', content: [fileBlock, { type: 'text', text: contexto }] }],
-  })
-  return lerExtracao(r.content?.find(b => b.type === 'text')?.text)
-}
+// A IA corre no Mac do worker (fila IA, plano Claude): o prompt é
+// PROMPT_EXTRATOR + contexto e a resposta é lida com lerExtracao.
 
 const ROTULOS = {
   artigo_matricial: 'Artigo matricial', descricao_predial: 'Descrição predial', fracao: 'Fração',

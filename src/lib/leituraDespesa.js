@@ -1,6 +1,12 @@
 // Mensagens da leitura automática de um anexo de despesa (auditoria D3).
 // `lido` = resposta do upload: { leitura, preenchidos }.
+// A leitura corre no Mac (Claude Code, plano Claude): com `leitura_em_fila` só
+// se avisa que os campos vazios são preenchidos no ciclo seguinte do worker.
 export function avisarLeitura(toast, lido) {
+  if (lido?.leitura_em_fila && !lido?.leitura) {
+    toast?.('Documento guardado. A leitura corre no Mac e preenche os campos vazios no próximo ciclo (até 3 minutos).', 'info', 5000)
+    return
+  }
   const l = lido?.leitura
   if (!l) return
   const criticos = (l.avisos || []).filter(a => /^\s*CR[IÍ]TICO/i.test(a))
