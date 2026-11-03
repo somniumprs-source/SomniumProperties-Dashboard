@@ -26,7 +26,7 @@ import {
 } from "../_shared/queries.ts";
 import { calcBurnRateMensal, despesasDaEmpresa } from "../_shared/financeCalc.ts";
 import { TTLCache } from "../_shared/ttlCache.ts";
-import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, haEscrituras, resumoFases, resumoProjetos, custoRealObra, diasNaFase } from "../_shared/regrasDashboard.js";
+import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, escrituraRegistada, resumoFases, resumoProjetos, custoRealObra, imoveisContactados, motivosPerda, cumprimentoTarefas, diasNaFase } from "../_shared/regrasDashboard.js";
 
 // Cache de endpoints pesados — port de endpointCache() em server.js (achado
 // da auditoria: dev tinha cache de 2-5min nestes 13 endpoints, produção
@@ -1345,7 +1345,7 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
     const periodo = ["semana", "mes", "trimestre", "ano"].includes(pq) ? pq : "mes";
     const regiao = c.req.header("x-regiao") || undefined;
 
-    const [imoveisRaw, investidoresRaw, consultores, negocios, despesas, ci, ii, pi, fasesRes, analisesRes, historicoRes] = await Promise.all([
+    const [imoveisRaw, investidoresRaw, consultores, negocios, despesas, ci, ii, pi, fasesRes, analisesRes, historicoRes, tarefasRes] = await Promise.all([
       getImóveis({ regiao }).catch(() => [] as any[]),
       getInvestidores({ regiao }).catch(() => [] as any[]),
       getConsultores({ regiao }).catch(() => [] as any[]),
@@ -1357,6 +1357,8 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
       pool.query(`SELECT negocio_id, nome, estado, ordem, data_fim_prevista, data_fim_real FROM projeto_fases ORDER BY ordem`).catch(() => ({ rows: [] as any[] })),
       pool.query(`SELECT id FROM negocios WHERE deleted_at IS NULL AND analise_final IS NOT NULL`).catch(() => ({ rows: [] as any[] })),
       pool.query(`SELECT entidade_id, alteracoes, created_at FROM historico_alteracoes WHERE entidade = 'imoveis' AND alteracoes::text LIKE '%"estado"%'`).catch(() => ({ rows: [] as any[] })),
+      // null = colunas da migração 0092 ainda por aplicar: C12 fica sem leitura.
+      pool.query(`SELECT prazo_original, concluida_em, arquivada, por_aprovar FROM tarefas WHERE prazo_original IS NOT NULL`).catch(() => null),
     ]);
     // Tipo explícito: sem ele o deno check rejeitava cada filter/map sobre a lista.
     const imoveisAll: any[] = imoveisRaw;
@@ -1391,7 +1393,7 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
     const fechado = (i: any) => !!i.dataPropostaAceite;
     const ESTADOS_NEG = new Set(["Descartado", "Nao interessa", "Não interessa", "Cancelado"]);
     const lucroDe = (n: any) => n.lucroReal || n.lucroEstimado || 0;
-    const comEscrituras = haEscrituras(negocios);
+    const comEscrituras = escrituraRegistada(negocios);
     const negFechouNoPeriodo = (n: any) => negocioFechado(n) && inP(n.dataEscrituraVenda, start, end);
 
     // ════════ PILAR 1 — ORIGINAÇÃO & FUNIL ════════
@@ -1424,6 +1426,8 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
     const origemMap: any = {};
     for (const i of coorte) { const o = i.origem || "Não registado"; origemMap[o] = (origemMap[o] || 0) + 1; }
     const origem = Object.entries(origemMap).map(([origem, total]) => ({ origem, total })).sort((a: any, b: any) => b.total - a.total);
+    const contactados = imoveisContactados(imoveisAll, historicoRes.rows);
+    const comContacto = coorte.filter((i: any) => contactados.has(i.id)).length;
 
     // ════════ PILAR 2 — UNIT ECONOMICS ════════
     const negPeriodo = negocios.filter(negFechouNoPeriodo);
@@ -1571,8 +1575,11 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
         visitaProposta: comVisita > 0 ? round2(comProposta / comVisita * 100) : null,
         chamadasCobertura: { com: imoveisAll.filter((i) => i.dataChamada).length, total: imoveisAll.length },
         diasNaFase: diasNaFase(imoveisAll, historicoRes.rows),
+        contactoEfetivo: cohortAdd > 0 ? { pct: round2(comContacto / cohortAdd * 100), com: comContacto, total: cohortAdd } : null,
+        motivosPerda: motivosPerda(imoveisAll),
+        cumprimentoTarefas: tarefasRes ? cumprimentoTarefas(tarefasRes.rows, start, end) : null,
       },
-      economia: { lucroMedio, margemPct, roiMedio, roiAnualizadoMedio, descontoMedio },
+      economia: { lucroLiquido, lucroMedio, margemPct, roiMedio, roiAnualizadoMedio, descontoMedio },
       velocidade: { diasAteFechar, capitalTurns, throughput },
       capital: {
         mobilizado: capitalMobilizado, capacidadeDeclarada: round2(capacidadeDeclarada(investidores)), parceria: contagemParceria(investidores), netFlow,

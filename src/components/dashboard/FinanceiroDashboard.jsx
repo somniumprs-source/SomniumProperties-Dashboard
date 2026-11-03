@@ -3,7 +3,7 @@ import { Receipt, Wallet, Calculator } from 'lucide-react'
 import { EUR } from '../../constants.js'
 import { POR_MEDIR } from '../../lib/catalogoMetricas.js'
 import { resumoAnalisesNegocios } from '../../../supabase/functions/_shared/regrasDashboard.js'
-import { Subdivisoes, Bloco, Numeros, PrecisaAcao, pctOuNulo } from './_shared.jsx'
+import { Subdivisoes, Bloco, Numeros, PrecisaAcao, pctOuNulo, numOuNulo, fmtNum } from './_shared.jsx'
 import { Indicador, PorMedir } from './Indicador.jsx'
 import { PeriodSelector } from './PeriodSelector.jsx'
 
@@ -18,7 +18,11 @@ const eur = (v) => (v == null ? null : EUR(v))
 
 export function FinanceiroDashboard({ data: d, finKpis: f, analises: a, periodo, onPeriodo }) {
   const [sub, setSub] = useState('caixa')
-  const ca = d?.capital
+  const ca = d?.capital, ec = d?.economia
+  const fechados = d?.fecho?.negociosFechados
+  const semFechos = fechados === 0 ? 'sem negócios fechados no período' : undefined
+  const notaPeriodo = d?.intervalo ? `${d.intervalo.de} a ${d.intervalo.ate}` : undefined
+  const seletor = <PeriodSelector value={periodo} onChange={onPeriodo} />
   const vencidos = f?.tranchesAtrasadas?.reduce((s, t) => s + t.valor, 0)
   const r = resumoAnalisesNegocios(a?.analises)
 
@@ -46,14 +50,32 @@ export function FinanceiroDashboard({ data: d, finKpis: f, analises: a, periodo,
             <Indicador id="I08" value={pctOuNulo(ca?.concentracaoTop3)} tone={ca?.concentracaoTop3 > 60 ? 'red' : 'amber'} />
           </Numeros>
         </Bloco>
-        <Bloco titulo="No período" nota={d?.intervalo ? `${d.intervalo.de} a ${d.intervalo.ate}` : undefined} acao={<PeriodSelector value={periodo} onChange={onPeriodo} />}>
+        <Bloco titulo="No período" nota={notaPeriodo} acao={seletor}>
           <Numeros>
             <Indicador id="G42" value={eur(ca?.capitalPerdido)} sub={ca?.capitalPerdidoPct != null ? `${pctOuNulo(ca.capitalPerdidoPct)} do capital` : undefined} tone={ca?.capitalPerdido > 0 ? 'red' : 'green'} />
+            <Indicador id="G39" value={numOuNulo(d?.velocidade?.capitalTurns)} sub={semFechos ?? 'vezes por ano'} tone="indigo" />
           </Numeros>
         </Bloco>
       </>}
 
-      {sub === 'rentabilidade' && (
+      {sub === 'rentabilidade' && <>
+        <Bloco titulo="Realizado no período" nota={notaPeriodo ? `só com escritura de venda · ${notaPeriodo}` : undefined} acao={seletor}>
+          <Numeros>
+            <Indicador id="G30" value={fmtNum(fechados)} tone="green" />
+            <Indicador id="G31" value={eur(ec?.lucroMedio)} sub={semFechos ?? 'alvo: 15 000 € a 20 000 €'} tone="green" />
+            <Indicador id="G32" value={pctOuNulo(ec?.margemPct)} sub={semFechos ?? (fechados ? `${fechados} ${fechados === 1 ? 'negócio' : 'negócios'}` : undefined)} tone="indigo" />
+          </Numeros>
+        </Bloco>
+        {d?.obras?.projetos?.length > 0 && (
+          <Bloco titulo="Contribuição da Somnium por projeto" nota="ainda sem descontar custos diretos">
+            <Numeros>
+              {d.obras.projetos.map((p) => (
+                <Indicador key={p.id} id="P05" value={eur(p.contribuicaoSomnium)}
+                  sub={p.parteSomniumPct != null ? `${p.nome} · ${fmtNum(p.parteSomniumPct)}% da quota` : `${p.nome} · sem parte da Somnium registada`} tone="green" />
+              ))}
+            </Numeros>
+          </Bloco>
+        )}
         <Bloco titulo="Previsto" nota={r.total > 0 ? `${r.total} ${r.total === 1 ? 'negócio com análise' : 'negócios com análise'}` : undefined}>
           <Numeros>
             <Indicador id="G43" value={eur(f?.lucroEstimadoTotal)} />
@@ -65,7 +87,7 @@ export function FinanceiroDashboard({ data: d, finKpis: f, analises: a, periodo,
             </>}
           </Numeros>
         </Bloco>
-      )}
+      </>}
 
       <PorMedir ids={POR_MEDIR.financeiro[sub]} />
     </div>

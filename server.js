@@ -780,7 +780,7 @@ const getObras        = async () => []
 // Cache com TTL para endpoints que fazem queries pesadas
 import { TTLCache } from './src/db/utils/ttlCache.js'
 import pool from './src/db/pg.js'
-import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, haEscrituras, resumoFases, resumoProjetos, custoRealObra, diasNaFase } from './supabase/functions/_shared/regrasDashboard.js'
+import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, escrituraRegistada, resumoFases, resumoProjetos, custoRealObra, imoveisContactados, motivosPerda, cumprimentoTarefas, diasNaFase } from './supabase/functions/_shared/regrasDashboard.js'
 import { alertasConservacao } from './src/db/consentimentos.js'
 import { juntarResponsavel, donosDasRegioes } from './src/db/responsavelRegiao.js'
 import { alertasDeDespesas } from './src/constants/regrasDespesas.js'
@@ -1887,7 +1887,7 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
     const periodo = ['semana','mes','trimestre','ano'].includes(req.query.periodo) ? req.query.periodo : 'mes'
     const regiao = req.regiaoActiva || undefined
 
-    const [imoveisAll, investidoresRaw, consultores, negocios, despesas, ci, ii, pi, fasesRes, analisesRes, historicoRes] = await Promise.all([
+    const [imoveisAll, investidoresRaw, consultores, negocios, despesas, ci, ii, pi, fasesRes, analisesRes, historicoRes, tarefasRes] = await Promise.all([
       getImóveis({ regiao }).catch(() => []),
       getInvestidores({ regiao }).catch(() => []),
       getConsultores({ regiao }).catch(() => []),
@@ -1899,6 +1899,8 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
       pool.query(`SELECT negocio_id, nome, estado, ordem, data_fim_prevista, data_fim_real FROM projeto_fases ORDER BY ordem`).catch(() => ({ rows: [] })),
       pool.query(`SELECT id FROM negocios WHERE deleted_at IS NULL AND analise_final IS NOT NULL`).catch(() => ({ rows: [] })),
       pool.query(`SELECT entidade_id, alteracoes, created_at FROM historico_alteracoes WHERE entidade = 'imoveis' AND alteracoes::text LIKE '%"estado"%'`).catch(() => ({ rows: [] })),
+      // null = colunas da migração 0092 ainda por aplicar: C12 fica sem leitura.
+      pool.query(`SELECT prazo_original, concluida_em, arquivada, por_aprovar FROM tarefas WHERE prazo_original IS NOT NULL`).catch(() => null),
     ])
     const investidores = investidoresRaw.filter(isInvestidorPrincipal)
     const ciRows = ci.rows, iiRows = ii.rows.filter(r => ehChamada(r.canal)), piRows = pi.rows
@@ -1932,7 +1934,7 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
     const fechado = (i) => !!i.dataPropostaAceite
     const ESTADOS_NEG = new Set(['Descartado','Nao interessa','Não interessa','Cancelado'])
     const lucroDe = (n) => n.lucroReal || n.lucroEstimado || 0
-    const comEscrituras = haEscrituras(negocios)
+    const comEscrituras = escrituraRegistada(negocios)
     const negFechouNoPeriodo = (n) => negocioFechado(n) && inP(n.dataEscrituraVenda, start, end)
 
     // ════════ PILAR 1 — ORIGINAÇÃO & FUNIL ════════
@@ -1965,6 +1967,8 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
     const origemMap = {}
     for (const i of coorte) { const o = i.origem || 'Não registado'; origemMap[o] = (origemMap[o] || 0) + 1 }
     const origem = Object.entries(origemMap).map(([origem, total]) => ({ origem, total })).sort((a,b) => b.total - a.total)
+    const contactados = imoveisContactados(imoveisAll, historicoRes.rows)
+    const comContacto = coorte.filter(i => contactados.has(i.id)).length
 
     // ════════ PILAR 2 — UNIT ECONOMICS ════════
     const negPeriodo = negocios.filter(negFechouNoPeriodo)
@@ -2112,8 +2116,11 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
         visitaProposta: comVisita > 0 ? round2(comProposta / comVisita * 100) : null,
         chamadasCobertura: { com: imoveisAll.filter(i => i.dataChamada).length, total: imoveisAll.length },
         diasNaFase: diasNaFase(imoveisAll, historicoRes.rows),
+        contactoEfetivo: cohortAdd > 0 ? { pct: round2(comContacto / cohortAdd * 100), com: comContacto, total: cohortAdd } : null,
+        motivosPerda: motivosPerda(imoveisAll),
+        cumprimentoTarefas: tarefasRes ? cumprimentoTarefas(tarefasRes.rows, start, end) : null,
       },
-      economia: { lucroMedio, margemPct, roiMedio, roiAnualizadoMedio, descontoMedio },
+      economia: { lucroLiquido, lucroMedio, margemPct, roiMedio, roiAnualizadoMedio, descontoMedio },
       velocidade: { diasAteFechar, capitalTurns, throughput },
       capital: {
         mobilizado: capitalMobilizado, capacidadeDeclarada: round2(capacidadeDeclarada(investidores)), parceria: contagemParceria(investidores), netFlow,

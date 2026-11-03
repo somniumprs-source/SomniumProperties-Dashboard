@@ -4,7 +4,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar,
-  negocioFechado, haEscrituras, resumoFases, custoRealObra, mediana, diasNaFase, resumoAnalisesNegocios, resumoProjetos,
+  negocioFechado, escrituraRegistada, imoveisContactados, motivosPerda, cumprimentoTarefas, contribuicaoSomnium, resumoFases, custoRealObra, mediana, diasNaFase, resumoAnalisesNegocios, resumoProjetos,
 } from '../supabase/functions/_shared/regrasDashboard.js'
 import { CATALOGO, NUCLEO, POR_MEDIR, ESTADOS, DEPARTAMENTOS, metrica, pesquisar } from '../src/lib/catalogoMetricas.js'
 
@@ -55,7 +55,8 @@ test('negócio fechado: só com escritura; Condeixa e Lages não contam', () => 
   const lages = { fase: 'Fase de obras', dataCompra: '2026-09-21' }
   assert.equal(negocioFechado(condeixa), false)
   assert.equal(negocioFechado(lages), false)
-  assert.equal(haEscrituras([condeixa, lages]), false)
+  assert.equal(escrituraRegistada([condeixa, lages]), false, 'sem coluna não há leitura')
+  assert.equal(escrituraRegistada([{ ...condeixa, dataEscrituraVenda: null }]), true)
   assert.equal(negocioFechado({ dataEscrituraVenda: '2027-03-21' }), true)
 })
 
@@ -150,4 +151,51 @@ test('pesquisa: encontra por sigla, nomes e sem acentos', () => {
   assert.ok(pesquisar('autonomia financeira').some(x => x.id === 'F05'))
   assert.ok(pesquisar('negocios fechados').some(x => x.id === 'G30'))
   assert.equal(pesquisar('').length, CATALOGO.length)
+})
+
+test('contacto efetivo: fase pós-contacto atual ou no histórico', () => {
+  const im = [
+    { id: 'a', estado: 'Visita Marcada' },
+    { id: 'b', estado: 'Chamada Não Atendida' },
+    { id: 'c', estado: 'Não interessa' },
+    { id: 'd', estado: 'Adicionado' },
+    { id: 'e', estado: 'Pendentes' },
+  ]
+  const hist = [
+    { entidade_id: 'c', alteracoes: JSON.stringify([{ campo: 'estado', antes: 'Adicionado', depois: 'Necessidade de Visita' }]) },
+    { entidade_id: 'd', alteracoes: [{ campo: 'estado', antes: 'Adicionado', depois: 'Chamada Não Atendida' }] },
+  ]
+  assert.deepEqual([...imoveisContactados(im, hist)].sort(), ['a', 'c'])
+})
+
+test('motivos de perda: separa por ";" e conta os sem motivo', () => {
+  const r = motivosPerda([
+    { estado: 'Não interessa', motivoNaoInteressa: 'Preço elevado; Proprietário difícil' },
+    { estado: 'Não interessa', motivoNaoInteressa: 'Preço elevado' },
+    { estado: 'Descartado', motivoDescarte: '' },
+    { estado: 'CAEP', motivoNaoInteressa: 'ignorado' },
+  ])
+  assert.equal(r.perdas, 3)
+  assert.equal(r.comMotivo, 2)
+  assert.deepEqual(r.motivos[0], { motivo: 'Preço elevado', total: 2 })
+})
+
+test('cumprimento de tarefas: conta o prazo original e ignora por aprovar', () => {
+  const ini = new Date('2026-11-01T00:00:00'), fim = new Date('2026-11-30T23:59:59'), agora = new Date('2026-11-10T12:00:00')
+  const r = cumprimentoTarefas([
+    { prazo_original: '2026-11-03', concluida_em: '2026-11-03T18:00:00' },
+    { prazo_original: '2026-11-04', concluida_em: '2026-11-08T10:00:00' },
+    { prazo_original: '2026-11-05', concluida_em: null },
+    { prazo_original: '2026-11-20', concluida_em: null },
+    { prazo_original: '2026-11-05', por_aprovar: true },
+    { prazo_original: '2026-10-20', concluida_em: '2026-10-19T10:00:00' },
+  ], ini, fim, agora)
+  assert.deepEqual(r, { vencidas: 3, noPrazo: 1, pct: 33.33 })
+})
+
+test('contribuição da Somnium: Lages 40% tudo Somnium; sem parte não calcula', () => {
+  assert.equal(contribuicaoSomnium({ categoria: 'CAEP', quotaSomnium: 18032.9, parteSomniumPct: 100 }), 18032.9)
+  assert.equal(contribuicaoSomnium({ categoria: 'CAEP', quotaSomnium: 15000, parteSomniumPct: 66.67 }), 10000.5)
+  assert.equal(contribuicaoSomnium({ categoria: 'Wholesaling', lucroEstimado: 3000, lucroReal: 1500, parteSomniumPct: 100 }), 3000)
+  assert.equal(contribuicaoSomnium({ categoria: 'CAEP', quotaSomnium: 15000 }), null)
 })

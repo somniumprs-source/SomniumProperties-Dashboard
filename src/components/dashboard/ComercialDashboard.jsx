@@ -56,19 +56,25 @@ export function ComercialDashboard({ data: d, comKpis, alertas, periodo, onPerio
             <Indicador id="G10" value={pctOuNulo(d?.economia?.descontoMedio)} tone="amber" />
           </Numeros>
         </Bloco>
+        <Bloco titulo="Contacto, prazos e fecho no período" nota={notaPeriodo}>
+          <Numeros>
+            <Indicador id="C01" value={pctOuNulo(fn?.contactoEfetivo?.pct)} tone="indigo"
+              sub={fn?.contactoEfetivo ? `${fn.contactoEfetivo.com} de ${fn.contactoEfetivo.total} imóveis` : 'sem imóveis adicionados'} />
+            <Indicador id="C12" value={pctOuNulo(fn?.cumprimentoTarefas?.pct)} tone={fn?.cumprimentoTarefas?.pct < 80 ? 'amber' : 'green'}
+              sub={fn?.cumprimentoTarefas?.vencidas ? `${fn.cumprimentoTarefas.noPrazo} de ${fn.cumprimentoTarefas.vencidas} tarefas` : 'sem prazos vencidos'} />
+            <Indicador id="G13" value={numOuNulo(ve?.throughput)} sub="negócios por mês" tone="green" />
+            <Indicador id="G29" value={co?.lucroPorFonte?.[0]?.origem ?? (ve?.throughput != null ? 'Sem fechos' : null)}
+              sub={co?.lucroPorFonte?.[0] ? EUR(co.lucroPorFonte[0].lucro) : undefined} />
+          </Numeros>
+        </Bloco>
         {fn?.origem?.length > 0 && (
           <Bloco titulo="Origem dos imóveis adicionados no período">
-            <div className="flex flex-col gap-1.5 rounded-xl border border-line bg-surface-raised px-4 py-3">
-              {fn.origem.slice(0, 6).map((o) => (
-                <div key={o.origem} className="flex items-center gap-2">
-                  <span className="text-xs text-ink-muted w-36 truncate shrink-0">{o.origem}</span>
-                  <div className="flex-1 bg-surface-muted rounded-full h-2.5">
-                    <div className="h-2.5 rounded-full bg-ink-muted/60" style={{ width: `${Math.round(o.total / (fn.origem[0]?.total || 1) * 100)}%` }} />
-                  </div>
-                  <span className="text-xs font-semibold text-ink num w-6 text-right">{o.total}</span>
-                </div>
-              ))}
-            </div>
+            <Barras linhas={fn.origem.map((o) => ({ nome: o.origem, total: o.total }))} />
+          </Bloco>
+        )}
+        {fn?.motivosPerda?.perdas > 0 && (
+          <Bloco titulo="Motivos de perda" nota={`C15 · ${fn.motivosPerda.comMotivo} de ${fn.motivosPerda.perdas} perdas com motivo`}>
+            <Barras linhas={fn.motivosPerda.motivos.map((m) => ({ nome: m.motivo, total: m.total }))} />
           </Bloco>
         )}
       </>}
@@ -86,6 +92,7 @@ export function ComercialDashboard({ data: d, comKpis, alertas, periodo, onPerio
         </Bloco>
         <Bloco titulo="Atividade no período" nota={notaPeriodo} acao={seletor}>
           <Numeros>
+            <Indicador id="G15" value={fmtNum(at?.discoveryCalls?.valor)} delta={at?.discoveryCalls?.delta} tone="indigo" />
             <Indicador id="G16" value={fmtNum(at?.followUpCalls?.valor)} delta={at?.followUpCalls?.delta} tone="indigo" />
             <Indicador id="G17" value={fmtNum(at?.novosInvestidores)} delta={at?.deltas?.novosInvestidores} />
             <Indicador id="G20" value={pctOuNulo(ca?.saidaInvestidores)} tone={ca?.saidaInvestidores > 0 ? 'red' : 'green'} />
@@ -117,6 +124,23 @@ export function ComercialDashboard({ data: d, comKpis, alertas, periodo, onPerio
       </>}
 
       <PorMedir ids={POR_MEDIR.comercial[sub]} />
+    </div>
+  )
+}
+
+function Barras({ linhas }) {
+  const maximo = linhas[0]?.total || 1
+  return (
+    <div className="flex flex-col gap-1.5 rounded-xl border border-line bg-surface-raised px-4 py-3">
+      {linhas.slice(0, 6).map((l) => (
+        <div key={l.nome} className="flex items-center gap-2">
+          <span className="text-xs text-ink-muted w-36 truncate shrink-0" title={l.nome}>{l.nome}</span>
+          <div className="flex-1 bg-surface-muted rounded-full h-2.5">
+            <div className="h-2.5 rounded-full bg-ink-muted/60" style={{ width: `${Math.round(l.total / maximo * 100)}%` }} />
+          </div>
+          <span className="text-xs font-semibold text-ink num w-6 text-right">{l.total}</span>
+        </div>
+      ))}
     </div>
   )
 }

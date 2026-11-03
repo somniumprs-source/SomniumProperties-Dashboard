@@ -20,6 +20,8 @@ function mapNegocio(r: any) {
     dataEstimada: r.data_estimada_venda,
     dataCompra: r.data_compra,
     data: r.data,
+    dataEscrituraVenda: r.data_escritura_venda,
+    parteSomniumPct: r.parte_somnium_pct,
     pagamentoEmFalta: !!r.pagamento_em_falta,
     investidor: r.investidor_ids ? JSON.parse(r.investidor_ids) : [],
     imovel: r.imovel_id ? [r.imovel_id] : [],
@@ -116,6 +118,7 @@ function mapImovel(r: any) {
     nomeConsultor: r.nome_consultor,
     modeloNegocio: r.modelo_negocio,
     motivoDescarte: r.motivo_descarte,
+    motivoNaoInteressa: r.motivo_nao_interessa,
     valorVendaRemodelado: r.valor_venda_remodelado || 0,
     dataFollowUp: r.data_follow_up,
     dataAdicionado: r.data_adicionado,
@@ -236,7 +239,7 @@ export async function getDespesas({ regiao }: { regiao?: string | null } = {}) {
 
 const IMOVEIS_COLS = `id, nome, estado, tipologia, ask_price, valor_proposta,
   custo_estimado_obra, area_bruta, roi, roi_anualizado, origem, zona, zonas,
-  nome_consultor, modelo_negocio, motivo_descarte, valor_venda_remodelado,
+  nome_consultor, modelo_negocio, motivo_descarte, motivo_nao_interessa, valor_venda_remodelado,
   data_follow_up, data_adicionado, data_chamada, data_visita, data_proposta,
   data_proposta_aceite, data_estudo_mercado, data_aceite_investidor, link, notas,
   regiao, concelho, freguesia`;

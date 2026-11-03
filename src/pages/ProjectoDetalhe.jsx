@@ -504,6 +504,8 @@ function TabResumo({ resumo, fases, onChange, readOnly }) {
         )}
       </Card>
 
+      <RegistoFecho negocio={negocio} onChange={onChange} readOnly={readOnly} />
+
       {fases.length > 0 && <GanttFases fases={fases} negocio={negocio} />}
 
       {negocio.notas && (
@@ -515,6 +517,71 @@ function TabResumo({ resumo, fases, onChange, readOnly }) {
 
       <AiResumoCard negocioId={negocio.id} />
     </div>
+  )
+}
+
+// Registos que alimentam o Dashboard: a escritura fecha o negócio (G30) e a
+// parte da Somnium dá a contribuição por negócio (P05).
+function RegistoFecho({ negocio, onChange, readOnly }) {
+  const toast = useToast()
+  const [escritura, setEscritura] = useState(negocio.data_escritura_venda?.slice(0, 10) || '')
+  const [parte, setParte] = useState(negocio.parte_somnium_pct ?? '')
+  const [saving, setSaving] = useState(false)
+  useEffect(() => {
+    setEscritura(negocio.data_escritura_venda?.slice(0, 10) || '')
+    setParte(negocio.parte_somnium_pct ?? '')
+  }, [negocio.data_escritura_venda, negocio.parte_somnium_pct])
+
+  async function guardar(campos) {
+    setSaving(true)
+    const r = await apiFetch(`/api/crm/negocios/${negocio.id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(campos),
+    })
+    setSaving(false)
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao guardar: ${err.error || r.status}`, 'error', 3500)
+      return
+    }
+    onChange()
+  }
+
+  function guardarEscritura() {
+    if ((negocio.data_escritura_venda?.slice(0, 10) || '') === escritura) return
+    guardar({ data_escritura_venda: escritura || null })
+  }
+
+  function guardarParte() {
+    const v = parte === '' ? null : Number(String(parte).replace(',', '.'))
+    if (v != null && (!Number.isFinite(v) || v < 0 || v > 100)) {
+      toast?.('A parte da Somnium tem de estar entre 0 e 100%.', 'error', 3500)
+      setParte(negocio.parte_somnium_pct ?? '')
+      return
+    }
+    if (v === (negocio.parte_somnium_pct ?? null)) return
+    guardar({ parte_somnium_pct: v })
+  }
+
+  return (
+    <Card padding="sm" className="flex flex-wrap items-end gap-x-6 gap-y-3">
+      <label className="flex flex-col gap-1">
+        <span className="text-[10px] uppercase tracking-wide font-semibold text-ink-muted">Escritura de venda</span>
+        {readOnly
+          ? <span className="text-sm font-medium text-ink">{fmtData(negocio.data_escritura_venda)}</span>
+          : <input type="date" value={escritura} disabled={saving} onChange={e => setEscritura(e.target.value)} onBlur={guardarEscritura}
+              className="rounded-lg border border-line bg-surface px-2 py-1 text-sm text-ink" />}
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-[10px] uppercase tracking-wide font-semibold text-ink-muted">Parte da Somnium (%)</span>
+        {readOnly
+          ? <span className="text-sm font-medium text-ink">{negocio.parte_somnium_pct != null ? `${negocio.parte_somnium_pct}%` : '—'}</span>
+          : <input type="text" inputMode="decimal" value={parte} disabled={saving} placeholder="ex.: 66,67" onChange={e => setParte(e.target.value)} onBlur={guardarParte}
+              className="w-28 rounded-lg border border-line bg-surface px-2 py-1 text-sm text-ink num" />}
+      </label>
+      <p className="text-[11px] text-ink-muted max-w-xs">
+        Sem escritura o negócio não conta como fechado. A parte da Somnium é a percentagem da quota que fica para a Somnium (CAEP normal: 66,67%).
+      </p>
+    </Card>
   )
 }
 
