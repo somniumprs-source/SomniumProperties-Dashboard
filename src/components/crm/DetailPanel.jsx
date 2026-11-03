@@ -18,6 +18,8 @@ import { GravacoesConsultor } from './GravacoesConsultor.jsx'
 import { DocumentosConsultor } from './DocumentosConsultor.jsx'
 import { RegistoChamadasTab } from './RegistoChamadasTab.jsx'
 import { ChamadasInvestidor } from './ChamadasInvestidor.jsx'
+import { ChamadasConsultor } from './ChamadasConsultor.jsx'
+import { AvaliacaoConsultor } from './AvaliacaoConsultor.jsx'
 import { isWholesaling } from '../../lib/modelos.js'
 import { fmtTempoMercado } from '../../lib/tempoMercado.js'
 import { DealBreakersPanel } from './DealBreakersPanel.jsx'
@@ -924,7 +926,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
     { key: 'dados_empresa', label: 'Dados Empresa', icon: Building, show: type === 'Investidores' },
     { key: 'documentos_consultor', label: 'Documentos', icon: FolderOpen, show: type === 'Consultores' },
     { key: 'relatorios', label: `Reuniões (${reunioes.length})`, icon: CalendarCheck, show: (type === 'Investidores' || type === 'Consultores') },
-    { key: 'avaliacao', label: 'Avaliação', icon: Star, show: type === 'Investidores' },
+    { key: 'avaliacao', label: 'Avaliação', icon: Star, show: type === 'Investidores' || type === 'Consultores' },
   ].filter(t => t.show)
 
   return (
@@ -1108,6 +1110,10 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       ) : type === 'Investidores' && activeTab === 'avaliacao' ? (
         <AvaliacaoTab data={data} onUpdate={loadData} />
 
+      /* Avaliação (Consultores) — classificação validada, mesmo desenho */
+      ) : type === 'Consultores' && activeTab === 'avaliacao' ? (
+        <AvaliacaoConsultor consultorId={data.id} onUpdate={loadData} />
+
       ) : (
       /* Detalhe tab */
       <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
@@ -1245,9 +1251,8 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
               {editing ? <>
                 <EF label="Nome" field="nome" form={form} set={setField} />
                 <EF label="Região" field="regiao" form={form} set={setField} type="select" options={['Coimbra','AMP']} />
-                <EF label="Estatuto" field="estatuto" form={form} set={setField} type="select" options={['Cold Call','Follow up','Aberto Parcerias','Acesso imoveis Off market','Consultores em Parceria']} />
-                <EF label="Estado Avaliação" field="estado_avaliacao" form={form} set={setField} type="select" options={['Em avaliação','Ativo','Inativo']} />
-                <EF label="Classificação" field="classificacao" form={form} set={setField} type="select" options={['A','B','C','D']} />
+                <EF label="Estatuto" field="estatuto" form={form} set={setField} type="select" options={['Cold Call','Discovery Call','Follow Up','Parceria']} />
+                <EF label="Estado da relação" field="estado_avaliacao" form={form} set={setField} type="select" options={['Ativo','Acompanhamento pontual','Inativo','Encerrado']} />
                 <EF label="Contacto" field="contacto" form={form} set={setField} />
                 <EF label="Email" field="email" form={form} set={setField} />
                 <EF label="Link da equipa" field="link_perfil" form={form} set={setField} />
@@ -1263,7 +1268,9 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
                 <EF label="Motivo Descontinuação" field="motivo_descontinuacao" form={form} set={setField} />
               </> : <>
                 <Field label="Estatuto" value={data.estatuto} />
-                <Field label="Classificação" value={data.classificacao} />
+                <Field label="Classe" value={data.classificacao || (data.cobertura != null ? 'Pendente' : '—')} />
+                <Field label="Validação" value={data.validacao || 'Por validar'} />
+                <Field label="Estado da relação" value={data.estado_avaliacao} />
                 <Field label="Contacto" value={data.contacto} />
                 <Field label="Email" value={data.email} />
                 <Field label="Link da equipa" value={data.link_perfil
@@ -1464,6 +1471,11 @@ function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onC
       {entidadeTipo === 'investidores' && (
         <div className="pb-5 mb-2 border-b border-line">
           <ChamadasInvestidor investidorId={entidadeId} />
+        </div>
+      )}
+      {entidadeTipo === 'consultores' && (
+        <div className="pb-5 mb-2 border-b border-line">
+          <ChamadasConsultor consultorId={entidadeId} />
         </div>
       )}
       <div className="flex items-center justify-between mb-2">
@@ -1909,7 +1921,7 @@ function ConsultorInlineCreator({ initialNome, regiao, sugestoesImobiliarias = [
         imobiliaria: imobiliarias.length ? JSON.stringify(imobiliarias) : null,
         regiao,
         estatuto: 'Cold Call',
-        estado_avaliacao: 'Em avaliação',
+        estado_avaliacao: 'Acompanhamento pontual',
       }
       const r = await apiFetch('/api/crm/consultores', {
         method: 'POST',

@@ -32,8 +32,8 @@ const COM_FINALIDADE = ['consultor', 'investidor']
 const PESSOAS = {
   consultor: {
     tabela: 'consultores', interacoes: 'consultor_interacoes', fk: 'consultor_id', origem: 'consultor_interacao',
-    espelho: 'data_proximo_follow_up', fase: 'estatuto', fasesFollowUp: ['Follow up'],
-    tipoPorFase: { 'Cold Call': 'cold_call', 'Aberto Parcerias': 'discovery_call' },
+    espelho: 'data_proximo_follow_up', fase: 'estatuto', fasesFollowUp: ['Follow Up'],
+    tipoPorFase: { 'Cold Call': 'cold_call', 'Discovery Call': 'discovery_call' },
     categorias: { cold_call: 'Cold Call a Consultores', discovery_call: 'Discovery Call a Consultores', follow_up: 'Follow-up de Consultores' },
   },
   investidor: {

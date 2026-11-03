@@ -79,13 +79,13 @@ export function Filters({ tab, filters, onChange, regiao }) {
       {tab === 'Consultores' && <>
         <select value={filters.estatuto ?? ''} onChange={e => set('estatuto', e.target.value)} className={selectClass}>
           <option value="">Todos os estatutos</option>
-          {['Cold Call','Follow up','Aberto Parcerias','Acesso imoveis Off market','Consultores em Parceria'].map(o =>
+          {['Cold Call','Discovery Call','Follow Up','Parceria'].map(o =>
             <option key={o} value={o}>{o}</option>
           )}
         </select>
         <select value={filters.estado_avaliacao ?? ''} onChange={e => set('estado_avaliacao', e.target.value)} className={selectClass}>
           <option value="">Todos os estados</option>
-          {['Em avaliação','Ativo','Inativo'].map(o =>
+          {['Ativo','Acompanhamento pontual','Inativo','Encerrado'].map(o =>
             <option key={o} value={o}>{o}</option>
           )}
         </select>

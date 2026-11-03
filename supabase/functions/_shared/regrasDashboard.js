@@ -22,9 +22,11 @@ export function contagemParceria(investidores) {
   };
 }
 
-// Proposta de 25/10: "Aberto Parcerias" ainda não é parceiro.
+// Proposta de 25/10: "Aberto Parcerias" ainda não é parceiro. Desde 3/11
+// (classificação de consultores) o estatuto chama-se "Parceria": entra quem
+// enviou uma oportunidade.
 export function ehConsultorParceiro(c) {
-  return c.estatuto === "Consultores em Parceria";
+  return c.estatuto === "Parceria" || c.estatuto === "Consultores em Parceria";
 }
 
 // Capacidade declarada, ainda por investir. Nunca é capital confirmado.

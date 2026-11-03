@@ -79,7 +79,8 @@ export function GravacoesConsultor({ consultorId }) {
     } catch (err) { toast(friendlyError(err.message || 'Falha ao guardar registo'), 'error') }
   }
 
-  const lista = gravacoes.filter(g => !g.tipo_chamada)
+  // As chamadas da classificação (etapa_consultor) vivem na aba Reuniões.
+  const lista = gravacoes.filter(g => !g.tipo_chamada && !g.etapa_consultor)
   if (lista.length === 0) return null
   return (
     <div>

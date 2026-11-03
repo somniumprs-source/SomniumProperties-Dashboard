@@ -21,6 +21,7 @@ test('parceria: reconhece o estado real e separa estado de aporte', () => {
 
 test('consultores: só Consultores em Parceria contam como parceiros', () => {
   assert.equal(ehConsultorParceiro({ estatuto: 'Consultores em Parceria' }), true)
+  assert.equal(ehConsultorParceiro({ estatuto: 'Parceria' }), true)
   assert.equal(ehConsultorParceiro({ estatuto: 'Aberto Parcerias' }), false)
 })
 

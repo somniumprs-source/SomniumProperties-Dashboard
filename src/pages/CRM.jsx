@@ -21,7 +21,7 @@ import { Button } from '../components/ui/Button.jsx'
 import { Modal } from '../components/ui/Modal.jsx'
 import { MultiSelect } from '../components/ui/MultiSelect.jsx'
 import { Combobox } from '../components/ui/Combobox.jsx'
-import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, etapaImovel, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR, PARC_TIPOS, PARC_ESTADOS, CONCELHOS_POR_REGIAO, concelhosDe } from '../constants.js'
+import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, etapaImovel, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, CONS_VALIDACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR, PARC_TIPOS, PARC_ESTADOS, CONCELHOS_POR_REGIAO, concelhosDe } from '../constants.js'
 import { apiFetch, apiFetchJson, openDocument } from '../lib/api.js'
 import { useUrlState, useUrlFilters } from '../hooks/useUrlState.js'
 import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
@@ -817,7 +817,7 @@ export function CRM() {
       },
     },
     'Consultores': {
-      columns: ['Cold Call','Follow up','Aberto Parcerias','Acesso imoveis Off market','Consultores em Parceria'],
+      columns: ['Cold Call','Discovery Call','Follow Up','Parceria'],
       colorMap: CONS_ESTATUTO_COLOR,
       groupField: 'estatuto',
       renderCard: (item) => {
@@ -1602,10 +1602,11 @@ function ConsultoresTable({ data, onEdit, onDelete, onView }) {
         <EntityCard key={r.id} name={<span className="inline-flex items-center gap-1.5"><AlertDot status={r._alertStatus} />{r.nome}</span>}
           onClick={() => onView?.(r.id)}
           item={r} onEdit={onEdit} onDelete={onDelete} onView={onView}
-          badge={<Badge text={r.estado_avaliacao || 'Em avaliação'} colorMap={CONS_ESTADO_AVALIACAO_COLOR} />}
+          badge={<Badge text={r.estado_avaliacao || 'Acompanhamento pontual'} colorMap={CONS_ESTADO_AVALIACAO_COLOR} />}
           fields={[
             { label: 'Agência', value: agencia },
-            { label: 'Score', value: r.score_prioridade > 0 ? <span className="num font-semibold text-accent-ink">{r.score_prioridade}</span> : null },
+            { label: 'Classe', value: r.classificacao ? <span className="font-semibold text-ink">{r.classificacao}</span> : (r.cobertura != null ? 'Pendente' : null) },
+            { label: 'Validação', value: r.validacao || null },
             { label: 'Imóveis', value: r._totalImoveis ?? r.imoveis_enviados ?? null },
             { label: 'Taxa Qualidade', value: r.taxa_qualidade > 0 ? `${r.taxa_qualidade}%` : null },
             { label: 'Tempo Resposta', value: tempoRespFmt(r.tempo_medio_resposta) },
@@ -1619,11 +1620,12 @@ function ConsultoresTable({ data, onEdit, onDelete, onView }) {
         <th className="w-6 py-2 px-1"></th>
         <Th field="nome" label="Nome" {...sp} />
         <Th field="_agencia" label="Agência" {...sp} />
-        <Th field="score_prioridade" label="Score" align="right" {...sp} />
+        <Th field="classificacao" label="Classe" {...sp} />
+        <Th field="validacao" label="Validação" {...sp} />
         <Th field="_totalImoveis" label="Imóveis" align="right" {...sp} />
         <Th field="taxa_qualidade" label="Taxa Qualidade" align="right" {...sp} />
         <Th field="tempo_medio_resposta" label="Tempo Resposta" align="right" {...sp} />
-        <Th field="estado_avaliacao" label="Estado" {...sp} />
+        <Th field="estado_avaliacao" label="Relação" {...sp} />
         <Th field="data_proximo_follow_up" label="Próx. Follow-up" {...sp} />
         <Th field="_diasSemContacto" label="Dias s/ contacto" align="right" {...sp} />
         <th className="py-3 px-3"></th>
@@ -1639,18 +1641,19 @@ function ConsultoresTable({ data, onEdit, onDelete, onView }) {
               <td className="py-2 px-1 text-center"><AlertDot status={r._alertStatus} /></td>
               <td className="py-3 px-3"><ClickableName name={r.nome} onClick={() => onView?.(r.id)} /></td>
               <td className="py-2 px-3 text-ink-muted">{agencia}</td>
-              <td className="py-2 px-3 text-right num font-semibold text-accent-ink">{r.score_prioridade > 0 ? r.score_prioridade : '—'}</td>
+              <td className="py-2 px-3 font-semibold text-ink">{r.classificacao || (r.cobertura != null ? 'Pendente' : '—')}</td>
+              <td className="py-3 px-3"><Badge text={r.validacao || 'Por validar'} colorMap={CONS_VALIDACAO_COLOR} /></td>
               <td className="py-2 px-3 text-right num">{r._totalImoveis ?? r.imoveis_enviados ?? '—'}</td>
               <td className="py-2 px-3 text-right num">{r.taxa_qualidade > 0 ? `${r.taxa_qualidade}%` : '—'}</td>
               <td className="py-2 px-3 text-right num">{tempoResp}</td>
-              <td className="py-3 px-3"><Badge text={r.estado_avaliacao || 'Em avaliação'} colorMap={CONS_ESTADO_AVALIACAO_COLOR} /></td>
+              <td className="py-3 px-3"><Badge text={r.estado_avaliacao || 'Acompanhamento pontual'} colorMap={CONS_ESTADO_AVALIACAO_COLOR} /></td>
               <td className="py-2 px-3 text-ink-muted">{fmtDate(r.data_proximo_follow_up)}</td>
               <td className="py-2 px-3 text-right num">{r._diasSemContacto != null ? `${r._diasSemContacto}d` : '—'}</td>
               <td className="py-3 px-3" onClick={e => e.stopPropagation()}><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
             </tr>
           )
         })}
-        {!sorted.length && <tr><td colSpan={11} className="py-8 text-center text-ink-muted">Sem registos</td></tr>}
+        {!sorted.length && <tr><td colSpan={12} className="py-8 text-center text-ink-muted">Sem registos</td></tr>}
       </tbody>
     </table>
     </>
@@ -1870,8 +1873,8 @@ const FIELD_DEFS = {
   ],
   'Consultores': [
     { key: 'nome', label: 'Nome', type: 'text', required: true },
-    { key: 'estatuto', label: 'Estatuto', type: 'select', options: ['Cold Call','Follow up','Aberto Parcerias','Acesso imoveis Off market','Consultores em Parceria'] },
-    { key: 'estado_avaliacao', label: 'Estado Avaliação', type: 'select', options: ['Em avaliação','Ativo','Inativo'] },
+    { key: 'estatuto', label: 'Estatuto', type: 'select', options: ['Cold Call','Discovery Call','Follow Up','Parceria'] },
+    { key: 'estado_avaliacao', label: 'Estado da relação', type: 'select', options: ['Ativo','Acompanhamento pontual','Inativo','Encerrado'] },
     { key: 'classificacao', label: 'Classificação', type: 'select', options: ['A','B','C','D'] },
     { key: 'contacto', label: 'Contacto (telefone)', type: 'tel' },
     { key: 'email', label: 'Email', type: 'email' },

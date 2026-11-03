@@ -153,7 +153,7 @@ export function Alertas() {
             {[
               { key: 'run-all',              label: 'Correr Todas',             desc: 'Reclassifica investidores e consultores automaticamente', path: '/api/crm/automation/run-all' },
               { key: 'score-investidores',   label: 'Scoring Investidores',     desc: 'Classifica A/B/C/D automaticamente', path: '/api/crm/automation/score-investidores' },
-              { key: 'score-prioridade-consultores', label: 'Scoring Consultores',  desc: 'Classifica A/B/C/D (qualidade + volume + velocidade)', path: '/api/crm/automation/score-prioridade-consultores' },
+              { key: 'score-prioridade-consultores', label: 'Scoring Consultores',  desc: 'Métricas de prioridade e sugestões de revisão (a classe A–D só muda pela avaliação validada)', path: '/api/crm/automation/score-prioridade-consultores' },
               { key: 'pipeline-to-faturacao', label: 'Pipeline \u2192 Fatura\u00e7\u00e3o', desc: 'Cria neg\u00f3cios de im\u00f3veis avan\u00e7ados', path: '/api/automation/pipeline-to-faturacao' },
             ].map(auto => (
               <button

@@ -52,6 +52,11 @@ import { donosDasRegioes } from './responsavelRegiao.js'
 import { tarefaAtrasada } from '../constants/regrasTarefas.js'
 import { inserirTarefasDoModelo, concluirRecebimentoFee, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase, pedeDocumento, documentoDoItem, documentosEmFalta, contextoDocumentos } from './projetoTarefas.js'
 import { baseLegal, mapaEstados, registar, retirar, retirados } from './consentimentos.js'
+import {
+  ensureClassificacaoTables, analisarGravacaoConsultor, lerAvaliacaoConsultor, lerAvaliacao, validarAvaliacao, descartarAvaliacao,
+  atualizarCompromisso, lerParametros, guardarParametros, painelRede, apagarDadosGravacoes, atualizarQualificacao, corrigirQualificacao,
+  sugestoesConsultores, sugestoesTrimestrais, gerarTarefasSugestao, limparAudiosAntigos,
+} from './classificacaoConsultor.js'
 import { getAuditUser } from './audit.js'
 import { resolveAppUser, RECORD_RESTRICTED_ROLES } from './userRoutes.js'
 import {
@@ -1148,7 +1153,7 @@ router.post('/consultores/find-or-create', async (req, res) => {
     const item = await Consultores.create({
       nome: nome.trim(),
       estatuto: 'Cold Call',
-      estado_avaliacao: 'Em avaliação',
+      estado_avaliacao: 'Acompanhamento pontual',
       imobiliaria: imobiliaria || null,
       contacto: contacto || null,
       email: email || null,
@@ -1289,7 +1294,19 @@ router.use((req, res, next) => {
   next()
 })
 rotasBaseLegal('/consultores', 'consultor')
-crudRoutes('/consultores', Consultores)
+// Classe, validação e pontuação só mudam pela avaliação validada
+// (classificacaoConsultor.validarAvaliacao), nunca pelo formulário ou API direta.
+crudRoutes('/consultores', Consultores, {
+  beforeUpdate: async (id, body) => {
+    const fixos = ['classificacao', 'validacao', 'pontuacao', 'cobertura'].filter(k => body[k] !== undefined)
+    if (!fixos.length) return null
+    const { rows: [c] } = await pool.query('SELECT classificacao, validacao, pontuacao, cobertura FROM consultores WHERE id = $1', [id])
+    if (c && fixos.some(k => String(body[k] ?? '') !== String(c[k] ?? ''))) {
+      return { error: 'A classe do consultor só muda pela avaliação validada (aba Avaliação)' }
+    }
+    return null
+  },
+})
 
 // ── Negocios: auto-criar fases conforme template da categoria ──
 // Suporta: Fix and Flip, CAEP, Wholesaling, Mediação Imobiliária, Consultoria/Assessoria
@@ -1870,6 +1887,12 @@ router.post('/consultores/:id/gravacoes', uploadRateLimit, uploadAudio.single('a
        registo.pp_compromisso_confirmado, registo.pp_criterios_pesquisa_enviados, registo.pp_negocios_fechados,
        now]
     )
+    // Classificação do consultor: etapa + consentimento. Sem consentimento a
+    // gravação fica guardada mas não é transcrita nem analisada.
+    if (req.body.etapa_consultor) {
+      const { rows: [comEtapa] } = await pool.query(...dadosEtapaConsultor(row.id, req.body, req.file ? 'pendente' : row.estado))
+      return res.json(comEtapa)
+    }
     res.json(row)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -1990,27 +2013,38 @@ router.post('/gravacoes/:id/transcricao', async (req, res) => {
       try { return res.json(await analisarEGravar(pool, req.params.id)) }
       catch { const { rows: [f] } = await pool.query('SELECT * FROM investidor_gravacoes WHERE id = $1', [req.params.id]); return res.json(f) }
     }
+    await ensureClassificacaoTables(pool)
+    const segmentos = Array.isArray(req.body?.segmentos) ? req.body.segmentos.slice(0, 5000) : null
     const { rows: [g] } = await pool.query(
-      `UPDATE consultor_gravacoes SET transcricao = $2, duracao_seg = $3, estado = 'transcrito', erro = NULL, updated_at = $4
+      `UPDATE consultor_gravacoes SET transcricao = $2, duracao_seg = $3, estado = 'transcrito', erro = NULL, updated_at = $4,
+         segmentos = COALESCE($5::jsonb, segmentos)
        WHERE id = $1 RETURNING *`,
-      [req.params.id, transcricao, duracao_seg ?? null, now]
+      [req.params.id, transcricao, duracao_seg ?? null, now, segmentos ? JSON.stringify(segmentos) : null]
     )
     if (!g) return res.status(404).json({ error: 'Gravacao nao encontrada' })
 
-    // Analise comercial (best-effort): falha nao bloqueia a transcricao.
-    try {
-      const cons = await Consultores.getById(g.consultor_id)
-      const analise = await analisarTranscricaoIA(transcricao, cons?.nome)
-      await pool.query(
-        `UPDATE consultor_gravacoes SET analise = $2, estado = 'analisado', updated_at = $3 WHERE id = $1`,
-        [req.params.id, JSON.stringify(analise), new Date().toISOString()]
-      )
-    } catch (e) {
-      await pool.query(
-        `UPDATE consultor_gravacoes SET erro = $2, updated_at = $3 WHERE id = $1`,
-        [req.params.id, `Analise: ${e.message}`, new Date().toISOString()]
-      )
+    // Analise comercial SOP 2 (best-effort): falha nao bloqueia a transcricao.
+    // Gravações do módulo de classificação só levam SOP 2 quando há imóvel.
+    if (!g.etapa_consultor || g.imovel_id) {
+      try {
+        const cons = await Consultores.getById(g.consultor_id)
+        const analise = await analisarTranscricaoIA(transcricao, cons?.nome)
+        await pool.query(
+          `UPDATE consultor_gravacoes SET analise = $2, estado = 'analisado', updated_at = $3 WHERE id = $1`,
+          [req.params.id, JSON.stringify(analise), new Date().toISOString()]
+        )
+      } catch (e) {
+        await pool.query(
+          `UPDATE consultor_gravacoes SET erro = $2, updated_at = $3 WHERE id = $1`,
+          [req.params.id, `Analise: ${e.message}`, new Date().toISOString()]
+        )
+      }
+    } else {
+      await pool.query(`UPDATE consultor_gravacoes SET estado = 'analisado' WHERE id = $1`, [req.params.id])
     }
+    // Avaliação do consultor (proposta para revisão humana).
+    // Em segundo plano: duas chamadas à IA podem passar o tempo de resposta do worker.
+    if (g.etapa_consultor) analisarGravacaoConsultor(pool, req.params.id).catch(e => console.error('[classificacao] analise:', e.message))
     const { rows: [final] } = await pool.query('SELECT * FROM consultor_gravacoes WHERE id = $1', [req.params.id])
     res.json(final)
   } catch (e) { res.status(500).json({ error: e.message }) }
@@ -2075,6 +2109,159 @@ router.delete('/gravacoes/:id', async (req, res) => {
     await pool.query('DELETE FROM consultor_gravacoes WHERE id = $1', [req.params.id])
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Classificação de consultores (spec v1, nov 2026) ─────────
+// Só os associados (admin) usam o módulo. Parceiros já estão fora pela lista
+// fechada; aqui fecha-se também ao perfil comercial.
+async function soAssociados(req, res) {
+  const u = await resolveCrmUser(req).catch(() => null)
+  if (u && u.role !== 'admin') { res.status(403).json({ error: 'Só os associados usam a classificação de consultores' }); return false }
+  return u || req.user || {}
+}
+
+// UPDATE com etapa, autor e consentimento de uma gravação do consultor.
+function dadosEtapaConsultor(id, body, estadoComConsentimento) {
+  const etapa = ['cold_call', 'discovery', 'acompanhamento'].includes(body.etapa_consultor) ? body.etapa_consultor : null
+  const modo = ['verbal_gravado', 'escrito'].includes(body.consentimento_modo) ? body.consentimento_modo : null
+  const consentiu = modo && (body.consentimento === true || body.consentimento === 'true')
+  const now = new Date().toISOString()
+  return [
+    `UPDATE consultor_gravacoes SET etapa_consultor = $2, realizada_por = COALESCE($3, realizada_por),
+       consentimento_modo = $4, consentimento_em = $5,
+       estado = CASE WHEN $5::text IS NULL AND estado = 'pendente' THEN 'aguarda_consentimento'
+                     WHEN $5::text IS NOT NULL AND estado = 'aguarda_consentimento' THEN 'pendente'
+                     ELSE $6 END,
+       updated_at = $7
+     WHERE id = $1 RETURNING *`,
+    [id, etapa, body.realizada_por || null, consentiu ? modo : null, consentiu ? now : null, estadoComConsentimento, now],
+  ]
+}
+
+// Etapa/consentimento registados depois do carregamento.
+router.patch('/gravacoes/:id/consultor', async (req, res) => {
+  try {
+    if (!(await soAssociados(req, res))) return
+    await ensureClassificacaoTables(pool)
+    const { rows: [g] } = await pool.query('SELECT estado FROM consultor_gravacoes WHERE id = $1', [req.params.id])
+    if (!g) return res.status(404).json({ error: 'Gravacao nao encontrada' })
+    const { rows: [row] } = await pool.query(...dadosEtapaConsultor(req.params.id, req.body || {}, g.estado))
+    res.json(row)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/gravacoes/:id/analisar-consultor', async (req, res) => {
+  try {
+    if (!(await soAssociados(req, res))) return
+    await ensureClassificacaoTables(pool)
+    const { rows: [g] } = await pool.query(
+      `UPDATE consultor_gravacoes SET estado_consultor = 'a_analisar', erro_consultor = NULL
+        WHERE id = $1 AND etapa_consultor IS NOT NULL AND consentimento_em IS NOT NULL AND transcricao IS NOT NULL RETURNING *`, [req.params.id])
+    if (!g) return res.status(400).json({ error: 'A gravação precisa de etapa, consentimento e transcrição' })
+    // Em segundo plano (duas chamadas à IA); o ecrã acompanha pelo estado.
+    analisarGravacaoConsultor(pool, req.params.id).catch(e => console.error('[classificacao] analise:', e.message))
+    res.json(g)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Áudio para o ecrã de revisão (URL assinado de 1 hora).
+router.get('/gravacoes/:id/audio', async (req, res) => {
+  try {
+    if (!(await soAssociados(req, res))) return
+    const tabela = await tabelaDaGravacao(pool, req.params.id)
+    const { rows: [g] } = await pool.query(`SELECT ficheiro_path FROM ${tabela} WHERE id = $1`, [req.params.id])
+    if (!g?.ficheiro_path || !supabaseStorage) return res.json({ url: null })
+    const { data } = await supabaseStorage.storage.from(GRAVACOES_BUCKET).createSignedUrl(g.ficheiro_path, 60 * 60)
+    res.json({ url: data?.signedUrl || null })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/consultores/:id/avaliacao', async (req, res) => {
+  try {
+    if (!(await soAssociados(req, res))) return
+    const d = await lerAvaliacaoConsultor(pool, req.params.id)
+    if (!d) return res.status(404).json({ error: 'Consultor nao encontrado' })
+    res.json(d)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/avaliacoes/:id', async (req, res) => {
+  try {
+    if (!(await soAssociados(req, res))) return
+    const d = await lerAvaliacao(pool, req.params.id)
+    if (!d) return res.status(404).json({ error: 'Avaliação não encontrada' })
+    res.json(d)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/avaliacoes/:id/validar', async (req, res) => {
+  try {
+    const u = await soAssociados(req, res)
+    if (!u) return
+    res.json(await validarAvaliacao(pool, req.params.id, req.body || {}, u))
+  } catch (e) { res.status(400).json({ error: e.message }) }
+})
+
+router.post('/avaliacoes/:id/descartar', async (req, res) => {
+  try {
+    if (!(await soAssociados(req, res))) return
+    res.json(await descartarAvaliacao(pool, req.params.id))
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.patch('/compromissos/:id', async (req, res) => {
+  try {
+    if (!(await soAssociados(req, res))) return
+    res.json(await atualizarCompromisso(pool, req.params.id, req.body || {}))
+  } catch (e) { res.status(400).json({ error: e.message }) }
+})
+
+router.get('/parametros-classificacao', async (req, res) => {
+  try {
+    if (!(await soAssociados(req, res))) return
+    res.json(await lerParametros(pool))
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.put('/parametros-classificacao', async (req, res) => {
+  try {
+    const u = await soAssociados(req, res)
+    if (!u) return
+    res.json(await guardarParametros(pool, req.body?.valores || {}, u))
+  } catch (e) { res.status(400).json({ error: e.message }) }
+})
+
+router.get('/rede-consultores', async (req, res) => {
+  try {
+    if (!(await soAssociados(req, res))) return
+    res.json(await painelRede(pool))
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Eliminação a pedido do consultor: áudio, transcrições e citações.
+router.post('/consultores/:id/apagar-dados-gravacao', async (req, res) => {
+  try {
+    const u = await soAssociados(req, res)
+    if (!u) return
+    const remover = (p) => supabaseStorage ? supabaseStorage.storage.from(GRAVACOES_BUCKET).remove([p]) : Promise.resolve()
+    res.json(await apagarDadosGravacoes(pool, req.params.id, remover, u))
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Qualificação da oportunidade: recalcular (automática) ou corrigir à mão.
+router.get('/oportunidades/:imovelId/qualificacao', async (req, res) => {
+  try {
+    if (!(await soAssociados(req, res))) return
+    res.json(await atualizarQualificacao(pool, req.params.imovelId))
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.patch('/oportunidades/:imovelId/qualificacao', async (req, res) => {
+  try {
+    const u = await soAssociados(req, res)
+    if (!u) return
+    res.json(await corrigirQualificacao(pool, req.params.imovelId, req.body || {}, u))
+  } catch (e) { res.status(400).json({ error: e.message }) }
 })
 
 // ── KPIs de chamadas (SOP 2) ──────────────────────────────────
@@ -3614,8 +3801,8 @@ router.post('/auto-task', async (req, res) => {
         'Investidor Ativo':                   'Preparar próximo deal para {name}',
       },
       consultores: {
-        'Follow up':          'Follow-up com consultor {name}',
-        'Aberto Parcerias':   'Formalizar parceria com {name}',
+        'Follow Up':          'Follow-up com consultor {name}',
+        'Discovery Call':     'Discovery call com {name}',
       },
     }
     const taskTemplates = TASK_MAP[entity] ?? {}
@@ -3827,12 +4014,10 @@ router.post('/automation/score-prioridade-consultores', async (req, res) => {
         : diasSemUpdate
       const isInativo = diasSemActividade >= 60 && totalImoveis === 0
 
+      // Inativo deixou de ser escrito aqui: passa a sugestão validada pelo
+      // associado (sugestoesConsultores, no fim). A classe A–D também não é
+      // escrita: vem só da avaliação validada (classificação de consultores).
       if (isInativo) {
-        const needsUpdate = c.estado_avaliacao !== 'Inativo'
-        if (needsUpdate) {
-          await pool.query('UPDATE consultores SET estado_avaliacao = $1, score_prioridade = 0, classificacao = NULL, updated_at = $2 WHERE id = $3',
-            ['Inativo', new Date().toISOString(), c.id])
-        }
         relatorio.inativos++
         continue
       }
@@ -3842,10 +4027,9 @@ router.post('/automation/score-prioridade-consultores', async (req, res) => {
         const scorePrioridade = 0
         const classificacao = 'D'
         relatorio.distribuicao.D++
-        if (c.score_prioridade !== 0 || c.classificacao !== 'D') {
-          await pool.query('UPDATE consultores SET score_prioridade = 0, taxa_qualidade = 0, classificacao = $1, imoveis_enviados = 0, updated_at = $2 WHERE id = $3',
-            ['D', new Date().toISOString(), c.id])
-          if (classeAnterior && classeAnterior !== 'D') relatorio.mudancas.push({ nome: c.nome, de: classeAnterior, para: 'D', score: 0 })
+        if (c.score_prioridade !== 0) {
+          await pool.query('UPDATE consultores SET score_prioridade = 0, taxa_qualidade = 0, imoveis_enviados = 0, updated_at = $1 WHERE id = $2',
+            [new Date().toISOString(), c.id])
           relatorio.reclassificados++
         }
         relatorio.semDados++
@@ -3885,19 +4069,15 @@ router.post('/automation/score-prioridade-consultores', async (req, res) => {
       const changed = Math.abs((c.score_prioridade || 0) - scorePrioridade) > 0.5 ||
                        Math.abs((c.taxa_qualidade || 0) - taxaQualidade) > 0.5 ||
                        (c.tempo_medio_resposta || null) !== tempoMedio ||
-                       c.classificacao !== classificacao ||
                        (c.imoveis_enviados || 0) !== leadsReferencia
 
       if (changed) {
         await pool.query(
           `UPDATE consultores SET score_prioridade = $1, taxa_qualidade = $2, tempo_medio_resposta = $3,
-           classificacao = $4, imoveis_enviados = $5, updated_at = $6 WHERE id = $7`,
-          [scorePrioridade, taxaQualidade, tempoMedio, classificacao, leadsReferencia, new Date().toISOString(), c.id]
+           imoveis_enviados = $4, updated_at = $5 WHERE id = $6`,
+          [scorePrioridade, taxaQualidade, tempoMedio, leadsReferencia, new Date().toISOString(), c.id]
         )
         relatorio.reclassificados++
-        if (classeAnterior && classeAnterior !== classificacao) {
-          relatorio.mudancas.push({ nome: c.nome, de: classeAnterior, para: classificacao, score: scorePrioridade })
-        }
       }
 
       if (tempoMedio === null) {
@@ -3911,6 +4091,14 @@ router.post('/automation/score-prioridade-consultores', async (req, res) => {
     relatorio.top5 = updated.sort((a, b) => b.scorePrioridade - a.scorePrioridade).slice(0, 5).map(u => ({
       nome: u.nome, score: u.scorePrioridade, classe: u.classificacao, imoveis: u.imoveisReais, qualidade: u.taxaQualidade
     }))
+
+    // Classificação de consultores: sugestões "Por aprovar" (inativo, baixa
+    // qualidade, incumprimento, sem oportunidades, revisão trimestral) e
+    // conservação dos áudios já revistos.
+    const sugestoes = [...await sugestoesConsultores(pool), ...await sugestoesTrimestrais(pool)]
+    relatorio.sugestoes_criadas = await gerarTarefasSugestao(pool, sugestoes)
+    const remover = (p) => supabaseStorage ? supabaseStorage.storage.from(GRAVACOES_BUCKET).remove([p]) : Promise.resolve()
+    relatorio.audios_apagados = await limparAudiosAntigos(pool, remover).catch(() => 0)
 
     res.json({ ok: true, atualizados: relatorio.reclassificados, relatorio, detalhes: updated })
   } catch (e) { res.status(500).json({ error: e.message }) }

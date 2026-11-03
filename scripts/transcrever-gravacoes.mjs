@@ -7,7 +7,7 @@
  *   2. POST /crm/gravacoes/:id/iniciar-transcricao  (lock optimista)
  *   3. download do audio -> ficheiro temporario
  *   4. Whisper LOCAL (whisper.cpp ou whisper python) -> texto
- *   5. POST /crm/gravacoes/:id/transcricao   { transcricao, duracao_seg }
+ *   5. POST /crm/gravacoes/:id/transcricao   { transcricao, duracao_seg, segmentos }
  *      (o backend dispara a analise comercial por Claude automaticamente)
  *   6. em caso de erro -> POST /crm/gravacoes/:id/falha
  *
@@ -95,8 +95,24 @@ async function getDuracaoSeg(file) {
   return Number.isFinite(v) ? Math.round(v) : null
 }
 
-// Transcreve um ficheiro de audio -> texto. Tenta whisper.cpp (rapido no Mac),
-// com fallback para o whisper python. Lanca se nenhum estiver disponivel.
+// Segmentos com tempos (segundos) a partir do JSON do whisper.cpp ou python:
+// servem para as citacoes da classificacao de consultores saltarem para o
+// ponto certo do audio. Sem JSON, so ha texto.
+function segmentosDoJson(path) {
+  try {
+    const j = JSON.parse(readFileSync(path, 'utf8'))
+    if (Array.isArray(j.transcription)) {
+      return j.transcription.map(s => ({ ini: (s.offsets?.from ?? 0) / 1000, fim: (s.offsets?.to ?? 0) / 1000, texto: String(s.text || '').trim() })).filter(s => s.texto)
+    }
+    if (Array.isArray(j.segments)) {
+      return j.segments.map(s => ({ ini: Number(s.start) || 0, fim: Number(s.end) || 0, texto: String(s.text || '').trim() })).filter(s => s.texto)
+    }
+  } catch { /* sem JSON */ }
+  return null
+}
+
+// Transcreve um ficheiro de audio -> { texto, segmentos }. Tenta whisper.cpp
+// (rapido no Mac), com fallback para o whisper python. Lanca se nenhum estiver disponivel.
 async function transcrever(audioFile, workDir) {
   const useCpp = WHISPER_MODEL && existsSync(WHISPER_MODEL) && await binExists(WHISPER_BIN)
   if (useCpp) {
@@ -105,25 +121,25 @@ async function transcrever(audioFile, workDir) {
     const conv = await run(FFMPEG, ['-y', '-i', audioFile, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', wav], { timeoutMs: 10 * 60_000 })
     if (conv.code !== 0 || !existsSync(wav)) throw new Error(`ffmpeg falhou: ${conv.stderr.slice(-300)}`)
     const outBase = join(workDir, 'out')
-    const r = await run(WHISPER_BIN, ['-m', WHISPER_MODEL, '-l', 'pt', '-nt', '-otxt', '-of', outBase, wav])
+    const r = await run(WHISPER_BIN, ['-m', WHISPER_MODEL, '-l', 'pt', '-nt', '-otxt', '-oj', '-of', outBase, wav])
     if (r.code !== 0) throw new Error(`whisper.cpp falhou: ${r.stderr.slice(-300)}`)
     const txtPath = `${outBase}.txt`
     if (!existsSync(txtPath)) throw new Error('whisper.cpp nao gerou .txt')
-    return readFileSync(txtPath, 'utf8').trim()
+    return { texto: readFileSync(txtPath, 'utf8').trim(), segmentos: segmentosDoJson(`${outBase}.json`) }
   }
 
   // Fallback: whisper python (gere mp3/m4a directamente via ffmpeg interno).
   if (await binExists(WHISPER_PY)) {
     const r = await run(WHISPER_PY, [
       audioFile, '--model', WHISPER_PY_MODEL, '--language', 'Portuguese',
-      '--task', 'transcribe', '--output_format', 'txt', '--output_dir', workDir, '--verbose', 'False',
+      '--task', 'transcribe', '--output_format', 'all', '--output_dir', workDir, '--verbose', 'False',
     ])
     if (r.code !== 0) throw new Error(`whisper python falhou: ${r.stderr.slice(-300)}`)
     // O whisper python nomeia o output pelo basename do input.
     const base = audioFile.split('/').pop().replace(/\.[^.]+$/, '')
     const txtPath = join(workDir, `${base}.txt`)
     if (!existsSync(txtPath)) throw new Error('whisper python nao gerou .txt')
-    return readFileSync(txtPath, 'utf8').trim()
+    return { texto: readFileSync(txtPath, 'utf8').trim(), segmentos: segmentosDoJson(join(workDir, `${base}.json`)) }
   }
 
   throw new Error('Nenhum motor Whisper disponivel. Instala whisper.cpp (brew install whisper-cpp + modelo ggml) e define WHISPER_MODEL, ou whisper python (pip install openai-whisper).')
@@ -147,14 +163,14 @@ async function processarUma(g) {
     log('  audio descarregado, a transcrever...')
 
     const duracao = await getDuracaoSeg(audioFile)
-    const transcricao = await transcrever(audioFile, work)
+    const { texto: transcricao, segmentos } = await transcrever(audioFile, work)
     if (!transcricao) throw new Error('transcricao vazia')
     log(`  transcrito (${transcricao.length} chars, ${duracao ?? '?'}s). A enviar + analise IA...`)
 
     await api(`/crm/gravacoes/${g.id}/transcricao`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcricao, duracao_seg: duracao }),
+      body: JSON.stringify({ transcricao, duracao_seg: duracao, segmentos }),
     })
     log('  concluido (transcrito + analisado).')
   } catch (e) {

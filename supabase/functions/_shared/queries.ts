@@ -211,7 +211,7 @@ function mapConsultor(r: any) {
     scorePrioridade: r.score_prioridade || 0,
     taxaQualidade: r.taxa_qualidade || 0,
     tempoMedioResposta: r.tempo_medio_resposta,
-    estadoAvaliacao: r.estado_avaliacao || "Em avaliação",
+    estadoAvaliacao: r.estado_avaliacao || "Acompanhamento pontual",
     createdAt: r.created_at,
   };
 }

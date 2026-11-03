@@ -1778,7 +1778,7 @@ app.get('/api/comercial/metricas-temporais', async (req, res) => {
     }
 
     // ── Consultores ────────────────────────────────────────────
-    const CONS_ATIVOS_STATUS = new Set(['Aberto Parcerias','Em Parceria','Follow up','Follow Up'])
+    const CONS_ATIVOS_STATUS = new Set(['Discovery Call', 'Follow Up', 'Parceria', 'Aberto Parcerias','Em Parceria','Follow up','Follow Up'])
     const consAtivos = consultoresRaw.filter(c => CONS_ATIVOS_STATUS.has(c.estatuto))
     const consInativos = consultoresRaw.filter(c => c.estatuto === 'Inativo').length
     const consFollowUpAtrasado = consultoresRaw.filter(c =>
@@ -2411,7 +2411,7 @@ app.get('/api/weekly-pulse', async (req, res) => {
       return dias != null && dias > 14
     }).length
 
-    const CONS_ATIVOS = new Set(['Aberto Parcerias','Em Parceria','Follow up','Follow Up','Acesso imoveis Off market'])
+    const CONS_ATIVOS = new Set(['Discovery Call', 'Follow Up', 'Parceria', 'Aberto Parcerias','Em Parceria','Follow up','Follow Up','Acesso imoveis Off market'])
     const consFollowUpAtrasado = consultoresRaw.filter(c =>
       CONS_ATIVOS.has(c.estatuto) && c.dataProximoFollowUp && new Date(c.dataProximoFollowUp) < now
     ).length
@@ -2561,12 +2561,12 @@ app.get('/api/ops-scorecard', async (req, res) => {
     // Excluir cópias duplicadas (Ativo/Passivo) para não contar a mesma pessoa duas vezes
     const investidores = investidoresRaw.filter(isInvestidorPrincipal)
     const now = new Date()
-    const CONS_ATIVOS = new Set(['Aberto Parcerias','Em Parceria','Follow up','Follow Up','Acesso imoveis Off market','Consultores em Parceria'])
+    const CONS_ATIVOS = new Set(['Discovery Call', 'Follow Up', 'Parceria', 'Aberto Parcerias','Em Parceria','Follow up','Follow Up','Acesso imoveis Off market','Consultores em Parceria'])
     const ESTADOS_NEG = new Set(['Descartado','Nao interessa','Não interessa','Cancelado'])
 
     // Consultores ativos
     const consAtivos = consultoresRaw.filter(c => CONS_ATIVOS.has(c.estatuto))
-    const consParceria = consultoresRaw.filter(c => c.estatuto === 'Consultores em Parceria' || c.estatuto === 'Em Parceria')
+    const consParceria = consultoresRaw.filter(c => c.estatuto === 'Parceria' || c.estatuto === 'Consultores em Parceria' || c.estatuto === 'Em Parceria')
     const taxaAtivacao = consultoresRaw.length > 0 ? round2(consAtivos.length / consultoresRaw.length * 100) : 0
 
     // Pipeline velocity
@@ -3046,8 +3046,8 @@ app.get('/api/metricas', async (req, res) => {
     const convInvGlobal = total > 0 ? round2(emParceria.length / total * 100) : null
 
     // Consultores — funil detalhado
-    const CONS_EM_PARCERIA = new Set(['Consultores em Parceria', 'Acesso imoveis Off market'])
-    const CONS_ATIVOS_SET = new Set(['Aberto Parcerias', 'Follow up', 'Follow Up', 'Acesso imoveis Off market', 'Consultores em Parceria'])
+    const CONS_EM_PARCERIA = new Set(['Parceria', 'Consultores em Parceria', 'Acesso imoveis Off market'])
+    const CONS_ATIVOS_SET = new Set(['Discovery Call', 'Follow Up', 'Parceria', 'Aberto Parcerias', 'Follow up', 'Follow Up', 'Acesso imoveis Off market', 'Consultores em Parceria'])
     const consComCall = consultoresRaw.filter(c => !!c.dataPrimeiraCall).length
     const consAtivos = consultoresRaw.filter(c => CONS_ATIVOS_SET.has(c.estatuto)).length
     const consEmParceria = consultoresRaw.filter(c => CONS_EM_PARCERIA.has(c.estatuto)).length
@@ -4697,9 +4697,9 @@ const KR_FONTE_QUERIES = {
   investidores_nda: "SELECT COUNT(*) as c FROM investidores WHERE (duplicado_de IS NULL OR duplicado_de = id) AND nda_assinado = 1",
   investidores_capital: "SELECT COUNT(*) as c FROM investidores WHERE (duplicado_de IS NULL OR duplicado_de = id) AND montante_investido > 0",
   consultores_followup_semana: "SELECT COUNT(*) as c FROM consultores WHERE data_follow_up >= NOW() - INTERVAL '7 days'",
-  consultores_followup_em_dia: "SELECT COUNT(*) as c FROM consultores WHERE data_proximo_follow_up >= NOW() AND estatuto IN ('Aberto Parcerias','Follow up','Acesso imoveis Off market','Consultores em Parceria')",
-  consultores_com_call: "SELECT COUNT(*) as c FROM consultores WHERE data_primeira_call IS NOT NULL AND estatuto IN ('Aberto Parcerias','Follow up','Acesso imoveis Off market','Consultores em Parceria')",
-  consultores_ativos: "SELECT COUNT(*) as c FROM consultores WHERE estatuto IN ('Aberto Parcerias','Follow up','Acesso imoveis Off market','Consultores em Parceria')",
+  consultores_followup_em_dia: "SELECT COUNT(*) as c FROM consultores WHERE data_proximo_follow_up >= NOW() AND estatuto IN ('Discovery Call', 'Follow Up', 'Parceria', 'Aberto Parcerias','Follow up','Acesso imoveis Off market','Consultores em Parceria')",
+  consultores_com_call: "SELECT COUNT(*) as c FROM consultores WHERE data_primeira_call IS NOT NULL AND estatuto IN ('Discovery Call', 'Follow Up', 'Parceria', 'Aberto Parcerias','Follow up','Acesso imoveis Off market','Consultores em Parceria')",
+  consultores_ativos: "SELECT COUNT(*) as c FROM consultores WHERE estatuto IN ('Discovery Call', 'Follow Up', 'Parceria', 'Aberto Parcerias','Follow up','Acesso imoveis Off market','Consultores em Parceria')",
   imoveis_sem_modelo: "SELECT COUNT(*) as c FROM imoveis WHERE (modelo_negocio IS NULL OR modelo_negocio = '') AND estado NOT IN ('Descartado','Nao interessa','Não interessa')",
   imoveis_com_modelo: "SELECT COUNT(*) as c FROM imoveis WHERE modelo_negocio IS NOT NULL AND modelo_negocio != '' AND estado NOT IN ('Descartado','Nao interessa','Não interessa')",
   imoveis_ativos: "SELECT COUNT(*) as c FROM imoveis WHERE estado NOT IN ('Descartado','Nao interessa','Não interessa')",
@@ -5205,7 +5205,7 @@ app.get('/api/alertas', endpointCache(300000), async (req, res) => {
     }
 
     // ── Consultores com follow-up atrasado ──
-    const CONS_ATIVOS = new Set(['Aberto Parcerias', 'Em Parceria', 'Follow up', 'Follow Up', 'Acesso imoveis Off market'])
+    const CONS_ATIVOS = new Set(['Discovery Call', 'Follow Up', 'Parceria', 'Aberto Parcerias', 'Em Parceria', 'Follow up', 'Follow Up', 'Acesso imoveis Off market'])
     for (const c of consultoresRaw) {
       if (!CONS_ATIVOS.has(c.estatuto)) continue
       if (c.dataProximoFollowUp && new Date(c.dataProximoFollowUp) < now) {
@@ -5232,7 +5232,7 @@ app.get('/api/alertas', endpointCache(300000), async (req, res) => {
         interacoesPorConsultor[i.consultor_id].push(i)
       }
 
-      const ESTATUTOS_ATIVOS = ['Follow up', 'Aberto Parcerias', 'Acesso imoveis Off market', 'Consultores em Parceria']
+      const ESTATUTOS_ATIVOS = ['Follow up', 'Discovery Call', 'Follow Up', 'Parceria', 'Aberto Parcerias', 'Acesso imoveis Off market', 'Consultores em Parceria']
       for (const c of pgConsultores) {
         const horasCriado = (now - new Date(c.created_at)) / 3600000
         const interacoesCons = interacoesPorConsultor[c.id] || []

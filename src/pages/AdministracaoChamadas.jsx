@@ -4,7 +4,8 @@
  * de todas as chamadas (Cold/Discovery/Close/Pivot) no período seleccionado.
  * O preenchimento de cada chamada acontece na ficha do consultor
  * (FollowUpsSection/GravacaoCard) — esta aba é só leitura.
- * A vista "Investidores" (SOP 4) vive em AdministracaoChamadasInvestidores.jsx.
+ * A vista "Investidores" (SOP 4) vive em AdministracaoChamadasInvestidores.jsx e a
+ * "Rede de consultores" (classificação de consultores) em AdministracaoRedeConsultores.jsx.
  */
 import { useState, useEffect, useMemo } from 'react'
 import { Phone, TrendingUp, Target, Award, Clock, Handshake, AlertCircle } from 'lucide-react'
@@ -15,6 +16,7 @@ import { TIPO_CHAMADA_LABEL, TIPO_CHAMADA_COLOR, bandaScorecard, fmtDate, result
 import { dotClass } from '../lib/statusTone.js'
 import { useUrlState } from '../hooks/useUrlState.js'
 import { AdministracaoChamadasInvestidores } from './AdministracaoChamadasInvestidores.jsx'
+import { AdministracaoRedeConsultores } from './AdministracaoRedeConsultores.jsx'
 
 const hoje = () => new Date().toISOString().slice(0, 10)
 const diasAtras = n => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10)
@@ -189,7 +191,7 @@ function AvaliacaoConsultores() {
   )
 }
 
-const AREAS = ['Consultores', 'Investidores']
+const AREAS = ['Consultores', 'Investidores', 'Rede de consultores']
 
 export function AdministracaoChamadas() {
   const [area, setArea] = useUrlState('area', 'Consultores')
@@ -203,7 +205,9 @@ export function AdministracaoChamadas() {
           </button>
         ))}
       </div>
-      {area === 'Investidores' ? <AdministracaoChamadasInvestidores /> : <AvaliacaoConsultores />}
+      {area === 'Investidores' ? <AdministracaoChamadasInvestidores />
+        : area === 'Rede de consultores' ? <AdministracaoRedeConsultores />
+        : <AvaliacaoConsultores />}
     </div>
   )
 }

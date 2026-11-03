@@ -128,17 +128,15 @@ export const INV_STATUS_COLOR = {
 }
 
 // ── Consultores — Estatutos ──────────────────────────────────
-export const CONS_ESTATUTOS = [
-  'Cold Call', 'Follow up', 'Aberto Parcerias',
-  'Acesso imoveis Off market', 'Consultores em Parceria',
-]
+// Etapas da classificação de consultores (nov 2026): entra em Parceria quem
+// envia uma oportunidade (trigger na BD, migração 0095).
+export const CONS_ESTATUTOS = ['Cold Call', 'Discovery Call', 'Follow Up', 'Parceria']
 
 export const CONS_ESTATUTO_COLOR = {
-  'Cold Call':                  'bg-gray-100 text-gray-600',
-  'Follow up':                  'bg-blue-100 text-blue-700',
-  'Aberto Parcerias':           'bg-yellow-100 text-yellow-700',
-  'Acesso imoveis Off market':  'bg-purple-100 text-purple-700',
-  'Consultores em Parceria':    'bg-green-100 text-green-700',
+  'Cold Call':      'bg-gray-100 text-gray-600',
+  'Discovery Call': 'bg-yellow-100 text-yellow-700',
+  'Follow Up':      'bg-blue-100 text-blue-700',
+  'Parceria':       'bg-green-100 text-green-700',
 }
 
 // ── Parceiros (prestadores de serviços aos projetos) ─────────
@@ -156,12 +154,21 @@ export const PARC_ESTADO_COLOR = {
 }
 
 // ── Consultores — Estado de Avaliação ────────────────────────
-export const CONS_ESTADO_AVALIACAO = ['Em avaliação', 'Ativo', 'Inativo']
+// Estado da relação (coluna estado_avaliacao). Só os associados o mudam; a
+// plataforma sugere Inativo ao fim de 60 dias sem contactos relevantes.
+export const CONS_ESTADO_AVALIACAO = ['Ativo', 'Acompanhamento pontual', 'Inativo', 'Encerrado']
 
 export const CONS_ESTADO_AVALIACAO_COLOR = {
-  'Em avaliação': 'bg-yellow-100 text-yellow-700',
-  'Ativo':        'bg-green-100 text-green-700',
-  'Inativo':      'bg-gray-100 text-gray-600',
+  'Ativo':                  'bg-green-100 text-green-700',
+  'Acompanhamento pontual': 'bg-yellow-100 text-yellow-700',
+  'Inativo':                'bg-gray-100 text-gray-600',
+  'Encerrado':              'bg-red-100 text-red-700',
+}
+
+export const CONS_VALIDACAO_COLOR = {
+  'Por validar': 'bg-gray-100 text-gray-600',
+  'Em teste':    'bg-yellow-100 text-yellow-700',
+  'Validado':    'bg-green-100 text-green-700',
 }
 
 // ── Negócios — Categorias e Fases ────────────────────────────
