@@ -1,15 +1,7 @@
 // Componentes e formatadores partilhados pelos blocos de departamento do Dashboard.
-import { KpiCard } from '../ui/KpiCard.jsx'
 
 export const fmtNum = (n) => (n == null ? '—' : new Intl.NumberFormat('pt-PT').format(n))
-export const fmtPct = (n) => (n == null ? '—' : `${n}%`)
-export const fmtX = (n) => (n == null ? '—' : `${n}×`)
-
-// Card de métrica de fluxo: valor + variação vs período anterior.
-// `metric` = { valor, delta }; `melhor` diz se subir é boa ou má notícia.
-export function MetricCard({ label, metric, format = fmtNum, tone = 'gold', melhor = 'subir', sub }) {
-  return <KpiCard label={label} value={format(metric?.valor)} delta={metric?.delta} melhor={melhor} sub={sub} tone={tone} size="md" />
-}
+export const fmtPct = (n) => (n == null ? '—' : `${new Intl.NumberFormat('pt-PT', { maximumFractionDigits: 1 }).format(n)}%`)
 
 export function Pillar({ icon: Icon, title, hint, children }) {
   return (

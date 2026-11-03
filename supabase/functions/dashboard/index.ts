@@ -26,6 +26,7 @@ import {
 } from "../_shared/queries.ts";
 import { calcBurnRateMensal, despesasDaEmpresa } from "../_shared/financeCalc.ts";
 import { TTLCache } from "../_shared/ttlCache.ts";
+import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, haEscrituras, resumoFases, custoRealObra, diasNaFase } from "../_shared/regrasDashboard.js";
 
 // Cache de endpoints pesados — port de endpointCache() em server.js (achado
 // da auditoria: dev tinha cache de 2-5min nestes 13 endpoints, produção
@@ -1344,20 +1345,24 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
     const periodo = ["semana", "mes", "trimestre", "ano"].includes(pq) ? pq : "mes";
     const regiao = c.req.header("x-regiao") || undefined;
 
-    const [imoveisRaw, investidoresRaw, consultores, negocios, despesas, ci, ii, pi] = await Promise.all([
+    const [imoveisRaw, investidoresRaw, consultores, negocios, despesas, ci, ii, pi, fasesRes, analisesRes, historicoRes] = await Promise.all([
       getImóveis({ regiao }).catch(() => [] as any[]),
       getInvestidores({ regiao }).catch(() => [] as any[]),
       getConsultores({ regiao }).catch(() => [] as any[]),
       getNegócios({ regiao }).catch(() => [] as any[]),
       getDespesas({ regiao }).catch(() => [] as any[]),
       pool.query(`SELECT consultor_id, canal, direcao, data_hora FROM consultor_interacoes WHERE canal IS DISTINCT FROM 'Nota' ORDER BY consultor_id, data_hora`).catch(() => ({ rows: [] as any[] })),
-      pool.query(`SELECT finalidade, data_hora FROM investidor_interacoes WHERE canal IS DISTINCT FROM 'Nota'`).catch(() => ({ rows: [] as any[] })),
+      pool.query(`SELECT finalidade, canal, data_hora FROM investidor_interacoes WHERE canal IS DISTINCT FROM 'Nota'`).catch(() => ({ rows: [] as any[] })),
       pool.query(`SELECT negocio_id, capital FROM projeto_investidores WHERE capital > 0`).catch(() => ({ rows: [] as any[] })),
+      pool.query(`SELECT negocio_id, data_fim_prevista, data_fim_real FROM projeto_fases`).catch(() => ({ rows: [] as any[] })),
+      pool.query(`SELECT id FROM negocios WHERE deleted_at IS NULL AND analise_final IS NOT NULL`).catch(() => ({ rows: [] as any[] })),
+      pool.query(`SELECT entidade_id, alteracoes, created_at FROM historico_alteracoes WHERE entidade = 'imoveis' AND alteracoes::text LIKE '%"estado"%'`).catch(() => ({ rows: [] as any[] })),
     ]);
     // Tipo explícito: sem ele o deno check rejeitava cada filter/map sobre a lista.
     const imoveisAll: any[] = imoveisRaw;
     const investidores = investidoresRaw.filter(isInvestidorPrincipal);
-    const ciRows = ci.rows, iiRows = ii.rows, piRows = pi.rows;
+    const ciRows = ci.rows, iiRows = ii.rows.filter((r: any) => ehChamada(r.canal)), piRows = pi.rows;
+    const idsNegocios = new Set(negocios.map((n: any) => n.id));
 
     const now = new Date(), Y = now.getFullYear(), MM = now.getMonth();
     function range(p: string, off = 0): [Date, Date] {
@@ -1386,7 +1391,8 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
     const fechado = (i: any) => !!i.dataPropostaAceite;
     const ESTADOS_NEG = new Set(["Descartado", "Nao interessa", "Não interessa", "Cancelado"]);
     const lucroDe = (n: any) => n.lucroReal || n.lucroEstimado || 0;
-    const negFechouNoPeriodo = (n: any) => inP(n.dataVenda, start, end) || inP(n.dataCompra, start, end);
+    const comEscrituras = haEscrituras(negocios);
+    const negFechouNoPeriodo = (n: any) => negocioFechado(n) && inP(n.dataEscrituraVenda, start, end);
 
     // ════════ PILAR 1 — ORIGINAÇÃO & FUNIL ════════
     const countIm = (s: Date, e: Date) => ({
@@ -1399,7 +1405,7 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
     const imCur = countIm(start, end), imPrev = countIm(prevStart, prevEnd);
     const atividadeImoveis: any = {};
     for (const k of Object.keys(imCur)) atividadeImoveis[k] = { valor: (imCur as any)[k], delta: pctDelta((imCur as any)[k], (imPrev as any)[k]) };
-    const backlogPorContactar = imoveisAll.filter((i) => i.dataAdicionado && !i.dataChamada).length;
+    const backlogPorContactar = imoveisPorContactar(imoveisAll).length;
 
     const coorte = imoveisAll.filter((i) => inP(i.dataAdicionado, start, end));
     const cohortAdd = coorte.length;
@@ -1422,11 +1428,9 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
     // ════════ PILAR 2 — UNIT ECONOMICS ════════
     const negPeriodo = negocios.filter(negFechouNoPeriodo);
     const dealsPeriodo = negPeriodo.length;
-    const lucroLiquido = round2(negPeriodo.reduce((s: number, n: any) => s + lucroDe(n), 0));
+    const lucroLiquido = comEscrituras ? round2(negPeriodo.reduce((s: number, n: any) => s + lucroDe(n), 0)) : null;
     const lucroMedio = avg(negPeriodo.map((n: any) => lucroDe(n) || null));
     const margemPct = avg(negPeriodo.filter((n: any) => n.capitalTotal > 0).map((n: any) => lucroDe(n) / n.capitalTotal * 100));
-    const burnMensal = round2(despesasDaEmpresa(despesas).reduce((s: number, d: any) => s + (d.custoMensal || 0), 0));
-    const cac = dealsPeriodo > 0 ? round2(burnMensal * mesesPeriodo / dealsPeriodo) : null;
     // "ROI médio" só faz sentido para modelos de compra-e-valoriza (CAEP,
     // Fix and Flip) — Wholesaling é cedência de posição com lucro = fee fixa,
     // não um retorno comparável, e diluía/distorcia esta média (achado da
@@ -1449,26 +1453,22 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
       const d = (new Date(i.dataPropostaAceite) as any - (new Date(i.dataAdicionado) as any)) / 86400000;
       return d >= 0 && d < 730 ? d : null;
     }));
-    const throughput = round2(dealsPeriodo / mesesPeriodo);
+    const throughput = comEscrituras ? round2(dealsPeriodo / mesesPeriodo) : null;
     const capitalPorNegocio: any = {};
     for (const r of piRows) { const k = r.negocio_id; capitalPorNegocio[k] = (capitalPorNegocio[k] || 0) + (Number(r.capital) || 0); }
     const negFechadosIds = new Set(negPeriodo.map((n: any) => n.id));
     const capitalRealizado = Object.entries(capitalPorNegocio).reduce((s: number, [nid, cap]: any) => s + (negFechadosIds.has(nid) ? cap : 0), 0);
 
     // ════════ PILAR 4 — CAPITAL & RELAÇÕES ════════
-    const emParceria = (i: any) => i.status === "Em Parceria" || i.montanteInvestido > 0 || i.numeroNegocios > 0;
+    const emParceria = ehParceria;
     const parceria = investidores.filter(emParceria);
     const capitalMobilizado = round2(parceria.reduce((s: number, i: any) => s + (i.montanteInvestido || 0), 0));
-    const capitalTurns = capitalMobilizado > 0 ? round2(capitalRealizado / capitalMobilizado * fatorAnual) : null;
-    const roicAnualizado = capitalMobilizado > 0 ? round2(lucroLiquido / capitalMobilizado * fatorAnual * 100) : null;
-    const dryPowder = round2(investidores
-      .filter((i: any) => !i.naoReinveste && (i.capitalMax || 0) > 0)
-      .reduce((s: number, i: any) => s + Math.max(0, (i.capitalMax || 0) - (i.montanteInvestido || 0)), 0));
+    const capitalTurns = comEscrituras && capitalMobilizado > 0 ? round2(capitalRealizado / capitalMobilizado * fatorAnual) : null;
     const entradas = round2(investidores.filter((i: any) => inP(i.dataCapitalTransferido, start, end)).reduce((s: number, i: any) => s + (i.montanteInvestido || 0), 0));
     const churned = parceria.filter((i: any) => i.naoReinveste && inP(i.dataNaoReinveste, start, end));
     const capitalPerdido = round2(churned.reduce((s: number, i: any) => s + (i.montanteInvestido || 0), 0));
     const capitalPerdidoPct = capitalMobilizado > 0 ? round2(capitalPerdido / capitalMobilizado * 100) : null;
-    const netFlow = round2(entradas - capitalPerdido);
+    const netFlow = investidores.some((i: any) => i.dataCapitalTransferido) ? round2(entradas - capitalPerdido) : null;
     const reinvestimento = parceria.length > 0 ? round2(parceria.filter((i: any) => (i.numeroNegocios || 0) > 1).length / parceria.length * 100) : null;
     const top3 = [...parceria].sort((a: any, b: any) => (b.montanteInvestido || 0) - (a.montanteInvestido || 0)).slice(0, 3).reduce((s: number, i: any) => s + (i.montanteInvestido || 0), 0);
     const concentracaoTop3 = capitalMobilizado > 0 ? round2(top3 / capitalMobilizado * 100) : null;
@@ -1516,7 +1516,7 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
       const t = new Date(i.dataAdicionado).getTime();
       if (!isNaN(t) && (!ultimoImovel[i.nomeConsultor] || t > ultimoImovel[i.nomeConsultor])) ultimoImovel[i.nomeConsultor] = t;
     }
-    const parceiros = consultores.filter((cc: any) => /parceir/i.test(cc.estatuto || ""));
+    const parceiros = consultores.filter(ehConsultorParceiro);
     const consInativos60 = parceiros.filter((cc: any) => {
       const last = ultimoImovel[cc.nome] || (cc.dataInicio ? new Date(cc.dataInicio).getTime() : null);
       return last ? (Date.now() - last) / 86400000 > 60 : false;
@@ -1552,18 +1552,29 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
     return c.json({
       periodo,
       intervalo: { de: start.toISOString().slice(0, 10), ate: end.toISOString().slice(0, 10) },
-      northStar: { roicAnualizado, lucroLiquido },
+      fecho: { negociosFechados: comEscrituras ? dealsPeriodo : null },
+      obras: {
+        negociosAtivos: negocios.filter((n: any) => n.fase !== "Vendido").length,
+        negociosTotal: negocios.length,
+        comAnaliseFinal: analisesRes.rows.filter((r: any) => idsNegocios.has(r.id)).length,
+        custoReal: round2(custoRealObra(despesas, idsNegocios)),
+        fases: resumoFases(fasesRes.rows.filter((f: any) => idsNegocios.has(f.negocio_id))),
+      },
       funil: {
         atividade: atividadeImoveis,
         backlogPorContactar,
         dealFlow: cohortAdd,
         aprovacaoAnalise, chegamProposta: conversao.proposta, taxaFecho,
         conversao, origem,
+        chamadaVisita: comChamada > 0 ? round2(comVisita / comChamada * 100) : null,
+        visitaProposta: comVisita > 0 ? round2(comProposta / comVisita * 100) : null,
+        chamadasCobertura: { com: imoveisAll.filter((i) => i.dataChamada).length, total: imoveisAll.length },
+        diasNaFase: diasNaFase(imoveisAll, historicoRes.rows),
       },
-      economia: { lucroMedio, margemPct, cac, roiMedio, roiAnualizadoMedio, descontoMedio },
+      economia: { lucroMedio, margemPct, roiMedio, roiAnualizadoMedio, descontoMedio },
       velocidade: { diasAteFechar, capitalTurns, throughput },
       capital: {
-        mobilizado: capitalMobilizado, disponivel: dryPowder, netFlow,
+        mobilizado: capitalMobilizado, capacidadeDeclarada: round2(capacidadeDeclarada(investidores)), parceria: contagemParceria(investidores), netFlow,
         reinvestimento, concentracaoTop3, capitalPerdido, capitalPerdidoPct,
         saidaInvestidores, taxaConvInvestidor, ticketMedioSlot,
       },

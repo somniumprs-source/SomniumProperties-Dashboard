@@ -25,6 +25,7 @@
     "preview": "vite preview",
     "lint": "eslint src --ext .js,.jsx",
     "test:smoke": "node scripts/smoke-projetos.mjs",
+    "test:dashboard": "node --test scripts/regras-dashboard.test.mjs",
     "generate:roles": "node scripts/generate-shared-roles.mjs",
     "check:roles": "node scripts/check-role-parity.mjs",
     "check:endpoints": "node scripts/check-endpoint-parity.mjs"

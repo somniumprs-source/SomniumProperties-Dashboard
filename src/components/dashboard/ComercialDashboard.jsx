@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Filter, Gauge, Users, Trophy, LayoutGrid } from 'lucide-react'
 import { EUR } from '../../constants.js'
-import { KpiCard } from '../ui/KpiCard.jsx'
 import { Tabs } from '../ui/Tabs.jsx'
-import { Pillar, Group, MetricCard, RankList, fmtNum, fmtPct } from './_shared.jsx'
+import { Pillar, Group, RankList, fmtNum, fmtPct } from './_shared.jsx'
+import { Indicador, PorMedir } from './Indicador.jsx'
 
 // Sub-vistas do departamento Comercial. Permitem ver cada pilar 1 a 1
 // (em vez de todos empilhados) — "Tudo" mantém a visão geral.
@@ -17,8 +17,11 @@ const SUB_TABS = [
 // Departamento Comercial — só o que a equipa comercial aciona:
 // originar, converter e gerir relações (investidores + consultores).
 // Métricas financeiras (lucro, margem, ROI, capital) vivem no Financeiro.
-export function ComercialDashboard({ data: d }) {
+export function ComercialDashboard({ data: d, comKpis }) {
   const [sub, setSub] = useState('tudo')
+  // null = sem base de cálculo neste período; nunca aparece como 0.
+  const pct = (v) => (v == null ? null : fmtPct(v))
+  const num = (v) => (v == null ? null : fmtNum(v))
   const fn = d?.funil, ve = d?.velocidade, ca = d?.capital, at = d?.atividade, co = d?.consultores
   const conv = fn?.conversao
   const show = (key) => sub === 'tudo' || sub === key
@@ -27,18 +30,21 @@ export function ComercialDashboard({ data: d }) {
   const pilarFunil = (
     <Pillar icon={Filter} title="Originação & Funil" hint="qualidade do deal flow, não só volume">
       <Group label="Atividade (leading)">
-        <MetricCard label="Adicionados" metric={fn?.atividade?.adicionados} />
-        <MetricCard label="Chamadas" metric={fn?.atividade?.chamadas} />
-        <MetricCard label="Visitas" metric={fn?.atividade?.visitas} />
-        <MetricCard label="Estudos de Mercado" metric={fn?.atividade?.em} />
-        <MetricCard label="Propostas" metric={fn?.atividade?.propostas} />
-        <KpiCard label="Por contactar" value={fmtNum(fn?.backlogPorContactar)} sub="backlog 1.º contacto" tone={fn?.backlogPorContactar ? 'amber' : 'green'} size="md" />
+        <Indicador id="G01" value={fmtNum(fn?.atividade?.adicionados?.valor)} delta={fn?.atividade?.adicionados?.delta} />
+        <Indicador id="G02" value={fmtNum(fn?.atividade?.chamadas?.valor)} delta={fn?.atividade?.chamadas?.delta}
+          sub={fn?.chamadasCobertura ? `${fn.chamadasCobertura.com} de ${fn.chamadasCobertura.total} imóveis com chamada` : undefined} />
+        <Indicador id="G03" value={fmtNum(fn?.atividade?.visitas?.valor)} delta={fn?.atividade?.visitas?.delta} />
+        <Indicador id="G04" value={fmtNum(fn?.atividade?.em?.valor)} delta={fn?.atividade?.em?.delta} />
+        <Indicador id="G05" value={fmtNum(fn?.atividade?.propostas?.valor)} delta={fn?.atividade?.propostas?.delta} />
+        <Indicador id="G06" value={fmtNum(fn?.backlogPorContactar)} tone={fn?.backlogPorContactar ? 'amber' : 'green'} />
       </Group>
       <Group label="Eficiência do funil">
-        <KpiCard label="Aprovação em análise" value={fmtPct(fn?.aprovacaoAnalise)} tone="indigo" size="md" />
-        <KpiCard label="Chegam a proposta" value={fmtPct(fn?.chegamProposta)} tone="indigo" size="md" />
-        <KpiCard label="Taxa de fecho" value={fmtPct(fn?.taxaFecho)} sub="Win rate" tone="green" size="md" />
-        <KpiCard label="Desconto médio" value={fmtPct(d?.economia?.descontoMedio)} sub="Discount rate · negociação" tone="amber" size="md" />
+        <Indicador id="C02" value={pct(fn?.chamadaVisita)} tone="indigo" />
+        <Indicador id="C03" value={pct(fn?.visitaProposta)} tone="indigo" />
+        <Indicador id="G07" value={pct(fn?.aprovacaoAnalise)} tone="indigo" />
+        <Indicador id="G08" value={pct(fn?.chegamProposta)} tone="indigo" />
+        <Indicador id="G09" value={pct(fn?.taxaFecho)} tone="green" />
+        <Indicador id="G10" value={pct(d?.economia?.descontoMedio)} tone="amber" />
       </Group>
       {conv && (
         <div>
@@ -82,9 +88,9 @@ export function ComercialDashboard({ data: d }) {
   const pilarVelocidade = (
     <Pillar icon={Gauge} title="Velocidade de vendas" hint="rapidez e ritmo do pipeline">
       <Group>
-        <KpiCard label="Dias até fechar" value={fmtNum(ve?.diasAteFechar)} sub="Sales cycle" tone="blue" size="md" />
-        <KpiCard label="Ritmo de fecho" value={fmtNum(ve?.throughput)} sub="Deals / mês" tone="green" size="md" />
-        <KpiCard label="Pipeline ponderado" value={EUR(d?.pipelinePonderado)} sub="Weighted pipeline" tone="gold" size="md" />
+        <Indicador id="G12" value={num(ve?.diasAteFechar)} tone="blue" />
+        <Indicador id="C11" value={num(fn?.diasNaFase?.mediana)} sub={fn?.diasNaFase ? `mediana de ${fn.diasNaFase.amostra} imóveis` : undefined} tone="amber" />
+        <Indicador id="G14" value={d ? EUR(d.pipelinePonderado) : null} sub="probabilidades estimadas" tone="gold" />
       </Group>
     </Pillar>
   )
@@ -93,34 +99,29 @@ export function ComercialDashboard({ data: d }) {
   const pilarInvestidores = (
     <Pillar icon={Users} title="Investidores & Parceiros" hint="aquisição e relação — não a contabilidade do capital">
       <Group label="Investidores">
-        <MetricCard label="Discovery Calls" metric={at?.discoveryCalls} tone="amber" />
-        <MetricCard label="Follow Up Calls" metric={at?.followUpCalls} tone="indigo" />
-        <MetricCard label="Novos investidores" metric={{ valor: at?.novosInvestidores, delta: at?.deltas?.novosInvestidores }} />
-        <KpiCard label="Conversão investidor" value={fmtPct(ca?.taxaConvInvestidor)} tone="indigo" size="md" />
-        <KpiCard label="Reinvestimento" value={fmtPct(ca?.reinvestimento)} sub="Reinvestment rate" tone="green" size="md" />
-        <KpiCard label="Saída de investidores" value={fmtPct(ca?.saidaInvestidores)} sub="Churn" tone={ca?.saidaInvestidores > 0 ? 'red' : 'green'} size="md" />
+        <Indicador id="I10" value={ca?.parceria ? `${ca.parceria.porEstado} / ${ca.parceria.comAporte}` : null} sub="por estado / com capital" tone="green" />
+        <Indicador id="I01" value={d ? EUR(ca?.capacidadeDeclarada) : null} sub="potencial, não confirmado" tone="amber" />
+        <Indicador id="G47" value={fmtNum(comKpis?.investClassificados)} tone="indigo" />
+        <Indicador id="G16" value={fmtNum(at?.followUpCalls?.valor)} delta={at?.followUpCalls?.delta} tone="indigo" />
+        <Indicador id="G17" value={fmtNum(at?.novosInvestidores)} delta={at?.deltas?.novosInvestidores} />
+        <Indicador id="G18" value={pct(ca?.taxaConvInvestidor)} tone="indigo" />
+        <Indicador id="G19" value={pct(ca?.reinvestimento)} tone="green" />
+        <Indicador id="G20" value={pct(ca?.saidaInvestidores)} tone={ca?.saidaInvestidores > 0 ? 'red' : 'green'} />
       </Group>
       <Group label="Consultores">
-        <MetricCard label="Chamadas" metric={{ valor: at?.chamadasConsultor, delta: at?.deltas?.chamadasConsultor }} />
-        <MetricCard label="Chamadas Somnium" metric={{ valor: at?.chamadasSomnium, delta: at?.deltas?.chamadasSomnium }} />
-        <MetricCard label="Novos consultores" metric={{ valor: at?.novosConsultores, delta: at?.deltas?.novosConsultores }} />
-        <KpiCard label="Taxa de conversão" value={fmtPct(co?.taxaConversao)} tone="indigo" size="md" />
-        <KpiCard label="Ativação" value={fmtPct(co?.ativacao)} sub="Activation rate" tone="green" size="md" />
-        <KpiCard label="Parceiros inativos" value={fmtPct(co?.parceirosInativos)} sub="Churn · 60d s/ imóvel" tone={co?.parceirosInativos > 0 ? 'red' : 'green'} size="md" />
-        <KpiCard label="Resposta ≤24h" value={fmtPct(co?.taxaResposta24h)} sub="Meta SOP 1: ≥ 80%" tone="indigo" size="md" />
+        <Indicador id="C16" value={fmtNum(at?.chamadasConsultor)} delta={at?.deltas?.chamadasConsultor} sub="chamadas no período" />
+        <Indicador id="G22" value={fmtNum(at?.chamadasSomnium)} delta={at?.deltas?.chamadasSomnium} />
+        <Indicador id="G23" value={fmtNum(at?.novosConsultores)} delta={at?.deltas?.novosConsultores} />
+        <Indicador id="G24" value={pct(co?.taxaConversao)} tone="indigo" />
+        <Indicador id="G25" value={pct(co?.ativacao)} tone="green" />
+        <Indicador id="G26" value={pct(co?.parceirosInativos)} tone={co?.parceirosInativos > 0 ? 'red' : 'green'} />
       </Group>
       {co?.premium?.length > 0 && (
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-muted mb-2 flex items-center gap-1.5">
-            <Trophy className="w-3 h-3 text-ink-muted" /> Lista Premium — parceiros por valor gerado
+            <Trophy className="w-3 h-3 text-ink-muted" /> Lista Premium — parceiros por imóveis enviados (lucro gerado por ligar)
           </p>
-          <RankList rows={co.premium} valueFmt={EUR} />
-        </div>
-      )}
-      {co?.lucroPorFonte?.length > 0 && (
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-muted mb-2">Lucro por fonte / canal</p>
-          <RankList rows={co.lucroPorFonte} valueFmt={EUR} />
+          <RankList rows={co.premium} valueFmt={(v) => (v ? EUR(v) : '—')} />
         </div>
       )}
     </Pillar>
@@ -134,6 +135,7 @@ export function ComercialDashboard({ data: d }) {
       {show('funil') && pilarFunil}
       {show('velocidade') && pilarVelocidade}
       {show('investidores') && pilarInvestidores}
+      <PorMedir departamento="comercial" />
     </div>
   )
 }

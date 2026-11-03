@@ -14,6 +14,7 @@ import { CountUp } from './CountUp.jsx'
  *  - size:  'sm' | 'md' | 'lg' (default md)
  *  - onClick: torna o card clicável com hover
  *  - delta: variação em % face ao período anterior (null = sem base de comparação)
+ *  - rotuloCompleto: mostra o rótulo inteiro em vez de o cortar com reticências
  *  - melhor: 'subir' | 'descer' | null — sentido em que a métrica é boa notícia;
  *           a cor da variação segue isto, não o sinal (null = sem cor)
  */
@@ -36,7 +37,7 @@ const SIZE_CONF = {
   lg: { card: 'p-5', value: 'font-display text-display font-medium', icon: 'w-11 h-11', iconSize: 'w-5 h-5' },
 }
 
-export function KpiCard({ icon: Icon, label, value, sub, tone = 'gray', size = 'md', onClick, active = false, className = '', delta, melhor = 'subir' }) {
+export function KpiCard({ icon: Icon, label, value, sub, tone = 'gray', size = 'md', onClick, active = false, className = '', delta, melhor = 'subir', rotuloCompleto = false }) {
   const t = TONE[tone] || TONE.gray
   const s = SIZE_CONF[size] || SIZE_CONF.md
   const interactive = !!onClick
@@ -60,7 +61,7 @@ export function KpiCard({ icon: Icon, label, value, sub, tone = 'gray', size = '
         </div>
       )}
       <div className="min-w-0 flex-1">
-        {label && <p className="text-overline uppercase font-medium truncate text-ink-muted">{label}</p>}
+        {label && <p className={`text-overline uppercase font-medium text-ink-muted ${rotuloCompleto ? '' : 'truncate'}`}>{label}</p>}
         <p className={`${s.value} num leading-tight truncate text-ink`}>{value == null ? '—' : <CountUp value={value} />}</p>
         {delta != null && <Variacao delta={delta} melhor={melhor} />}
         {sub && <p className="text-caption truncate mt-0.5 text-ink-muted">{sub}</p>}
