@@ -62,7 +62,7 @@ export function ComercialDashboard({ data: d, comKpis, alertas, periodo, onPerio
               sub={fn?.contactoEfetivo ? `${fn.contactoEfetivo.com} de ${fn.contactoEfetivo.total} imóveis` : 'sem imóveis adicionados'} />
             <Indicador id="C12" value={pctOuNulo(fn?.cumprimentoTarefas?.pct)} tone={fn?.cumprimentoTarefas?.pct < 80 ? 'amber' : 'green'}
               sub={fn?.cumprimentoTarefas?.vencidas ? `${fn.cumprimentoTarefas.noPrazo} de ${fn.cumprimentoTarefas.vencidas} tarefas` : 'sem prazos vencidos'} />
-            <Indicador id="G13" value={numOuNulo(ve?.throughput)} sub="negócios por mês" tone="green" />
+            <Indicador id="G13" value={numOuNulo(ve?.throughput == null ? null : Math.round(ve.throughput * 10) / 10)} sub="negócios por mês" tone="green" />
             <Indicador id="G29" value={co?.lucroPorFonte?.[0]?.origem ?? (ve?.throughput != null ? 'Sem fechos' : null)}
               sub={co?.lucroPorFonte?.[0] ? EUR(co.lucroPorFonte[0].lucro) : undefined} />
           </Numeros>
