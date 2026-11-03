@@ -1809,19 +1809,14 @@ Avalia a chamada CONTRA o(s) guiao(oes) das fases que identificares, com o objec
 Escreve em portugues de Portugal, directo e profissional. Se a chamada nao cobrir uma fase, deixa TODOS os campos sugestao_* dessa fase a null — nao inventes.`
 }
 
-// Corre a analise da transcricao com o Claude. Devolve o objecto parseado ou lanca.
-async function analisarTranscricaoIA(transcricao, consultorNome) {
-  if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY nao configurada')
-  const Anthropic = (await import('@anthropic-ai/sdk')).default
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 4096,
-    messages: [{ role: 'user', content: `${buildGravacaoPrompt(consultorNome)}\n\n--- TRANSCRICAO ---\n${transcricao}` }],
-  })
-  const respText = response.content?.[0]?.text || '{}'
-  const jsonMatch = respText.match(/\{[\s\S]*\}/)
-  return JSON.parse(jsonMatch?.[0] || respText)
+// A análise SOP 2 corre no Mac (Claude Code, plano Claude), como as restantes:
+// o backend põe a gravação em fila ('aguarda_analise') e o worker pede o prompt
+// em /gravacoes/:id/analise-sop2 e devolve a resposta.
+async function pedirAnaliseSop2(id) {
+  const { rows: [g] } = await pool.query(
+    `UPDATE consultor_gravacoes SET estado = 'aguarda_analise', erro = NULL, updated_at = $2
+     WHERE id = $1 AND COALESCE(btrim(transcricao), '') <> '' RETURNING *`, [id, new Date().toISOString()])
+  return g
 }
 
 // Upload de uma gravacao de chamada para um consultor. O audio e opcional —
@@ -2070,22 +2065,10 @@ router.post('/gravacoes/:id/transcricao', async (req, res) => {
     )
     if (!g) return res.status(404).json({ error: 'Gravacao nao encontrada' })
 
-    // Analise comercial SOP 2 (best-effort): falha nao bloqueia a transcricao.
+    // Analise comercial SOP 2: fica em fila para o Mac (worker).
     // Gravações do módulo de classificação só levam SOP 2 quando há imóvel.
     if (!g.etapa_consultor || g.imovel_id) {
-      try {
-        const cons = await Consultores.getById(g.consultor_id)
-        const analise = await analisarTranscricaoIA(transcricao, cons?.nome)
-        await pool.query(
-          `UPDATE consultor_gravacoes SET analise = $2, estado = 'analisado', updated_at = $3 WHERE id = $1`,
-          [req.params.id, JSON.stringify(analise), new Date().toISOString()]
-        )
-      } catch (e) {
-        await pool.query(
-          `UPDATE consultor_gravacoes SET erro = $2, updated_at = $3 WHERE id = $1`,
-          [req.params.id, `Analise: ${e.message}`, new Date().toISOString()]
-        )
-      }
+      await pedirAnaliseSop2(req.params.id)
     } else {
       await pool.query(`UPDATE consultor_gravacoes SET estado = 'analisado' WHERE id = $1`, [req.params.id])
     }
@@ -2123,24 +2106,51 @@ router.post('/gravacoes/:id/retomar', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-// (Re)correr a analise comercial sobre a transcricao existente.
+// (Re)correr a analise comercial sobre a transcricao existente: fica em fila
+// para o Mac, que a corre no ciclo seguinte do worker.
 router.post('/gravacoes/:id/analisar', async (req, res) => {
   try {
-    const { rows: [g] } = await pool.query('SELECT * FROM consultor_gravacoes WHERE id = $1', [req.params.id])
+    const g = await pedirAnaliseSop2(req.params.id)
+    if (!g) return res.status(404).json({ error: 'Gravacao nao encontrada ou sem transcricao' })
+    res.json(g)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Worker: análises SOP 2 em fila (ou presas em a_analisar há >30 min).
+router.get('/gravacoes/sop2/por-analisar', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id FROM consultor_gravacoes
+        WHERE COALESCE(btrim(transcricao), '') <> ''
+          AND (estado = 'aguarda_analise' OR (estado = 'a_analisar' AND updated_at < $1))
+        ORDER BY created_at ASC LIMIT 5`, [new Date(Date.now() - 30 * 60_000).toISOString()])
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Worker: sem `resposta` devolve { pedido }; com ela grava a análise.
+router.post('/gravacoes/:id/analise-sop2', async (req, res) => {
+  const id = req.params.id
+  const falha = (msg) => pool.query(`UPDATE consultor_gravacoes SET estado = 'transcrito', erro = $2, updated_at = $3 WHERE id = $1`,
+    [id, `Analise: ${String(msg).slice(0, 480)}`, new Date().toISOString()])
+  try {
+    if (req.body?.erro) { await falha(req.body.erro); return res.json({ ok: true }) }
+    const { rows: [g] } = await pool.query('SELECT * FROM consultor_gravacoes WHERE id = $1', [id])
     if (!g) return res.status(404).json({ error: 'Gravacao nao encontrada' })
-    if (!g.transcricao?.trim()) return res.status(400).json({ error: 'Sem transcricao para analisar' })
-    await pool.query(`UPDATE consultor_gravacoes SET estado = 'a_analisar', updated_at = $2 WHERE id = $1`,
-      [req.params.id, new Date().toISOString()])
-    const cons = await Consultores.getById(g.consultor_id)
-    const analise = await analisarTranscricaoIA(g.transcricao, cons?.nome)
+    if (!g.transcricao?.trim()) throw new Error('Sem transcricao para analisar')
+    if (req.body?.resposta == null) {
+      await pool.query(`UPDATE consultor_gravacoes SET estado = 'a_analisar', updated_at = $2 WHERE id = $1`, [id, new Date().toISOString()])
+      const cons = await Consultores.getById(g.consultor_id)
+      return res.json({ pedido: { passo: 'analise', modelo: 'sonnet', prompt: `${buildGravacaoPrompt(cons?.nome)}\n\n--- TRANSCRICAO ---\n${g.transcricao}` } })
+    }
+    const texto = String(req.body.resposta)
+    const analise = JSON.parse(texto.match(/\{[\s\S]*\}/)?.[0] || texto)
     const { rows: [final] } = await pool.query(
       `UPDATE consultor_gravacoes SET analise = $2, estado = 'analisado', erro = NULL, updated_at = $3 WHERE id = $1 RETURNING *`,
-      [req.params.id, JSON.stringify(analise), new Date().toISOString()]
-    )
-    res.json(final)
+      [id, JSON.stringify(analise), new Date().toISOString()])
+    res.json({ concluido: true, gravacao: final })
   } catch (e) {
-    await pool.query(`UPDATE consultor_gravacoes SET estado = 'transcrito', erro = $2, updated_at = $3 WHERE id = $1`,
-      [req.params.id, `Analise: ${e.message}`, new Date().toISOString()]).catch(() => {})
+    await falha(e.message).catch(() => {})
     res.status(500).json({ error: e.message })
   }
 })

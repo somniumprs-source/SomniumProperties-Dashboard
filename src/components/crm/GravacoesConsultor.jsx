@@ -27,7 +27,7 @@ export function GravacoesConsultor({ consultorId }) {
   useEffect(() => { loadGravacoes() }, [loadGravacoes])
 
   // Polling enquanto houver gravações em processamento.
-  const temPendentes = gravacoes.some(g => ['pendente', 'a_transcrever', 'a_analisar'].includes(g.estado))
+  const temPendentes = gravacoes.some(g => ['pendente', 'a_transcrever', 'aguarda_analise', 'a_analisar'].includes(g.estado))
   useEffect(() => {
     if (!temPendentes) return
     const t = setInterval(loadGravacoes, 10000)
@@ -41,6 +41,7 @@ export function GravacoesConsultor({ consultorId }) {
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || 'Falha na análise')
       setGravacoes(p => p.map(g => g.id === id ? data : g))
+      toast('Análise em fila. O Mac corre-a no próximo ciclo (até 3 minutos).', 'success')
     } catch (err) { toast(friendlyError(err.message || 'Falha na análise'), 'error') }
     setBusy(p => ({ ...p, [id]: null }))
   }

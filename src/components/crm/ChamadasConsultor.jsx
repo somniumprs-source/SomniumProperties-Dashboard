@@ -17,7 +17,7 @@ import { GuiaoConsultor } from './GuiaoConsultor.jsx'
 import { RevisaoAvaliacao, ClasseBadge } from './RevisaoAvaliacao.jsx'
 
 const AUDIO_ACCEPT = 'audio/*,.mp3,.m4a,.wav,.ogg,.webm,.mp4,.aac'
-const EM_PROCESSAMENTO = ['pendente', 'a_transcrever', 'a_analisar']
+const EM_PROCESSAMENTO = ['pendente', 'a_transcrever', 'aguarda_analise', 'a_analisar']
 const hojeISO = () => new Date().toISOString().slice(0, 10)
 const TRIAGEM = { avancar_discovery: 'Avançar para discovery', follow_up: 'Follow-up com data', descartar: 'Descartar' }
 
@@ -26,6 +26,7 @@ const ESTADO_META = {
   pendente:      { label: 'Em fila para transcrever', cls: 'bg-warning/10 text-warning border-warning/30', spin: false },
   a_transcrever: { label: 'A transcrever…', cls: 'bg-surface-muted text-ink border-line', spin: true },
   transcrito:    { label: 'Transcrito', cls: 'bg-surface-muted text-ink border-line', spin: false },
+  aguarda_analise: { label: 'Em fila para analisar', cls: 'bg-warning/10 text-warning border-warning/30', spin: false },
   a_analisar:    { label: 'A analisar…', cls: 'bg-surface-muted text-ink border-line', spin: true },
   analisado:     { label: 'Transcrito', cls: 'bg-surface-muted text-ink border-line', spin: false },
   erro:          { label: 'Erro', cls: 'bg-danger/10 text-danger border-danger/30', spin: false },

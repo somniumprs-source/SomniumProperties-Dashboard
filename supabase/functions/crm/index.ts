@@ -2448,17 +2448,14 @@ Avalia a chamada CONTRA o(s) guiao(oes) das fases que identificares, com o objec
 Escreve em portugues de Portugal, directo e profissional. Se a chamada nao cobrir uma fase, deixa TODOS os campos sugestao_* dessa fase a null — nao inventes.`;
 }
 
-async function analisarTranscricaoIA(transcricao: string, consultorNome: string) {
-  if (!Deno.env.get("ANTHROPIC_API_KEY")) throw new Error("ANTHROPIC_API_KEY nao configurada");
-  const client = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") });
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 4096,
-    messages: [{ role: "user", content: `${buildGravacaoPrompt(consultorNome)}\n\n--- TRANSCRICAO ---\n${transcricao}` }],
-  });
-  const respText = (response.content?.[0] as any)?.text || "{}";
-  const jsonMatch = respText.match(/\{[\s\S]*\}/);
-  return JSON.parse(jsonMatch?.[0] || respText);
+// A análise SOP 2 corre no Mac (Claude Code, plano Claude), como as restantes:
+// o backend põe a gravação em fila ('aguarda_analise') e o worker pede o prompt
+// em /gravacoes/:id/analise-sop2 e devolve a resposta.
+async function pedirAnaliseSop2(id: string) {
+  const { rows: [g] } = await pool.query(
+    `UPDATE consultor_gravacoes SET estado = 'aguarda_analise', erro = NULL, updated_at = $2
+     WHERE id = $1 AND COALESCE(btrim(transcricao), '') <> '' RETURNING *`, [id, new Date().toISOString()]);
+  return g;
 }
 
 async function nomeConsultor(id: string): Promise<string> {
@@ -2736,18 +2733,7 @@ app.post("/gravacoes/:id/transcricao", async (c: any) => {
 
     // Gravações do módulo de classificação só levam SOP 2 quando há imóvel.
     if (!g.etapa_consultor || g.imovel_id) {
-      try {
-        const analise = await analisarTranscricaoIA(transcricao, await nomeConsultor(g.consultor_id));
-        await pool.query(
-          `UPDATE consultor_gravacoes SET analise = $2, estado = 'analisado', updated_at = $3 WHERE id = $1`,
-          [id, JSON.stringify(analise), new Date().toISOString()],
-        );
-      } catch (e) {
-        await pool.query(
-          `UPDATE consultor_gravacoes SET erro = $2, updated_at = $3 WHERE id = $1`,
-          [id, `Analise: ${(e as Error).message}`, new Date().toISOString()],
-        );
-      }
+      await pedirAnaliseSop2(id);
     } else {
       await pool.query(`UPDATE consultor_gravacoes SET estado = 'analisado' WHERE id = $1`, [id]);
     }
@@ -2786,25 +2772,54 @@ app.post("/gravacoes/:id/retomar", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// (Re)correr a analise comercial sobre a transcricao existente.
+// (Re)correr a analise comercial sobre a transcricao existente: fica em fila
+// para o Mac, que a corre no ciclo seguinte do worker.
 app.post("/gravacoes/:id/analisar", async (c: any) => {
-  const id = c.req.param("id");
   try {
     await ensureGravacoesTable();
+    const g = await pedirAnaliseSop2(c.req.param("id"));
+    if (!g) return c.json({ error: "Gravacao nao encontrada ou sem transcricao" }, 404);
+    return c.json(g);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// Worker: análises SOP 2 em fila (ou presas em a_analisar há >30 min).
+app.get("/gravacoes/sop2/por-analisar", async (c: any) => {
+  try {
+    await ensureGravacoesTable();
+    const { rows } = await pool.query(
+      `SELECT id FROM consultor_gravacoes
+        WHERE COALESCE(btrim(transcricao), '') <> ''
+          AND (estado = 'aguarda_analise' OR (estado = 'a_analisar' AND updated_at < $1))
+        ORDER BY created_at ASC LIMIT 5`, [new Date(Date.now() - 30 * 60_000).toISOString()]);
+    return c.json(rows);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// Worker: sem `resposta` devolve { pedido }; com ela grava a análise.
+app.post("/gravacoes/:id/analise-sop2", async (c: any) => {
+  const id = c.req.param("id");
+  const body = await c.req.json().catch(() => ({}));
+  const falha = (msg: string) => pool.query(`UPDATE consultor_gravacoes SET estado = 'transcrito', erro = $2, updated_at = $3 WHERE id = $1`,
+    [id, `Analise: ${String(msg).slice(0, 480)}`, new Date().toISOString()]);
+  try {
+    if (body?.erro) { await falha(body.erro); return c.json({ ok: true }); }
     const { rows: [g] } = await pool.query("SELECT * FROM consultor_gravacoes WHERE id = $1", [id]);
     if (!g) return c.json({ error: "Gravacao nao encontrada" }, 404);
-    if (!g.transcricao?.trim()) return c.json({ error: "Sem transcricao para analisar" }, 400);
-    await pool.query(`UPDATE consultor_gravacoes SET estado = 'a_analisar', updated_at = $2 WHERE id = $1`,
-      [id, new Date().toISOString()]);
-    const analise = await analisarTranscricaoIA(g.transcricao, await nomeConsultor(g.consultor_id));
+    if (!g.transcricao?.trim()) throw new Error("Sem transcricao para analisar");
+    if (body?.resposta == null) {
+      await pool.query(`UPDATE consultor_gravacoes SET estado = 'a_analisar', updated_at = $2 WHERE id = $1`, [id, new Date().toISOString()]);
+      const prompt = `${buildGravacaoPrompt(await nomeConsultor(g.consultor_id))}\n\n--- TRANSCRICAO ---\n${g.transcricao}`;
+      return c.json({ pedido: { passo: "analise", modelo: "sonnet", prompt } });
+    }
+    const texto = String(body.resposta);
+    const analise = JSON.parse(texto.match(/\{[\s\S]*\}/)?.[0] || texto);
     const { rows: [final] } = await pool.query(
       `UPDATE consultor_gravacoes SET analise = $2, estado = 'analisado', erro = NULL, updated_at = $3 WHERE id = $1 RETURNING *`,
-      [id, JSON.stringify(analise), new Date().toISOString()],
-    );
-    return c.json(final);
+      [id, JSON.stringify(analise), new Date().toISOString()]);
+    return c.json({ concluido: true, gravacao: final });
   } catch (e) {
-    await pool.query(`UPDATE consultor_gravacoes SET estado = 'transcrito', erro = $2, updated_at = $3 WHERE id = $1`,
-      [id, `Analise: ${(e as Error).message}`, new Date().toISOString()]).catch(() => {});
+    await falha((e as Error).message).catch(() => {});
     return c.json({ error: (e as Error).message }, 500);
   }
 });

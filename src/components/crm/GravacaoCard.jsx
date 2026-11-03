@@ -21,6 +21,7 @@ const ESTADO_META = {
   pendente:      { label: 'Em fila',        cls: 'bg-warning/10 text-warning border-warning/30', spin: false },
   a_transcrever: { label: 'A transcrever…', cls: 'bg-surface-muted text-ink border-line',    spin: true },
   transcrito:    { label: 'Transcrito',     cls: 'bg-surface-muted text-ink border-line', spin: false },
+  aguarda_analise: { label: 'Em fila para analisar', cls: 'bg-warning/10 text-warning border-warning/30', spin: false },
   a_analisar:    { label: 'A analisar…',    cls: 'bg-surface-muted text-ink border-line',    spin: true },
   analisado:     { label: 'Analisado',      cls: 'bg-success/10 text-success border-success/30',  spin: false },
   erro:          { label: 'Erro',           cls: 'bg-danger/10 text-danger border-danger/30',        spin: false },
@@ -349,7 +350,7 @@ export function GravacaoCard({ g, busy, onAnalisar, onRetomar, onApagar, onRegis
             </div>
           ) : g.estado === 'transcrito' ? (
             <p className="text-xs text-ink-muted">Transcrição pronta. Carrega em Analisar para gerar a análise comercial.</p>
-          ) : ['pendente', 'a_transcrever', 'a_analisar'].includes(g.estado) ? (
+          ) : ['pendente', 'a_transcrever', 'aguarda_analise', 'a_analisar'].includes(g.estado) ? (
             <p className="text-xs text-ink-muted flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> A processar… isto pode demorar alguns minutos.</p>
           ) : null}
 

@@ -13,7 +13,9 @@
  *      A IA corre AQUI, no Claude Code do Mac (plano Claude, sem custo de API):
  *      POST /crm/gravacoes/:id/analise-consultor { respostas } devolve o prompt
  *      do passo seguinte ate a analise ficar concluida.
- *   8. GET  /crm/gravacoes/investidores/por-analisar -> chamadas com investidores
+ *   8. GET  /crm/gravacoes/sop2/por-analisar -> analise comercial SOP 2 das
+ *      chamadas com consultores: POST /crm/gravacoes/:id/analise-sop2.
+ *      GET  /crm/gravacoes/investidores/por-analisar -> chamadas com investidores
  *      (SOP 4), mesmo esquema: POST /crm/gravacoes/:id/analise-investidor
  *      devolve o prompt; o worker responde com { resposta }.
  *   9. GET  /crm/gravacoes/sinteses-investidores/por-gerar -> sinteses do
@@ -278,6 +280,9 @@ async function main() {
   let porAnalisar = []
   try { porAnalisar = await api('/crm/gravacoes/por-analisar') } catch (e) { err(`Falha a obter analises: ${e.message}`) }
   for (const g of porAnalisar || []) await analisarConsultor(g)
+  let sop2 = []
+  try { sop2 = await api('/crm/gravacoes/sop2/por-analisar') } catch (e) { err(`Falha a obter analises SOP 2: ${e.message}`) }
+  for (const g of sop2 || []) await passoUnico(`/crm/gravacoes/${g.id}/analise-sop2`, `Analise SOP 2 (consultor): gravacao ${g.id}`)
   let investidores = []
   try { investidores = await api('/crm/gravacoes/investidores/por-analisar') } catch (e) { err(`Falha a obter analises de investidores: ${e.message}`) }
   for (const g of investidores || []) await passoUnico(`/crm/gravacoes/${g.id}/analise-investidor`, `Analise SOP 4 (investidor): gravacao ${g.id} (${g.tipo_chamada})`)
