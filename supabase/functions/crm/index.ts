@@ -6782,6 +6782,61 @@ async function ensureVistoriasObraTable() {
   _vistoriasObraTableEnsured = true;
 }
 
+// ── Bloqueios e prazos contratuais do projeto (O09, W04) ──
+// Só a equipa interna: são notas de gestão, não informação para investidores.
+const TIPOS_BLOQUEIO = ["bloqueio", "prazo"];
+const eDia = (v: unknown) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ""));
+async function soEquipaInterna(c: any) {
+  const u = await resolveCrmUser(c).catch(() => null);
+  if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return null;
+  return u || {};
+}
+
+app.get("/projetos/:negocioId/bloqueios", async (c: any) => {
+  try {
+    if (!(await soEquipaInterna(c))) return c.json({ error: "Sem acesso" }, 403);
+    const { rows } = await pool.query(
+      `SELECT * FROM projeto_bloqueios WHERE negocio_id = $1 ORDER BY resolvido_em IS NOT NULL, COALESCE(data_limite, aberto_em)`,
+      [c.req.param("negocioId")],
+    );
+    return c.json({ bloqueios: rows });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/projetos/:negocioId/bloqueios", async (c: any) => {
+  try {
+    const u: any = await soEquipaInterna(c);
+    if (!u) return c.json({ error: "Sem acesso" }, 403);
+    const { tipo, descricao, depende_de, aberto_em, data_limite } = await c.req.json().catch(() => ({}));
+    if (!TIPOS_BLOQUEIO.includes(tipo)) return c.json({ error: "Tipo inválido" }, 400);
+    if (!String(descricao || "").trim()) return c.json({ error: "Indica a descrição" }, 400);
+    if (tipo === "prazo" && !eDia(data_limite)) return c.json({ error: "Indica a data limite" }, 400);
+    if (aberto_em && !eDia(aberto_em)) return c.json({ error: "Data de início inválida" }, 400);
+    const { rows } = await pool.query(
+      `INSERT INTO projeto_bloqueios (id, negocio_id, tipo, descricao, depende_de, aberto_em, data_limite, autor)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6, to_char(current_date, 'YYYY-MM-DD')), $7, $8) RETURNING *`,
+      [crypto.randomUUID(), c.req.param("negocioId"), tipo, String(descricao).trim(), String(depende_de || "").trim() || null,
+        aberto_em || null, eDia(data_limite) ? data_limite : null, u.nome || u.email || null],
+    );
+    return c.json(rows[0], 201);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// Só se resolve ou reabre: o histórico dos bloqueios não se apaga.
+app.put("/projetos/:negocioId/bloqueios/:id", async (c: any) => {
+  try {
+    if (!(await soEquipaInterna(c))) return c.json({ error: "Sem acesso" }, 403);
+    const { resolvido_em } = await c.req.json().catch(() => ({}));
+    if (resolvido_em != null && !eDia(resolvido_em)) return c.json({ error: "Data inválida" }, 400);
+    const { rows } = await pool.query(
+      `UPDATE projeto_bloqueios SET resolvido_em = $1, updated_at = NOW() WHERE id = $2 AND negocio_id = $3 RETURNING *`,
+      [resolvido_em ?? null, c.req.param("id"), c.req.param("negocioId")],
+    );
+    if (!rows.length) return c.json({ error: "Não encontrado" }, 404);
+    return c.json(rows[0]);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
 app.get("/projetos/:negocioId/vistorias", async (c: any) => {
   try {
     await ensureVistoriasObraTable();

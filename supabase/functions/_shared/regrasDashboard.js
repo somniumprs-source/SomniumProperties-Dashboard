@@ -209,3 +209,106 @@ export function resumoProjetos(negocios, fases, despesas, hoje = new Date()) {
     };
   });
 }
+
+// ── Entrega 2, fase 2 ────────────────────────────────────────────────────
+
+// Uma confirmação de capital vale 30 dias (decisão do CEO, 03/11/2026: 90 era
+// demasiado). Mudar aqui muda a ficha do investidor e o Dashboard.
+export const VALIDADE_CONFIRMACAO_DIAS = 30;
+
+export function validadeConfirmacao(inv, hoje = new Date()) {
+  const em = dataPrazo(inv?.capitalConfirmadoEm);
+  if (!em || !(inv.capitalConfirmado > 0)) return null;
+  const ate = new Date(em.getTime() + VALIDADE_CONFIRMACAO_DIAS * DIA_MS);
+  return { ate, valida: ate.getTime() >= hoje.getTime() };
+}
+
+// Capital confirmado (I02) e validade das confirmações (I09).
+export function capitalConfirmado(investidores, hoje = new Date()) {
+  const comConfirmacao = investidores
+    .map((i) => ({ i, v: validadeConfirmacao(i, hoje) }))
+    .filter((x) => x.v);
+  const validas = comConfirmacao.filter((x) => x.v.valida);
+  return {
+    valido: validas.reduce((s, x) => s + x.i.capitalConfirmado, 0),
+    confirmacoes: comConfirmacao.length,
+    validas: validas.length,
+    pctValidas: comConfirmacao.length ? Math.round(validas.length / comConfirmacao.length * 10000) / 100 : null,
+  };
+}
+
+// Falta de financiamento (I04): capital pedido pelos imóveis em fase de
+// proposta face ao capital confirmado e válido. Reservas por operação ainda
+// não existem, por isso todo o capital confirmado conta como disponível.
+const FASES_A_FINANCIAR = new Set([
+  "Proposta aceite", "Enviar proposta ao investidor", "Follow Up após proposta",
+]);
+export function faltaFinanciamento(imoveis, analises, capitalValido) {
+  const ids = new Set(imoveis.filter((i) => FASES_A_FINANCIAR.has(limpaEstado(i.estado))).map((i) => i.id));
+  const porImovel = new Map();
+  for (const a of analises || []) {
+    if (ids.has(a.imovel_id) && a.capital_necessario > 0) porImovel.set(a.imovel_id, a.capital_necessario);
+  }
+  const necessidade = [...porImovel.values()].reduce((s, v) => s + v, 0);
+  return {
+    operacoes: porImovel.size,
+    necessidade,
+    falta: Math.max(0, necessidade - capitalValido),
+    cobertura: necessidade > 0 ? Math.round(Math.min(capitalValido / necessidade, 1) * 10000) / 100 : null,
+  };
+}
+
+// Bloqueios (O09) e prazos contratuais (W04) ainda abertos.
+export function resumoBloqueios(registos, hoje = new Date()) {
+  const abertos = registos.filter((b) => !b.resolvido_em);
+  // Aberto num dia conta desde o início desse dia (o prazo é até ao fim).
+  const inicioDia = (d) => new Date(/^\d{4}-\d{2}-\d{2}$/.test(d) ? `${d}T00:00:00` : d);
+  const dias = (d) => Math.max(0, Math.floor((hoje.getTime() - inicioDia(d).getTime()) / DIA_MS));
+  const bloqueios = abertos.filter((b) => b.tipo === "bloqueio" && dataPrazo(b.aberto_em))
+    .map((b) => ({ id: b.id, negocioId: b.negocio_id, descricao: b.descricao, dependeDe: b.depende_de, dias: dias(b.aberto_em) }))
+    .sort((a, b) => b.dias - a.dias);
+  const prazos = abertos.filter((b) => b.tipo === "prazo" && dataPrazo(b.data_limite))
+    .map((b) => {
+      const falta = Math.ceil((dataPrazo(b.data_limite).getTime() - hoje.getTime()) / DIA_MS);
+      return { id: b.id, negocioId: b.negocio_id, descricao: b.descricao, dataLimite: b.data_limite, diasAteLimite: falta };
+    })
+    .sort((a, b) => a.diasAteLimite - b.diasAteLimite);
+  return {
+    bloqueios,
+    maiorBloqueioDias: bloqueios.length ? bloqueios[0].dias : 0,
+    prazos,
+    prazosVencidos: prazos.filter((p) => p.diasAteLimite < 0).length,
+    prazos30Dias: prazos.filter((p) => p.diasAteLimite >= 0 && p.diasAteLimite <= 30).length,
+  };
+}
+
+// Resposta em 24 horas (G27), nos dois sentidos. Uma mensagem conta como
+// respondida pelo primeiro contacto do outro lado nos 7 dias seguintes; depois
+// disso já é conversa nova e fica de fora.
+const JANELA_RESPOSTA_H = 7 * 24;
+export function respostas24h(interacoes) {
+  const porPessoa = new Map();
+  for (const r of interacoes) {
+    if (r.direcao !== "Enviado" && r.direcao !== "Recebido") continue;
+    if (!porPessoa.has(r.consultor_id)) porPessoa.set(r.consultor_id, []);
+    porPessoa.get(r.consultor_id).push(r);
+  }
+  const horas = { Enviado: [], Recebido: [] };
+  for (const lista of porPessoa.values()) {
+    lista.sort((a, b) => new Date(a.data_hora).getTime() - new Date(b.data_hora).getTime());
+    for (let i = 0; i < lista.length; i++) {
+      const outro = lista[i].direcao === "Enviado" ? "Recebido" : "Enviado";
+      if (i > 0 && lista[i - 1].direcao === lista[i].direcao) continue; // só a primeira de cada sequência
+      const resp = lista.slice(i + 1).find((x) => x.direcao === outro);
+      if (!resp) continue;
+      const h = (new Date(resp.data_hora).getTime() - new Date(lista[i].data_hora).getTime()) / 3600000;
+      if (h >= 0 && h <= JANELA_RESPOSTA_H) horas[lista[i].direcao].push(h);
+    }
+  }
+  const taxa = (v) => ({
+    amostra: v.length,
+    pct: v.length ? Math.round(v.filter((h) => h <= 24).length / v.length * 10000) / 100 : null,
+  });
+  // Enviado pela Somnium → resposta do consultor; Recebido → resposta da Somnium.
+  return { consultor: taxa(horas.Enviado), somnium: taxa(horas.Recebido) };
+}

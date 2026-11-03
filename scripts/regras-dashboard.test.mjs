@@ -4,7 +4,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar,
-  negocioFechado, escrituraRegistada, imoveisContactados, motivosPerda, cumprimentoTarefas, contribuicaoSomnium, resumoFases, custoRealObra, mediana, diasNaFase, resumoAnalisesNegocios, resumoProjetos,
+  negocioFechado, escrituraRegistada, imoveisContactados, motivosPerda, cumprimentoTarefas, contribuicaoSomnium, capitalConfirmado, faltaFinanciamento, resumoBloqueios, respostas24h, VALIDADE_CONFIRMACAO_DIAS, resumoFases, custoRealObra, mediana, diasNaFase, resumoAnalisesNegocios, resumoProjetos,
 } from '../supabase/functions/_shared/regrasDashboard.js'
 import { CATALOGO, NUCLEO, POR_MEDIR, ESTADOS, DEPARTAMENTOS, metrica, pesquisar } from '../src/lib/catalogoMetricas.js'
 
@@ -198,4 +198,52 @@ test('contribuição da Somnium: Lages 40% tudo Somnium; sem parte não calcula'
   assert.equal(contribuicaoSomnium({ categoria: 'CAEP', quotaSomnium: 15000, parteSomniumPct: 66.67 }), 10000.5)
   assert.equal(contribuicaoSomnium({ categoria: 'Wholesaling', lucroEstimado: 3000, lucroReal: 1500, parteSomniumPct: 100 }), 3000)
   assert.equal(contribuicaoSomnium({ categoria: 'CAEP', quotaSomnium: 15000 }), null)
+})
+
+test('capital confirmado: vale 30 dias e só com valor', () => {
+  assert.equal(VALIDADE_CONFIRMACAO_DIAS, 30)
+  const hoje = new Date('2026-11-03T12:00:00')
+  const r = capitalConfirmado([
+    { capitalConfirmado: 100000, capitalConfirmadoEm: '2026-10-20' },
+    { capitalConfirmado: 50000, capitalConfirmadoEm: '2026-09-01' },
+    { capitalConfirmado: 0, capitalConfirmadoEm: '2026-11-01' },
+    { capitalConfirmado: 70000 },
+  ], hoje)
+  assert.deepEqual(r, { valido: 100000, confirmacoes: 2, validas: 1, pctValidas: 50 })
+})
+
+test('falta de financiamento: só imóveis em fase de proposta', () => {
+  const im = [{ id: 'a', estado: 'Proposta aceite' }, { id: 'b', estado: 'Estudo de VVR' }, { id: 'c', estado: 'Enviar proposta ao investidor' }]
+  const an = [{ imovel_id: 'a', capital_necessario: 150000 }, { imovel_id: 'b', capital_necessario: 999999 }, { imovel_id: 'c', capital_necessario: 50000 }]
+  assert.deepEqual(faltaFinanciamento(im, an, 120000), { operacoes: 2, necessidade: 200000, falta: 80000, cobertura: 60 })
+  assert.equal(faltaFinanciamento([], [], 0).cobertura, null)
+})
+
+test('bloqueios e prazos: só abertos, com dias e vencidos', () => {
+  const hoje = new Date('2026-11-03T12:00:00')
+  const r = resumoBloqueios([
+    { id: 1, tipo: 'bloqueio', descricao: 'Certidão ARU', aberto_em: '2026-10-01' },
+    { id: 2, tipo: 'bloqueio', descricao: 'resolvido', aberto_em: '2026-09-01', resolvido_em: '2026-10-01' },
+    { id: 3, tipo: 'prazo', descricao: 'CPCV', data_limite: '2026-11-20' },
+    { id: 4, tipo: 'prazo', descricao: 'Cedência', data_limite: '2026-11-01' },
+  ], hoje)
+  assert.equal(r.maiorBloqueioDias, 33)
+  assert.equal(r.bloqueios.length, 1)
+  assert.equal(r.prazosVencidos, 1)
+  assert.equal(r.prazos30Dias, 1)
+  assert.equal(r.prazos[0].descricao, 'Cedência')
+})
+
+test('resposta em 24 h: nos dois sentidos, conversa nova fora', () => {
+  const r = respostas24h([
+    { consultor_id: 'x', direcao: 'Enviado', data_hora: '2026-11-01T10:00:00Z' },
+    { consultor_id: 'x', direcao: 'Enviado', data_hora: '2026-11-01T12:00:00Z' },
+    { consultor_id: 'x', direcao: 'Recebido', data_hora: '2026-11-01T20:00:00Z' },
+    { consultor_id: 'x', direcao: 'Enviado', data_hora: '2026-11-03T08:00:00Z' },
+    { consultor_id: 'y', direcao: 'Recebido', data_hora: '2026-10-01T10:00:00Z' },
+    { consultor_id: 'y', direcao: 'Enviado', data_hora: '2026-10-20T10:00:00Z' },
+    { consultor_id: 'y', direcao: 'Nota', data_hora: '2026-10-20T11:00:00Z' },
+  ])
+  assert.deepEqual(r.consultor, { amostra: 1, pct: 100 })
+  assert.deepEqual(r.somnium, { amostra: 1, pct: 0 })
 })

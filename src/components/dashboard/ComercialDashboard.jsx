@@ -88,6 +88,8 @@ export function ComercialDashboard({ data: d, comKpis, alertas, periodo, onPerio
             <Indicador id="G47" value={fmtNum(comKpis?.investClassificados)} tone="indigo" />
             <Indicador id="G18" value={pctOuNulo(ca?.taxaConvInvestidor)} tone="indigo" />
             <Indicador id="G19" value={pctOuNulo(ca?.reinvestimento)} tone="green" />
+            <Indicador id="I09" value={pctOuNulo(ca?.confirmado?.pctValidas)} tone={ca?.confirmado?.pctValidas < 100 ? 'amber' : 'green'}
+              sub={ca?.confirmado ? (ca.confirmado.confirmacoes ? `${ca.confirmado.validas} de ${ca.confirmado.confirmacoes} confirmações válidas` : 'sem confirmações registadas') : undefined} />
           </Numeros>
         </Bloco>
         <Bloco titulo="Atividade no período" nota={notaPeriodo} acao={seletor}>
@@ -107,6 +109,15 @@ export function ComercialDashboard({ data: d, comKpis, alertas, periodo, onPerio
             <Indicador id="G25" value={pctOuNulo(co?.ativacao)} tone="green" />
             <Indicador id="G24" value={pctOuNulo(co?.taxaConversao)} tone="indigo" />
             <Indicador id="G26" value={pctOuNulo(co?.parceirosInativos)} tone={co?.parceirosInativos > 0 ? 'red' : 'green'} />
+          </Numeros>
+        </Bloco>
+        <Bloco titulo="Resposta em 24 horas" nota="meta: 80%">
+          <Numeros>
+            {[['consultor', 'Consultores à Somnium'], ['somnium', 'Somnium aos consultores']].map(([k, quem]) => {
+              const r = co?.respostas24h?.[k]
+              return <Indicador key={k} id="G27" value={pctOuNulo(r?.pct)} tone={r?.pct != null && r.pct < 80 ? 'red' : 'green'}
+                sub={r ? `${quem} · ${r.amostra ? `${r.amostra} ${r.amostra === 1 ? 'resposta' : 'respostas'}` : 'sem respostas registadas'}` : quem} />
+            })}
           </Numeros>
         </Bloco>
         <Bloco titulo="Atividade no período" nota={notaPeriodo} acao={seletor}>

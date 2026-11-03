@@ -122,6 +122,7 @@ export { MOTIVOS_NAO_INTERESSA_PADRAO } from './detailPanelConstants.js'
 import { MOTIVOS_NAO_INTERESSA_PADRAO } from './detailPanelConstants.js'
 import { confirmar } from '../ui/ConfirmDialog.jsx'
 import { dotClass, pillClass } from '../../lib/statusTone.js'
+import { validadeConfirmacao, VALIDADE_CONFIRMACAO_DIAS } from '../../../supabase/functions/_shared/regrasDashboard.js'
 
 function PontosRiscosTab({ imovel, endpoint, id, onUpdate, toast }) {
   const CAMPOS = [
@@ -2770,7 +2771,7 @@ function InvestidorEditSections({ data, form, setField }) {
   const isAtivo = parseJsonArray(form.tipo_principal).includes('Ativo')
   const sec = {
     identificacao: ['nome','ref_investidor','tipo_principal','status','classificacao','origem','data_primeiro_contacto'],
-    capital:       ['capital_min','capital_max','estrategia','perfil_risco','roi_pretendido','roi_anualizado_pretendido','origem_capital','montante_investido'],
+    capital:       ['capital_min','capital_max','estrategia','perfil_risco','roi_pretendido','roi_anualizado_pretendido','origem_capital','montante_investido','capital_confirmado','data_capital_confirmado'],
     preferencias:  ['tipo_imovel_preferido','localizacao_preferida','regioes_preferidas','experiencia_imobiliario','equipa_obras'],
     contacto:      ['telemovel','email','preferencia_contacto','nda_assinado'],
     timeline:      ['data_primeiro_contacto','data_reuniao','data_ultimo_contacto'],
@@ -2800,6 +2801,8 @@ function InvestidorEditSections({ data, form, setField }) {
     <Section icon={Briefcase} title="Capital & Estratégia" fields={sec.capital} form={form} defaultOpen>
       <EF label="Capital Min (€)" field="capital_min" form={form} set={setField} type="number" />
       <EF label="Capital Max (€)" field="capital_max" form={form} set={setField} type="number" />
+      <EF label="Capital confirmado (€)" field="capital_confirmado" form={form} set={setField} type="number" />
+      <EF label="Confirmado em" field="data_capital_confirmado" form={form} set={setField} type="date" />
       <EF label="Perfil Risco" field="perfil_risco" form={form} set={setField} type="select" options={INV_PERFIL_RISCO_OPTS} />
       <EF label="ROI Previsto" field="roi_pretendido" form={form} set={setField} type="select" options={roiOpts} />
       <EF label="ROI Anualizado Previsto" field="roi_anualizado_pretendido" form={form} set={setField} type="select" options={roiOpts} />
@@ -2867,6 +2870,15 @@ function InvestidorEditSections({ data, form, setField }) {
 }
 
 // Bloco de leitura — espelho das 6 secções.
+// Confirmação de capital: vale VALIDADE_CONFIRMACAO_DIAS dias (I02, I09).
+function textoConfirmacao(data) {
+  const v = validadeConfirmacao({ capitalConfirmado: Number(data.capital_confirmado), capitalConfirmadoEm: data.data_capital_confirmado })
+  if (!v) return null
+  const valor = `€${Number(data.capital_confirmado).toLocaleString('pt-PT')}`
+  const ate = v.ate.toLocaleDateString('pt-PT')
+  return v.valida ? `${valor} · válido até ${ate}` : `${valor} · caducou a ${ate} (mais de ${VALIDADE_CONFIRMACAO_DIAS} dias)`
+}
+
 function InvestidorReadSections({ data }) {
   const estrategia = parseJsonArray(data.estrategia)
   const tipoImovel = parseJsonArray(data.tipo_imovel_preferido)
@@ -2876,7 +2888,7 @@ function InvestidorReadSections({ data }) {
   const labelLocalizacao = isAtivo ? 'Área de Atuação (Distritos)' : 'Localização'
   const sec = {
     identificacao: ['nome','ref_investidor','tipo_principal','status','classificacao','origem','data_primeiro_contacto'],
-    capital:       ['capital_min','capital_max','estrategia','perfil_risco','roi_pretendido','roi_anualizado_pretendido','origem_capital','montante_investido'],
+    capital:       ['capital_min','capital_max','estrategia','perfil_risco','roi_pretendido','roi_anualizado_pretendido','origem_capital','montante_investido','capital_confirmado','data_capital_confirmado'],
     preferencias:  ['tipo_imovel_preferido','localizacao_preferida','regioes_preferidas','experiencia_imobiliario','equipa_obras'],
     contacto:      ['telemovel','email','preferencia_contacto','nda_assinado'],
     timeline:      ['data_primeiro_contacto','data_reuniao','data_ultimo_contacto'],
@@ -2907,6 +2919,7 @@ function InvestidorReadSections({ data }) {
       <Field label="ROI Anualizado Previsto" value={data.roi_anualizado_pretendido} />
       <Field label="Origem Capital" value={data.origem_capital} />
       <Field label="Montante Investido" value={data.montante_investido > 0 ? `€${Number(data.montante_investido).toLocaleString('pt-PT')}` : '—'} />
+      <Field label="Capital confirmado" value={textoConfirmacao(data)} />
       <div className="col-span-2 md:col-span-3">
         <p className="text-xs text-ink-muted mb-1">Estratégia</p>
         {estrategia.length > 0 ? (

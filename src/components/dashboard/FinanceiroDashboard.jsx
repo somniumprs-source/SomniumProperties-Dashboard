@@ -50,6 +50,16 @@ export function FinanceiroDashboard({ data: d, finKpis: f, analises: a, periodo,
             <Indicador id="I08" value={pctOuNulo(ca?.concentracaoTop3)} tone={ca?.concentracaoTop3 > 60 ? 'red' : 'amber'} />
           </Numeros>
         </Bloco>
+        <Bloco titulo="Para novos negócios" nota="capital confirmado nos últimos 30 dias">
+          <Numeros>
+            <Indicador id="I02" value={eur(ca?.confirmado?.valido)} tone="green"
+              sub={ca?.confirmado ? `${ca.confirmado.validas} ${ca.confirmado.validas === 1 ? 'investidor' : 'investidores'}` : undefined} />
+            <Indicador id="I04" value={eur(ca?.financiamento?.falta)} tone={ca?.financiamento?.falta > 0 ? 'red' : 'green'}
+              sub={ca?.financiamento ? (ca.financiamento.operacoes
+                ? `cobertura ${pctOuNulo(ca.financiamento.cobertura)} de ${EUR(ca.financiamento.necessidade)} · ${ca.financiamento.operacoes} ${ca.financiamento.operacoes === 1 ? 'operação' : 'operações'}`
+                : 'sem operações em fase de proposta') : undefined} />
+          </Numeros>
+        </Bloco>
         <Bloco titulo="No período" nota={notaPeriodo} acao={seletor}>
           <Numeros>
             <Indicador id="G42" value={eur(ca?.capitalPerdido)} sub={ca?.capitalPerdidoPct != null ? `${pctOuNulo(ca.capitalPerdidoPct)} do capital` : undefined} tone={ca?.capitalPerdido > 0 ? 'red' : 'green'} />

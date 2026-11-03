@@ -200,7 +200,7 @@ export async function lerContactoPessoa(pool, tipo, id) {
   const { cfg } = p
   const t = await tarefaAberta(pool, tipo, id)
   const { rows: feitos } = await pool.query(
-    `SELECT x.id, x.data_hora AS quando, x.canal, x.notas, x.resultado, x.proxima_data, x.autor,
+    `SELECT x.id, x.data_hora AS quando, x.canal, x.direcao, x.notas, x.resultado, x.proxima_data, x.autor,
             ${tipo === 'consultor' ? 'x.imovel_id AS imovel_antigo_id, i.nome AS imovel_antigo_nome, x.finalidade' : `NULL AS imovel_antigo_id, NULL AS imovel_antigo_nome, ${tipo === 'investidor' ? 'x.finalidade' : 'NULL AS finalidade'}`}
      FROM ${cfg.interacoes} x ${tipo === 'consultor' ? 'LEFT JOIN imoveis i ON i.id = x.imovel_id' : ''}
      WHERE x.${cfg.fk} = $1 ORDER BY x.data_hora DESC LIMIT 100`,
@@ -212,7 +212,7 @@ export async function lerContactoPessoa(pool, tipo, id) {
     // Interações antigas guardavam um único imóvel na própria linha.
     if (!meus.length && f.imovel_antigo_id) meus.push({ imovel_id: f.imovel_antigo_id, imovel_nome: f.imovel_antigo_nome, texto: null })
     return {
-      id: f.id, quando: f.quando, canal: f.canal, notas: f.notas, resultado: f.resultado || null,
+      id: f.id, quando: f.quando, canal: f.canal, direcao: f.direcao || null, notas: f.notas, resultado: f.resultado || null,
       proxima_data: f.proxima_data || null, autor: f.autor || null, finalidade: f.finalidade || null,
       assuntos: meus.map(a => ({ imovel_id: a.imovel_id, imovel_nome: a.imovel_nome, texto: a.texto })),
     }
@@ -301,7 +301,7 @@ export async function registarContactoPessoa(poolOuCx, tipo, id, opcoes = {}) {
 }
 
 async function registarContactoPessoaTx(pool, tipo, id, {
-  resultado, quando = null, canal = 'Chamada', notas = '', finalidade = null, tratados = [], novos = [], proximo = null, avulso = false, user = null,
+  resultado, quando = null, canal = 'Chamada', notas = '', finalidade = null, direcao = 'Enviado', tratados = [], novos = [], proximo = null, avulso = false, user = null,
 } = {}) {
   const p = await carregarPessoa(pool, tipo, id)
   if (!p) return null
@@ -309,6 +309,8 @@ async function registarContactoPessoaTx(pool, tipo, id, {
   const semSucesso = resultado === 'Sem sucesso'
   if (!RESULTADOS_CONTACTO.includes(resultado)) throw new Error('Resultado inválido')
   if (!CANAIS_CONTACTO.includes(canal)) throw new Error('Canal inválido')
+  // Enviado = a Somnium contactou; Recebido = a pessoa contactou a Somnium (G27).
+  if (!['Enviado', 'Recebido'].includes(direcao)) throw new Error('Indica quem contactou')
   if (semSucesso && !(notas || '').trim()) throw new Error('Indica o motivo do contacto sem sucesso')
   if (semSucesso && !eData(proximo?.data)) throw new Error('Indica a nova data do contacto')
   if (proximo?.data && !eData(proximo.data)) throw new Error('Data do próximo contacto inválida')
@@ -322,7 +324,7 @@ async function registarContactoPessoaTx(pool, tipo, id, {
   const interacaoId = randomUUID()
   const agora = new Date().toISOString()
   const cols = ['id', cfg.fk, 'data_hora', 'canal', 'direcao', 'notas', 'resultado', 'proxima_data', 'autor', 'created_at', 'updated_at']
-  const vals = [interacaoId, id, feitoEm, canal, 'Enviado', (notas || '').trim() || null, resultado, proximo?.data || null, user?.nome || user?.email || null, agora, agora]
+  const vals = [interacaoId, id, feitoEm, canal, direcao, (notas || '').trim() || null, resultado, proximo?.data || null, user?.nome || user?.email || null, agora, agora]
   if (COM_FINALIDADE.includes(tipo)) { cols.push('finalidade'); vals.push(finalidade === 'discovery' ? 'discovery' : 'follow_up') }
   await pool.query(`INSERT INTO ${cfg.interacoes} (${cols.join(', ')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(', ')})`, vals)
 

@@ -506,6 +506,8 @@ function TabResumo({ resumo, fases, onChange, readOnly }) {
 
       <RegistoFecho negocio={negocio} onChange={onChange} readOnly={readOnly} />
 
+      <BloqueiosPrazos negocioId={negocio.id} readOnly={readOnly} />
+
       {fases.length > 0 && <GanttFases fases={fases} negocio={negocio} />}
 
       {negocio.notas && (
@@ -581,6 +583,98 @@ function RegistoFecho({ negocio, onChange, readOnly }) {
       <p className="text-[11px] text-ink-muted max-w-xs">
         Sem escritura o negócio não conta como fechado. A parte da Somnium é a percentagem da quota que fica para a Somnium (CAEP normal: 66,67%).
       </p>
+    </Card>
+  )
+}
+
+// Bloqueios (O09) e prazos contratuais (W04): resolvem-se, nunca se apagam.
+function BloqueiosPrazos({ negocioId, readOnly }) {
+  const toast = useToast()
+  const hoje = new Date().toISOString().slice(0, 10)
+  const vazio = { tipo: 'bloqueio', descricao: '', depende_de: '', aberto_em: hoje, data_limite: '' }
+  const [lista, setLista] = useState(null)
+  const [novo, setNovo] = useState(null)
+  const [saving, setSaving] = useState(false)
+
+  async function carregar() {
+    const r = await apiFetch(`/api/crm/projetos/${negocioId}/bloqueios`).catch(() => null)
+    setLista(r?.ok ? (await r.json()).bloqueios : [])
+  }
+  useEffect(() => { carregar() }, [negocioId])
+
+  async function pedir(caminho, metodo, corpo) {
+    setSaving(true)
+    const r = await apiFetch(`/api/crm/projetos/${negocioId}/bloqueios${caminho}`, {
+      method: metodo, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo),
+    })
+    setSaving(false)
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao guardar: ${err.error || r.status}`, 'error', 3500)
+      return false
+    }
+    await carregar()
+    return true
+  }
+
+  async function adicionar(e) {
+    e.preventDefault()
+    if (await pedir('', 'POST', novo)) setNovo(null)
+  }
+
+  const abertos = (lista || []).filter(b => !b.resolvido_em)
+  const resolvidos = (lista || []).filter(b => b.resolvido_em)
+  const linha = (b) => (
+    <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+      <span className={b.resolvido_em ? 'text-ink-muted line-through' : 'text-ink'}>
+        <span className="text-[10px] uppercase tracking-wide font-semibold text-ink-muted mr-2">{b.tipo === 'prazo' ? 'Prazo' : 'Bloqueio'}</span>
+        {b.descricao}{b.depende_de ? ` · depende de ${b.depende_de}` : ''}
+      </span>
+      <span className="flex items-center gap-3 text-xs text-ink-muted">
+        {b.tipo === 'prazo' ? `até ${fmtData(b.data_limite)}` : `desde ${fmtData(b.aberto_em)}`}
+        {b.resolvido_em && ` · resolvido a ${fmtData(b.resolvido_em)}`}
+        {!readOnly && (b.resolvido_em
+          ? <button type="button" disabled={saving} onClick={() => pedir(`/${b.id}`, 'PUT', { resolvido_em: null })} className="underline">Reabrir</button>
+          : <button type="button" disabled={saving} onClick={() => pedir(`/${b.id}`, 'PUT', { resolvido_em: hoje })} className="font-medium text-ink underline">Resolvido hoje</button>)}
+      </span>
+    </li>
+  )
+
+  if (lista === null) return null
+  return (
+    <Card padding="sm">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] uppercase tracking-wide font-semibold text-ink-muted">Bloqueios e prazos</p>
+        {!readOnly && !novo && <Button size="sm" variant="ghost" icon={Plus} onClick={() => setNovo(vazio)}>Adicionar</Button>}
+      </div>
+      {abertos.length === 0 && !novo && <p className="text-xs text-ink-muted mt-1">Sem bloqueios nem prazos em aberto.</p>}
+      <ul className="divide-y divide-line">{abertos.map(linha)}</ul>
+      {novo && (
+        <form onSubmit={adicionar} className="mt-2 grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
+          <Select label="Tipo" value={novo.tipo} onChange={e => setNovo({ ...novo, tipo: e.target.value })}>
+            <option value="bloqueio">Bloqueio</option>
+            <option value="prazo">Prazo contratual</option>
+          </Select>
+          <Input label="Descrição" value={novo.descricao} required placeholder={novo.tipo === 'prazo' ? 'ex.: escritura do CPCV' : 'ex.: certidão ARU'}
+            onChange={e => setNovo({ ...novo, descricao: e.target.value })} />
+          {novo.tipo === 'prazo'
+            ? <Input type="date" label="Data limite" required value={novo.data_limite} onChange={e => setNovo({ ...novo, data_limite: e.target.value })} />
+            : <Input label="Depende de" value={novo.depende_de} placeholder="ex.: Câmara de Coimbra" onChange={e => setNovo({ ...novo, depende_de: e.target.value })} />}
+          {novo.tipo === 'bloqueio'
+            ? <Input type="date" label="Desde" value={novo.aberto_em} onChange={e => setNovo({ ...novo, aberto_em: e.target.value })} />
+            : <span />}
+          <div className="sm:col-span-4 flex gap-2 justify-end">
+            <Button size="sm" variant="ghost" type="button" onClick={() => setNovo(null)}>Cancelar</Button>
+            <Button size="sm" type="submit" disabled={saving}>Guardar</Button>
+          </div>
+        </form>
+      )}
+      {resolvidos.length > 0 && (
+        <details className="mt-1">
+          <summary className="text-xs text-ink-muted cursor-pointer">{resolvidos.length} {resolvidos.length === 1 ? 'resolvido' : 'resolvidos'}</summary>
+          <ul className="divide-y divide-line">{resolvidos.map(linha)}</ul>
+        </details>
+      )}
     </Card>
   )
 }

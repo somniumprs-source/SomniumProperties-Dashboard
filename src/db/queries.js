@@ -125,6 +125,7 @@ function mapInvestidor(r) {
     dataReuniao: r.data_reuniao, dataPrimeiroContacto: r.data_primeiro_contacto,
     dataUltimoContacto: r.data_ultimo_contacto,
     dataCapitalTransferido: r.data_capital_transferido,
+    capitalConfirmado: r.capital_confirmado, capitalConfirmadoEm: r.data_capital_confirmado,
     dataProximaAcao: r.data_proxima_acao,
     dataApresentacaoNegocio: r.data_apresentacao_negocio,
     dataAprovacaoNegocio: r.data_aprovacao_negocio,

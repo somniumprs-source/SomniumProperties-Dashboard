@@ -26,7 +26,7 @@ import {
 } from "../_shared/queries.ts";
 import { calcBurnRateMensal, despesasDaEmpresa } from "../_shared/financeCalc.ts";
 import { TTLCache } from "../_shared/ttlCache.ts";
-import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, escrituraRegistada, resumoFases, resumoProjetos, custoRealObra, imoveisContactados, motivosPerda, cumprimentoTarefas, diasNaFase } from "../_shared/regrasDashboard.js";
+import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, escrituraRegistada, resumoFases, resumoProjetos, custoRealObra, imoveisContactados, motivosPerda, cumprimentoTarefas, capitalConfirmado, faltaFinanciamento, resumoBloqueios, respostas24h, diasNaFase } from "../_shared/regrasDashboard.js";
 
 // Cache de endpoints pesados — port de endpointCache() em server.js (achado
 // da auditoria: dev tinha cache de 2-5min nestes 13 endpoints, produção
@@ -1345,7 +1345,7 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
     const periodo = ["semana", "mes", "trimestre", "ano"].includes(pq) ? pq : "mes";
     const regiao = c.req.header("x-regiao") || undefined;
 
-    const [imoveisRaw, investidoresRaw, consultores, negocios, despesas, ci, ii, pi, fasesRes, analisesRes, historicoRes, tarefasRes] = await Promise.all([
+    const [imoveisRaw, investidoresRaw, consultores, negocios, despesas, ci, ii, pi, fasesRes, analisesRes, historicoRes, tarefasRes, bloqueiosRes, analisesAtivasRes] = await Promise.all([
       getImóveis({ regiao }).catch(() => [] as any[]),
       getInvestidores({ regiao }).catch(() => [] as any[]),
       getConsultores({ regiao }).catch(() => [] as any[]),
@@ -1359,10 +1359,14 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
       pool.query(`SELECT entidade_id, alteracoes, created_at FROM historico_alteracoes WHERE entidade = 'imoveis' AND alteracoes::text LIKE '%"estado"%'`).catch(() => ({ rows: [] as any[] })),
       // null = colunas da migração 0092 ainda por aplicar: C12 fica sem leitura.
       pool.query(`SELECT prazo_original, concluida_em, arquivada, por_aprovar FROM tarefas WHERE prazo_original IS NOT NULL`).catch(() => null),
+      // null = tabela da migração 0093 ainda por criar: O09 e W04 ficam sem leitura.
+      pool.query(`SELECT b.* FROM projeto_bloqueios b JOIN negocios n ON n.id = b.negocio_id WHERE n.deleted_at IS NULL`).catch(() => null),
+      pool.query(`SELECT imovel_id, capital_necessario FROM analises WHERE activa = true`).catch(() => ({ rows: [] as any[] })),
     ]);
     // Tipo explícito: sem ele o deno check rejeitava cada filter/map sobre a lista.
     const imoveisAll: any[] = imoveisRaw;
     const investidores = investidoresRaw.filter(isInvestidorPrincipal);
+    const capConfirmado = capitalConfirmado(investidores);
     const ciRows = ci.rows, iiRows = ii.rows.filter((r: any) => ehChamada(r.canal)), piRows = pi.rows;
     const idsNegocios = new Set(negocios.map((n: any) => n.id));
 
@@ -1564,6 +1568,7 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
         custoReal: round2(custoRealObra(despesas, idsNegocios)),
         fases: resumoFases(fasesRes.rows.filter((f: any) => idsNegocios.has(f.negocio_id))),
         projetos: resumoProjetos(negocios, fasesRes.rows, despesas),
+        bloqueios: bloqueiosRes ? resumoBloqueios(bloqueiosRes.rows) : null,
       },
       funil: {
         atividade: atividadeImoveis,
@@ -1582,6 +1587,7 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
       economia: { lucroLiquido, lucroMedio, margemPct, roiMedio, roiAnualizadoMedio, descontoMedio },
       velocidade: { diasAteFechar, capitalTurns, throughput },
       capital: {
+        confirmado: capConfirmado, financiamento: faltaFinanciamento(imoveisAll, analisesAtivasRes.rows, capConfirmado.valido),
         mobilizado: capitalMobilizado, capacidadeDeclarada: round2(capacidadeDeclarada(investidores)), parceria: contagemParceria(investidores), netFlow,
         reinvestimento, concentracaoTop3, capitalPerdido, capitalPerdidoPct,
         saidaInvestidores, taxaConvInvestidor, ticketMedioSlot,
@@ -1601,7 +1607,7 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
       },
       consultores: {
         taxaConversao: taxaConvConsultor, parceirosInativos, ativacao: ativacaoConsultor, tempoResposta: tempoRespostaConsultor,
-        taxaResposta24h,
+        taxaResposta24h, respostas24h: respostas24h(ciRows),
         premium, lucroPorFonte,
       },
       updatedAt: new Date().toISOString(),

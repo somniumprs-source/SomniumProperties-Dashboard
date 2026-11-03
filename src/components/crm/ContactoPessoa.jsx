@@ -48,7 +48,13 @@ const paraLocal = v => {
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 
 // Título curto do registo: «Call <imóvel>», «Follow Up», «Nota»… O resto só ao abrir.
+// Contacto que veio do outro lado leva «· recebido».
 function tituloDe(h) {
+  const t = tituloBase(h)
+  return h.direcao === 'Recebido' ? `${t} · recebido` : t
+}
+
+function tituloBase(h) {
   const canal = canalDe(h)
   if (canal === 'Nota') return 'Nota'
   const etiqueta = String(h.notas || '').match(PREFIXO)?.[0]
@@ -355,6 +361,8 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
   const [quando, setQuando] = useState(agoraLocal())
   const [canal, setCanal] = useState('Chamada')
   const [finalidade, setFinalidade] = useState(proximo?.tipo === 'discovery_call' ? 'discovery' : 'follow_up')
+  // Quem tomou a iniciativa: mede a resposta em 24 h nos dois sentidos (G27).
+  const [direcao, setDirecao] = useState('Enviado')
   // Tipo do contacto a marcar (no agendar, ou o seguinte ao registar).
   const [tipoContacto, setTipoContacto] = useState(modo === 'agendar' ? (proximo?.tipo || tipoSugerido || 'follow_up') : modo === 'sem_sucesso' ? (proximo?.tipo || tipoSugerido || 'follow_up') : 'follow_up')
   const [tratados, setTratados] = useState(marcados.map(a => a.id))
@@ -407,7 +415,7 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
       ? ['agendar', { data, quando: comHora(data, hora), assuntos: limpos(assuntos), tipo_contacto: tipoContacto }]
       : modo === 'sem_sucesso'
         ? ['registar', { resultado: 'Sem sucesso', notas, proximo: prox }]
-        : ['registar', { resultado: 'Feito', quando: quando ? new Date(quando).toISOString() : null, canal, finalidade, notas, tratados, novos: [...limpos(novos), ...novosImoveis], proximo: prox, avulso: modo === 'novo' && !!proximo }]
+        : ['registar', { resultado: 'Feito', quando: quando ? new Date(quando).toISOString() : null, canal, finalidade, direcao, notas, tratados, novos: [...limpos(novos), ...novosImoveis], proximo: prox, avulso: modo === 'novo' && !!proximo }]
     try {
       const r = await apiFetch(`/api/crm/${ROTA[tipo]}/${pessoaId}/contacto/${caminho}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo),
@@ -442,7 +450,7 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
 
       {feito && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className={`grid grid-cols-1 gap-2 ${tipo === 'consultor' ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
             <label className="text-[11px] text-ink-muted">Quando
               <input type="datetime-local" value={quando} onChange={e => setQuando(e.target.value)} className={inputClass} />
             </label>
@@ -456,6 +464,14 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
                 <select value={finalidade} onChange={e => setFinalidade(e.target.value)} className={inputClass}>
                   <option value="discovery">Discovery</option>
                   <option value="follow_up">Follow Up</option>
+                </select>
+              </label>
+            )}
+            {tipo === 'consultor' && (
+              <label className="text-[11px] text-ink-muted">Quem contactou
+                <select value={direcao} onChange={e => setDirecao(e.target.value)} className={inputClass}>
+                  <option value="Enviado">A Somnium</option>
+                  <option value="Recebido">O consultor</option>
                 </select>
               </label>
             )}

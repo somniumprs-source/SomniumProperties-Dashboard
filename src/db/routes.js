@@ -6333,6 +6333,58 @@ async function ensureVistoriasObraTable() {
   _vistoriasObraTableEnsured = true
 }
 
+// ── Bloqueios e prazos contratuais do projeto (O09, W04) ──
+// Só a equipa interna: são notas de gestão, não informação para investidores.
+const TIPOS_BLOQUEIO = ['bloqueio', 'prazo']
+const eDia = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''))
+async function soEquipaInterna(req, res) {
+  const u = await resolveAppUser(req).catch(() => null)
+  if (u && RECORD_RESTRICTED_ROLES.has(u.role)) { res.status(403).json({ error: 'Sem acesso' }); return null }
+  return u || {}
+}
+
+router.get('/projetos/:negocioId/bloqueios', async (req, res) => {
+  try {
+    if (!(await soEquipaInterna(req, res))) return
+    const { rows } = await pool.query(
+      `SELECT * FROM projeto_bloqueios WHERE negocio_id = $1 ORDER BY resolvido_em IS NOT NULL, COALESCE(data_limite, aberto_em)`,
+      [req.params.negocioId])
+    res.json({ bloqueios: rows })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/projetos/:negocioId/bloqueios', async (req, res) => {
+  try {
+    const u = await soEquipaInterna(req, res)
+    if (!u) return
+    const { tipo, descricao, depende_de, aberto_em, data_limite } = req.body || {}
+    if (!TIPOS_BLOQUEIO.includes(tipo)) return res.status(400).json({ error: 'Tipo inválido' })
+    if (!String(descricao || '').trim()) return res.status(400).json({ error: 'Indica a descrição' })
+    if (tipo === 'prazo' && !eDia(data_limite)) return res.status(400).json({ error: 'Indica a data limite' })
+    if (aberto_em && !eDia(aberto_em)) return res.status(400).json({ error: 'Data de início inválida' })
+    const { rows } = await pool.query(
+      `INSERT INTO projeto_bloqueios (id, negocio_id, tipo, descricao, depende_de, aberto_em, data_limite, autor)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6, to_char(current_date, 'YYYY-MM-DD')), $7, $8) RETURNING *`,
+      [randomUUID(), req.params.negocioId, tipo, String(descricao).trim(), String(depende_de || '').trim() || null,
+       aberto_em || null, eDia(data_limite) ? data_limite : null, u.nome || req.user?.email || null])
+    res.status(201).json(rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Só se resolve ou reabre: o histórico dos bloqueios não se apaga.
+router.put('/projetos/:negocioId/bloqueios/:id', async (req, res) => {
+  try {
+    if (!(await soEquipaInterna(req, res))) return
+    const { resolvido_em } = req.body || {}
+    if (resolvido_em != null && !eDia(resolvido_em)) return res.status(400).json({ error: 'Data inválida' })
+    const { rows } = await pool.query(
+      `UPDATE projeto_bloqueios SET resolvido_em = $1, updated_at = NOW() WHERE id = $2 AND negocio_id = $3 RETURNING *`,
+      [resolvido_em ?? null, req.params.id, req.params.negocioId])
+    if (!rows.length) return res.status(404).json({ error: 'Não encontrado' })
+    res.json(rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 router.get('/projetos/:negocioId/vistorias', async (req, res) => {
   try {
     await ensureVistoriasObraTable()

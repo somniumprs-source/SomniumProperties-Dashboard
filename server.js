@@ -780,7 +780,7 @@ const getObras        = async () => []
 // Cache com TTL para endpoints que fazem queries pesadas
 import { TTLCache } from './src/db/utils/ttlCache.js'
 import pool from './src/db/pg.js'
-import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, escrituraRegistada, resumoFases, resumoProjetos, custoRealObra, imoveisContactados, motivosPerda, cumprimentoTarefas, diasNaFase } from './supabase/functions/_shared/regrasDashboard.js'
+import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, escrituraRegistada, resumoFases, resumoProjetos, custoRealObra, imoveisContactados, motivosPerda, cumprimentoTarefas, capitalConfirmado, faltaFinanciamento, resumoBloqueios, respostas24h, diasNaFase } from './supabase/functions/_shared/regrasDashboard.js'
 import { alertasConservacao } from './src/db/consentimentos.js'
 import { juntarResponsavel, donosDasRegioes } from './src/db/responsavelRegiao.js'
 import { alertasDeDespesas } from './src/constants/regrasDespesas.js'
@@ -1887,7 +1887,7 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
     const periodo = ['semana','mes','trimestre','ano'].includes(req.query.periodo) ? req.query.periodo : 'mes'
     const regiao = req.regiaoActiva || undefined
 
-    const [imoveisAll, investidoresRaw, consultores, negocios, despesas, ci, ii, pi, fasesRes, analisesRes, historicoRes, tarefasRes] = await Promise.all([
+    const [imoveisAll, investidoresRaw, consultores, negocios, despesas, ci, ii, pi, fasesRes, analisesRes, historicoRes, tarefasRes, bloqueiosRes, analisesAtivasRes] = await Promise.all([
       getImóveis({ regiao }).catch(() => []),
       getInvestidores({ regiao }).catch(() => []),
       getConsultores({ regiao }).catch(() => []),
@@ -1901,8 +1901,12 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
       pool.query(`SELECT entidade_id, alteracoes, created_at FROM historico_alteracoes WHERE entidade = 'imoveis' AND alteracoes::text LIKE '%"estado"%'`).catch(() => ({ rows: [] })),
       // null = colunas da migração 0092 ainda por aplicar: C12 fica sem leitura.
       pool.query(`SELECT prazo_original, concluida_em, arquivada, por_aprovar FROM tarefas WHERE prazo_original IS NOT NULL`).catch(() => null),
+      // null = tabela da migração 0093 ainda por criar: O09 e W04 ficam sem leitura.
+      pool.query(`SELECT b.* FROM projeto_bloqueios b JOIN negocios n ON n.id = b.negocio_id WHERE n.deleted_at IS NULL`).catch(() => null),
+      pool.query(`SELECT imovel_id, capital_necessario FROM analises WHERE activa = true`).catch(() => ({ rows: [] })),
     ])
     const investidores = investidoresRaw.filter(isInvestidorPrincipal)
+    const capConfirmado = capitalConfirmado(investidores)
     const ciRows = ci.rows, iiRows = ii.rows.filter(r => ehChamada(r.canal)), piRows = pi.rows
     const idsNegocios = new Set(negocios.map(n => n.id))
 
@@ -2105,6 +2109,7 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
         custoReal: round2(custoRealObra(despesas, idsNegocios)),
         fases: resumoFases(fasesRes.rows.filter(f => idsNegocios.has(f.negocio_id))),
         projetos: resumoProjetos(negocios, fasesRes.rows, despesas),
+        bloqueios: bloqueiosRes ? resumoBloqueios(bloqueiosRes.rows) : null,
       },
       funil: {
         atividade: atividadeImoveis,
@@ -2123,6 +2128,7 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
       economia: { lucroLiquido, lucroMedio, margemPct, roiMedio, roiAnualizadoMedio, descontoMedio },
       velocidade: { diasAteFechar, capitalTurns, throughput },
       capital: {
+        confirmado: capConfirmado, financiamento: faltaFinanciamento(imoveisAll, analisesAtivasRes.rows, capConfirmado.valido),
         mobilizado: capitalMobilizado, capacidadeDeclarada: round2(capacidadeDeclarada(investidores)), parceria: contagemParceria(investidores), netFlow,
         reinvestimento, concentracaoTop3, capitalPerdido, capitalPerdidoPct,
         saidaInvestidores, taxaConvInvestidor, ticketMedioSlot,
@@ -2142,7 +2148,7 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
       },
       consultores: {
         taxaConversao: taxaConvConsultor, parceirosInativos, ativacao: ativacaoConsultor, tempoResposta: tempoRespostaConsultor,
-        taxaResposta24h,
+        taxaResposta24h, respostas24h: respostas24h(ciRows),
         premium, lucroPorFonte,
       },
       updatedAt: new Date().toISOString(),
