@@ -112,14 +112,16 @@ export function AdministracaoChamadasInvestidores() {
   const [ate, setAte] = useState(hoje())
   const [rel, setRel] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [sintese, setSintese] = useState(undefined) // undefined = ainda não gerada
+  // Síntese guardada do período: null = nunca pedida; estado aguarda/a_gerar = em fila no Mac.
+  const [pedido, setPedido] = useState(null)
   const [aGerar, setAGerar] = useState(false)
   const [aExportar, setAExportar] = useState(false)
 
   useEffect(() => {
     let activo = true
     setLoading(true)
-    setSintese(undefined)
+    setPedido(null)
+    lerSintese().then(d => { if (activo) setPedido(d) })
     apiFetch(`/api/crm/chamadas-investidores/relatorio?desde=${desde}&ate=${ate}`)
       .then(r => r.json())
       .then(d => { if (activo) setRel(d?.totais ? d : null) })
@@ -128,13 +130,23 @@ export function AdministracaoChamadasInvestidores() {
     return () => { activo = false }
   }, [desde, ate])
 
+  const lerSintese = () => apiFetch(`/api/crm/chamadas-investidores/sintese?desde=${desde}&ate=${ate}`)
+    .then(r => r.json()).then(d => (d?.id ? d : null)).catch(() => null)
+
+  const emFila = ['aguarda', 'a_gerar'].includes(pedido?.estado)
+  useEffect(() => {
+    if (!emFila) return
+    const t = setInterval(() => lerSintese().then(setPedido), 15000)
+    return () => clearInterval(t)
+  }, [emFila, desde, ate])
+
   async function gerarSintese() {
     setAGerar(true)
     try {
-      const r = await apiFetch(`/api/crm/chamadas-investidores/sintese?desde=${desde}&ate=${ate}`)
+      const r = await apiFetch(`/api/crm/chamadas-investidores/sintese?desde=${desde}&ate=${ate}`, { method: 'POST' })
       const d = await r.json()
-      if (!r.ok) throw new Error(d?.error || 'Falha a gerar a leitura')
-      setSintese(d)
+      if (!r.ok) throw new Error(d?.error || 'Falha a pedir a leitura')
+      setPedido(d)
     } catch (err) { toast(friendlyError(err.message), 'error') }
     setAGerar(false)
   }
@@ -236,15 +248,20 @@ export function AdministracaoChamadasInvestidores() {
       <div className="bg-surface-raised rounded-xl border border-line p-4">
         <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
           <p className="text-overline font-semibold text-ink-muted uppercase">Leitura e recomendações (IA)</p>
-          <button type="button" onClick={gerarSintese} disabled={aGerar || !t.analisadas}
+          <button type="button" onClick={gerarSintese} disabled={aGerar || emFila || !t.analisadas}
             className="px-3 py-1.5 rounded-lg bg-accent text-accent-foreground text-xs font-medium disabled:opacity-50 flex items-center gap-1.5">
-            {aGerar ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-            {sintese === undefined ? 'Gerar leitura' : 'Gerar de novo'}
+            {aGerar || emFila ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            {emFila ? 'Em fila no Mac…' : pedido?.sintese ? 'Gerar de novo' : 'Gerar leitura'}
           </button>
         </div>
-        {sintese === undefined
-          ? <p className="text-sm text-ink-muted">Diagnóstico do período, prioridades, objecções frequentes e script recomendado. Também incluído no PDF.</p>
-          : <Sintese s={sintese} />}
+        {emFila && <p className="text-xs text-ink-muted mb-2">A leitura é gerada no Mac (Claude Code no plano) no próximo ciclo, até 3 minutos. Esta página actualiza sozinha.</p>}
+        {pedido?.estado === 'erro' && <p className="text-xs text-danger mb-2">{pedido.erro || 'Falha a gerar a leitura'}</p>}
+        {pedido?.sintese
+          ? <>
+              <Sintese s={pedido.sintese} />
+              {pedido.estado === 'concluida' && <p className="text-xs text-ink-muted mt-3">Gerada em {fmtDate(pedido.updated_at)}. Incluída no PDF.</p>}
+            </>
+          : !emFila && <p className="text-sm text-ink-muted">Diagnóstico do período, prioridades, objecções frequentes e script recomendado. Também incluído no PDF depois de gerada.</p>}
       </div>
 
       <div className="bg-surface-raised rounded-xl border border-line p-4">

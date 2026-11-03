@@ -35,7 +35,11 @@ import { ensureOportunidadesScraperTable } from './oportunidadesScraper.js'
 import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
 import { generateMeetingPDF } from './pdfMeetingReport.js'
 import { generateChamadasInvestidoresPDF } from './pdfChamadasInvestidores.js'
-import { ensureInvestidorGravacoesTable, tabelaDaGravacao, sanitizeRegistoInvestidor, analisarEGravar, relatorioChamadasInvestidores, sinteseChamadasInvestidores, TIPOS_CHAMADA_INV } from './chamadasInvestidor.js'
+import {
+  ensureInvestidorGravacoesTable, tabelaDaGravacao, sanitizeRegistoInvestidor, relatorioChamadasInvestidores, TIPOS_CHAMADA_INV,
+  pedirAnaliseInvestidor, investidorGravacoesPorAnalisar, passoAnaliseInvestidor, falhaAnaliseInvestidor,
+  lerSinteseInvestidores, pedirSinteseInvestidores, sintesesInvestidoresPorGerar, passoSinteseInvestidores, falhaSinteseInvestidores,
+} from './chamadasInvestidor.js'
 import { ensureLabels, organizeMessage, organizeBatch, autoOrganize, isConfigured as gmailConfigured } from './gmailSync.js'
 import { exportDepartment } from './excelExport.js'
 import { listarFaturas, exportarZip, marcarEnviadas } from './contabilidade.js'
@@ -1962,6 +1966,36 @@ router.post('/gravacoes/:id/analise-consultor', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// Worker: análises SOP 4 das chamadas com investidores e sínteses do período,
+// também corridas no Mac. Sem `resposta` devolve { pedido }; com ela grava.
+router.get('/gravacoes/investidores/por-analisar', async (req, res) => {
+  try { res.json(await investidorGravacoesPorAnalisar(pool)) } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/gravacoes/:id/analise-investidor', async (req, res) => {
+  try {
+    if (req.body?.erro) { await falhaAnaliseInvestidor(pool, req.params.id, req.body.erro); return res.json({ ok: true }) }
+    res.json(await passoAnaliseInvestidor(pool, req.params.id, req.body?.resposta ?? null))
+  } catch (e) {
+    await falhaAnaliseInvestidor(pool, req.params.id, e.message).catch(() => {})
+    res.status(500).json({ error: e.message })
+  }
+})
+
+router.get('/gravacoes/sinteses-investidores/por-gerar', async (req, res) => {
+  try { res.json(await sintesesInvestidoresPorGerar(pool)) } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/gravacoes/sinteses-investidores/:id/passo', async (req, res) => {
+  try {
+    if (req.body?.erro) { await falhaSinteseInvestidores(pool, req.params.id, req.body.erro); return res.json({ ok: true }) }
+    res.json(await passoSinteseInvestidores(pool, req.params.id, req.body?.resposta ?? null))
+  } catch (e) {
+    await falhaSinteseInvestidores(pool, req.params.id, e.message).catch(() => {})
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // Worker: gravacoes a aguardar transcricao, com signed URL para descarregar o audio.
 router.get('/gravacoes/pendentes', async (req, res) => {
   try {
@@ -2018,13 +2052,13 @@ router.post('/gravacoes/:id/transcricao', async (req, res) => {
     const now = new Date().toISOString()
     if (await tabelaDaGravacao(pool, req.params.id) === 'investidor_gravacoes') {
       const { rows: [gi] } = await pool.query(
-        `UPDATE investidor_gravacoes SET transcricao = $2, duracao_seg = $3, estado = 'transcrito', erro = NULL, updated_at = $4
+        `UPDATE investidor_gravacoes SET transcricao = $2, duracao_seg = $3, estado = 'aguarda_analise', erro = NULL, updated_at = $4
          WHERE id = $1 RETURNING *`,
         [req.params.id, transcricao, duracao_seg ?? null, now]
       )
       if (!gi) return res.status(404).json({ error: 'Gravacao nao encontrada' })
-      try { return res.json(await analisarEGravar(pool, req.params.id)) }
-      catch { const { rows: [f] } = await pool.query('SELECT * FROM investidor_gravacoes WHERE id = $1', [req.params.id]); return res.json(f) }
+      // A análise SOP 4 corre no Mac (Claude Code): o worker apanha-a em /gravacoes/investidores/por-analisar.
+      return res.json(gi)
     }
     await ensureClassificacaoTables(pool)
     const segmentos = Array.isArray(req.body?.segmentos) ? req.body.segmentos.slice(0, 5000) : null
@@ -2536,7 +2570,7 @@ router.patch('/chamadas-investidores/:id/registo', async (req, res) => {
 router.post('/chamadas-investidores/:id/analisar', async (req, res) => {
   try {
     await ensureInvestidorGravacoesTable(pool)
-    res.json(await analisarEGravar(pool, req.params.id))
+    res.json(await pedirAnaliseInvestidor(pool, req.params.id))
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -2563,15 +2597,24 @@ router.get('/chamadas-investidores/relatorio', async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// Síntese guardada do período (null se nunca foi pedida). Gerar = pôr em fila
+// para o Mac; o frontend volta a ler até ficar concluída.
 router.get('/chamadas-investidores/sintese', async (req, res) => {
-  try { res.json((await sinteseChamadasInvestidores(pool, periodoChamadas(req))).sintese) }
+  try { res.json(await lerSinteseInvestidores(pool, periodoChamadas(req))) }
+  catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/chamadas-investidores/sintese', async (req, res) => {
+  try { res.json(await pedirSinteseInvestidores(pool, periodoChamadas(req))) }
   catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 router.get('/chamadas-investidores/relatorio/pdf', async (req, res) => {
   try {
     const periodo = periodoChamadas(req)
-    const { rel, sintese } = await sinteseChamadasInvestidores(pool, periodo)
+    const rel = await relatorioChamadasInvestidores(pool, periodo)
+    const s = await lerSinteseInvestidores(pool, periodo)
+    const sintese = s?.sintese || null
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', pdfDisposition(req, `Relatorio_Chamadas_Investidores_${periodo.desde}_${periodo.ate}.pdf`))
     generateChamadasInvestidoresPDF(rel, sintese).pipe(res)

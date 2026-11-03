@@ -4,15 +4,15 @@
  * (Checklist de Validação de Investidores).
  *
  * Fluxo igual ao das gravações dos consultores: upload do áudio → worker
- * Whisper local (launchd) transcreve → análise pelo Claude. O registo manual
+ * Whisper local (launchd) transcreve → análise pelo Claude Code no Mac do
+ * worker (plano Claude, sem API paga). O backend só prepara os prompts e grava
+ * as respostas; a síntese do período segue o mesmo caminho. O registo manual
  * (resultado, próximo passo, temperatura, data de follow-up) é sempre a fonte
  * de verdade; a IA só deixa sugestões dentro de `analise`.
  *
  * Gémeo Deno em supabase/functions/_shared/chamadasInvestidor.ts — o código é
- * o mesmo, só mudam os imports. Portar qualquer alteração para os dois.
+ * o mesmo. Portar qualquer alteração para os dois.
  */
-
-const env = (k) => (globalThis.Deno ? globalThis.Deno.env.get(k) : process.env[k])
 
 export const TIPOS_CHAMADA_INV = ['cold_call', 'follow_up']
 export const RESULTADOS_INV = ['atendeu', 'nao_atendeu', 'recusou', 'numero_errado']
@@ -81,6 +81,16 @@ export async function ensureInvestidorGravacoesTable(pool) {
     CREATE INDEX IF NOT EXISTS idx_inv_gravacoes_investidor ON investidor_gravacoes(investidor_id);
     CREATE INDEX IF NOT EXISTS idx_inv_gravacoes_estado ON investidor_gravacoes(estado);
     CREATE INDEX IF NOT EXISTS idx_inv_gravacoes_data ON investidor_gravacoes(data_chamada);
+    CREATE TABLE IF NOT EXISTS investidor_chamadas_sinteses (
+      id TEXT PRIMARY KEY,
+      desde TEXT NOT NULL,
+      ate TEXT NOT NULL,
+      estado TEXT NOT NULL DEFAULT 'aguarda',
+      sintese JSONB,
+      erro TEXT,
+      created_at TEXT DEFAULT (NOW()::TEXT),
+      updated_at TEXT DEFAULT (NOW()::TEXT)
+    );
   `)
   _tabelaGarantida = true
 }
@@ -181,43 +191,53 @@ function parseJson(texto) {
   return JSON.parse(m?.[0] || texto || '{}')
 }
 
-async function claude(prompt, maxTokens) {
-  const key = env('ANTHROPIC_API_KEY')
-  if (!key) throw new Error('ANTHROPIC_API_KEY nao configurada')
-  const Anthropic = (await import('@anthropic-ai/sdk')).default
-  const client = new Anthropic({ apiKey: key })
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: maxTokens,
-    messages: [{ role: 'user', content: prompt }],
-  })
-  return parseJson(response.content?.[0]?.text || '{}')
+// A IA corre no Mac (Claude Code, plano Claude): o worker pede o prompt, corre-o
+// e devolve o texto. Sem resposta devolve { pedido }; com resposta grava.
+export const MODELO_IA_INV = 'sonnet'
+const agora = () => new Date().toISOString()
+const limiteObsoleto = () => new Date(Date.now() - 30 * 60_000).toISOString()
+
+// Põe a chamada em fila para a análise no Mac (também usado para analisar de novo).
+export async function pedirAnaliseInvestidor(pool, id) {
+  const { rows: [g] } = await pool.query(
+    `UPDATE investidor_gravacoes SET estado = 'aguarda_analise', erro = NULL, updated_at = $2
+     WHERE id = $1 AND COALESCE(btrim(transcricao), '') <> '' RETURNING *`, [id, agora()])
+  if (!g) throw new Error('Gravacao nao encontrada ou sem transcricao')
+  return g
 }
 
-export async function analisarChamadaInvestidor(transcricao, tipo, investidor) {
-  return claude(`${buildPrompt(tipo, investidor)}\n\n--- TRANSCRICAO ---\n${transcricao}`, 6000)
+// Worker: chamadas à espera da análise (ou presas em a_analisar há >30 min).
+export async function investidorGravacoesPorAnalisar(pool) {
+  await ensureInvestidorGravacoesTable(pool)
+  const { rows } = await pool.query(
+    `SELECT id, tipo_chamada FROM investidor_gravacoes
+      WHERE COALESCE(btrim(transcricao), '') <> ''
+        AND (estado = 'aguarda_analise' OR (estado = 'a_analisar' AND updated_at < $1))
+      ORDER BY created_at ASC LIMIT 5`, [limiteObsoleto()])
+  return rows
 }
 
-// Corre a análise e grava-a (com a nota SOP). Em erro, deixa a mensagem e
-// repõe 'transcrito' para se poder tentar de novo.
-export async function analisarEGravar(pool, id) {
+export async function passoAnaliseInvestidor(pool, id, resposta) {
   const { rows: [g] } = await pool.query('SELECT * FROM investidor_gravacoes WHERE id = $1', [id])
   if (!g) throw new Error('Gravacao nao encontrada')
   if (!g.transcricao?.trim()) throw new Error('Sem transcricao para analisar')
-  const { rows: [inv] } = await pool.query('SELECT * FROM investidores WHERE id = $1', [g.investidor_id])
-  await pool.query(`UPDATE investidor_gravacoes SET estado = 'a_analisar', updated_at = $2 WHERE id = $1`, [id, new Date().toISOString()])
-  try {
-    const analise = await analisarChamadaInvestidor(g.transcricao, g.tipo_chamada, inv)
-    const { rows: [final] } = await pool.query(
-      `UPDATE investidor_gravacoes SET analise = $2, nota_sop = $3, estado = 'analisado', erro = NULL, updated_at = $4 WHERE id = $1 RETURNING *`,
-      [id, JSON.stringify(analise), notaSop(analise, g.tipo_chamada), new Date().toISOString()],
-    )
-    return final
-  } catch (e) {
-    await pool.query(`UPDATE investidor_gravacoes SET estado = 'transcrito', erro = $2, updated_at = $3 WHERE id = $1`,
-      [id, `Analise: ${e.message}`, new Date().toISOString()]).catch(() => {})
-    throw e
+  if (resposta == null) {
+    const { rows: [inv] } = await pool.query('SELECT * FROM investidores WHERE id = $1', [g.investidor_id])
+    await pool.query(`UPDATE investidor_gravacoes SET estado = 'a_analisar', updated_at = $2 WHERE id = $1`, [id, agora()])
+    return { pedido: { passo: 'analise', modelo: MODELO_IA_INV, prompt: `${buildPrompt(g.tipo_chamada, inv)}\n\n--- TRANSCRICAO ---\n${g.transcricao}` } }
   }
+  const analise = parseJson(resposta)
+  const { rows: [final] } = await pool.query(
+    `UPDATE investidor_gravacoes SET analise = $2, nota_sop = $3, estado = 'analisado', erro = NULL, updated_at = $4 WHERE id = $1 RETURNING *`,
+    [id, JSON.stringify(analise), notaSop(analise, g.tipo_chamada), agora()],
+  )
+  return { concluido: true, gravacao: final }
+}
+
+// Em erro repõe 'transcrito' para se poder tentar de novo.
+export async function falhaAnaliseInvestidor(pool, id, erro) {
+  await pool.query(`UPDATE investidor_gravacoes SET estado = 'transcrito', erro = $2, updated_at = $3 WHERE id = $1`,
+    [id, `Analise: ${String(erro || 'falhou').slice(0, 480)}`, agora()])
 }
 
 const media = (arr) => (arr.length ? Math.round(arr.reduce((s, n) => s + n, 0) / arr.length * 10) / 10 : null)
@@ -286,7 +306,7 @@ export async function relatorioChamadasInvestidores(pool, { desde, ate }) {
       cold_call: cold.length,
       follow_up: follow.length,
       analisadas: analisadas.length,
-      por_processar: rows.filter(g => ['pendente', 'a_transcrever', 'transcrito', 'a_analisar'].includes(g.estado)).length,
+      por_processar: rows.filter(g => ['pendente', 'a_transcrever', 'transcrito', 'aguarda_analise', 'a_analisar'].includes(g.estado)).length,
       sem_registo_manual: rows.filter(g => !g.resultado && !g.proximo_passo).length,
     },
     nota_media: {
@@ -323,9 +343,46 @@ export async function relatorioChamadasInvestidores(pool, { desde, ate }) {
 }
 
 // Leitura de conjunto pelo Claude: o que mudar no script e nos follow-ups.
-export async function sinteseChamadasInvestidores(pool, periodo) {
+// Fica guardada por período (id = desde_ate); o PDF usa a última gerada.
+const idSintese = ({ desde, ate }) => `${desde}_${ate}`
+
+export async function lerSinteseInvestidores(pool, periodo) {
+  await ensureInvestidorGravacoesTable(pool)
+  const { rows: [s] } = await pool.query('SELECT * FROM investidor_chamadas_sinteses WHERE id = $1', [idSintese(periodo)])
+  return s || null
+}
+
+export async function pedirSinteseInvestidores(pool, periodo) {
   const rel = await relatorioChamadasInvestidores(pool, periodo)
-  if (!rel.totais.analisadas) return { rel, sintese: null }
+  if (!rel.totais.analisadas) throw new Error('Sem chamadas analisadas no periodo')
+  const { rows: [s] } = await pool.query(
+    `INSERT INTO investidor_chamadas_sinteses (id, desde, ate, estado, updated_at) VALUES ($1, $2, $3, 'aguarda', $4)
+     ON CONFLICT (id) DO UPDATE SET estado = 'aguarda', erro = NULL, updated_at = $4 RETURNING *`,
+    [idSintese(periodo), periodo.desde, periodo.ate, agora()])
+  return s
+}
+
+// Worker: sínteses pedidas (ou presas em a_gerar há >30 min).
+export async function sintesesInvestidoresPorGerar(pool) {
+  await ensureInvestidorGravacoesTable(pool)
+  const { rows } = await pool.query(
+    `SELECT id, desde, ate FROM investidor_chamadas_sinteses
+      WHERE estado = 'aguarda' OR (estado = 'a_gerar' AND updated_at < $1) ORDER BY updated_at ASC LIMIT 3`, [limiteObsoleto()])
+  return rows
+}
+
+export async function passoSinteseInvestidores(pool, id, resposta) {
+  const { rows: [s] } = await pool.query('SELECT * FROM investidor_chamadas_sinteses WHERE id = $1', [id])
+  if (!s) throw new Error('Sintese nao encontrada')
+  if (resposta != null) {
+    const { rows: [final] } = await pool.query(
+      `UPDATE investidor_chamadas_sinteses SET sintese = $2, estado = 'concluida', erro = NULL, updated_at = $3 WHERE id = $1 RETURNING *`,
+      [id, JSON.stringify(parseJson(resposta)), agora()])
+    return { concluido: true, sintese: final }
+  }
+  const periodo = { desde: s.desde, ate: s.ate }
+  const rel = await relatorioChamadasInvestidores(pool, periodo)
+  if (!rel.totais.analisadas) throw new Error('Sem chamadas analisadas no periodo')
   const { rows } = await pool.query(
     `SELECT tipo_chamada, data_chamada, nota_sop, analise FROM investidor_gravacoes
      WHERE analise IS NOT NULL AND substr(data_chamada, 1, 10) BETWEEN $1 AND $2
@@ -338,7 +395,8 @@ export async function sinteseChamadasInvestidores(pool, periodo) {
     melhorias_script: g.analise?.melhorias_script, dados_em_falta: g.analise?.dados_recolhidos?.dados_em_falta,
   }))
   const estat = { totais: rel.totais, nota_media: rel.nota_media, passos: rel.passos, conversao: rel.conversao, conformidade: rel.conformidade, temperatura: rel.temperatura }
-  const sintese = await claude(`És o director comercial da Somnium Properties. Analisa o conjunto das chamadas a investidores (Cold Call e Follow-up) do período ${periodo.desde} a ${periodo.ate}, avaliadas contra o SOP 4, e diz o que a equipa deve mudar para converter mais investidores em Entrevista Estratégica.
+  await pool.query(`UPDATE investidor_chamadas_sinteses SET estado = 'a_gerar', updated_at = $2 WHERE id = $1`, [id, agora()])
+  return { pedido: { passo: 'sintese', modelo: MODELO_IA_INV, prompt: `És o director comercial da Somnium Properties. Analisa o conjunto das chamadas a investidores (Cold Call e Follow-up) do período ${periodo.desde} a ${periodo.ate}, avaliadas contra o SOP 4, e diz o que a equipa deve mudar para converter mais investidores em Entrevista Estratégica.
 
 ESTATÍSTICAS DO PERÍODO
 ${JSON.stringify(estat)}
@@ -354,6 +412,10 @@ Responde APENAS com JSON válido, sem markdown:
   "script_cold_call": { "abertura": "texto a usar", "qualificacao": ["perguntas pela ordem"], "fecho": "texto a usar" },
   "follow_up": ["recomendações concretas para os follow-ups (timing, valor novo, canal)"]
 }
-No máximo 5 prioridades e 6 objecções. Português de Portugal, directo. Sem promessas de rentabilidade garantida nos textos sugeridos.`, 4000)
-  return { rel, sintese }
+No máximo 5 prioridades e 6 objecções. Português de Portugal, directo. Sem promessas de rentabilidade garantida nos textos sugeridos.` } }
+}
+
+export async function falhaSinteseInvestidores(pool, id, erro) {
+  await pool.query(`UPDATE investidor_chamadas_sinteses SET estado = 'erro', erro = $2, updated_at = $3 WHERE id = $1`,
+    [id, String(erro || 'Falha a gerar a sintese').slice(0, 500), agora()])
 }

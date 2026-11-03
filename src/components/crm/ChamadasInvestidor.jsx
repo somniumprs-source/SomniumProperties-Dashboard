@@ -21,13 +21,14 @@ import {
 } from '../../lib/chamadasInvestidor.js'
 
 const AUDIO_ACCEPT = 'audio/*,.mp3,.m4a,.wav,.ogg,.webm,.mp4,.aac'
-const EM_PROCESSAMENTO = ['pendente', 'a_transcrever', 'a_analisar']
+const EM_PROCESSAMENTO = ['pendente', 'a_transcrever', 'aguarda_analise', 'a_analisar']
 const hojeISO = () => new Date().toISOString().slice(0, 10)
 
 const ESTADO_META = {
   pendente:      { label: 'Em fila para transcrever', cls: 'bg-warning/10 text-warning border-warning/30', spin: false },
   a_transcrever: { label: 'A transcrever…', cls: 'bg-surface-muted text-ink border-line', spin: true },
   transcrito:    { label: 'Transcrito', cls: 'bg-surface-muted text-ink border-line', spin: false },
+  aguarda_analise: { label: 'Em fila para analisar', cls: 'bg-warning/10 text-warning border-warning/30', spin: false },
   a_analisar:    { label: 'A analisar…', cls: 'bg-surface-muted text-ink border-line', spin: true },
   analisado:     { label: 'Analisado', cls: 'bg-success/10 text-success border-success/30', spin: false },
   erro:          { label: 'Erro', cls: 'bg-danger/10 text-danger border-danger/30', spin: false },
@@ -321,7 +322,7 @@ function ChamadaCard({ g, busy, onAnalisar, onRetomar, onApagar, onGuardarRegist
         <div className="border-t border-line p-3 space-y-4">
           {g.erro && <p className="text-xs text-danger">{g.erro}</p>}
           {EM_PROCESSAMENTO.includes(g.estado) && !g.analise && (
-            <p className="text-xs text-ink-muted">A transcrição corre no Mac (worker Whisper, de 3 em 3 minutos). A análise aparece aqui automaticamente.</p>
+            <p className="text-xs text-ink-muted">A transcrição e a análise correm no Mac (worker de 3 em 3 minutos, Claude Code no plano). A análise aparece aqui automaticamente.</p>
           )}
           <Analise g={g} />
           <RegistoManual g={g} onGuardar={onGuardarRegisto} />
@@ -396,6 +397,7 @@ export function ChamadasInvestidor({ investidorId }) {
     const d = await r.json()
     if (!r.ok) throw new Error(d.error || 'Falha na análise')
     setChamadas(p => p.map(g => g.id === id ? d : g))
+    toast('Análise em fila. O Mac corre-a no próximo ciclo (até 3 minutos).', 'success')
   })
 
   const retomar = (id) => accao(id, 'retomar', async () => {

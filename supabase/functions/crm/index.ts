@@ -30,7 +30,11 @@ import { persistDocumento, listDocumentos, urlAssinadaDocumento, apagarDocumento
 import { generateImovelPDF } from "../_shared/pdfReport.ts";
 import { generateMeetingPDF } from "../_shared/pdfMeetingReport.ts";
 import { generateChamadasInvestidoresPDF } from "../_shared/pdfChamadasInvestidores.ts";
-import { ensureInvestidorGravacoesTable, tabelaDaGravacao, sanitizeRegistoInvestidor, analisarEGravar, relatorioChamadasInvestidores, sinteseChamadasInvestidores, TIPOS_CHAMADA_INV } from "../_shared/chamadasInvestidor.ts";
+import {
+  ensureInvestidorGravacoesTable, tabelaDaGravacao, sanitizeRegistoInvestidor, relatorioChamadasInvestidores, TIPOS_CHAMADA_INV,
+  pedirAnaliseInvestidor, investidorGravacoesPorAnalisar, passoAnaliseInvestidor, falhaAnaliseInvestidor,
+  lerSinteseInvestidores, pedirSinteseInvestidores, sintesesInvestidoresPorGerar, passoSinteseInvestidores, falhaSinteseInvestidores,
+} from "../_shared/chamadasInvestidor.ts";
 import { analyzeReuniao, autoFillConsultor, autoFillInvestidor } from "../_shared/meetingAnalysis.ts";
 import { isConfigured as firefliesConfigured, syncFireflies } from "../_shared/firefliesSync.ts";
 import { runEstudoLocalizacao } from "../_shared/estudoLocalizacao.ts";
@@ -2621,6 +2625,40 @@ app.post("/gravacoes/:id/analise-consultor", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
+// Worker: análises SOP 4 das chamadas com investidores e sínteses do período,
+// também corridas no Mac. Sem `resposta` devolve { pedido }; com ela grava.
+app.get("/gravacoes/investidores/por-analisar", async (c: any) => {
+  try { return c.json(await investidorGravacoesPorAnalisar(pool)); } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/gravacoes/:id/analise-investidor", async (c: any) => {
+  const id = c.req.param("id");
+  const body = await c.req.json().catch(() => ({}));
+  try {
+    if (body?.erro) { await falhaAnaliseInvestidor(pool, id, body.erro); return c.json({ ok: true }); }
+    return c.json(await passoAnaliseInvestidor(pool, id, body?.resposta ?? null));
+  } catch (e) {
+    await falhaAnaliseInvestidor(pool, id, (e as Error).message).catch(() => {});
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+app.get("/gravacoes/sinteses-investidores/por-gerar", async (c: any) => {
+  try { return c.json(await sintesesInvestidoresPorGerar(pool)); } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/gravacoes/sinteses-investidores/:id/passo", async (c: any) => {
+  const id = c.req.param("id");
+  const body = await c.req.json().catch(() => ({}));
+  try {
+    if (body?.erro) { await falhaSinteseInvestidores(pool, id, body.erro); return c.json({ ok: true }); }
+    return c.json(await passoSinteseInvestidores(pool, id, body?.resposta ?? null));
+  } catch (e) {
+    await falhaSinteseInvestidores(pool, id, (e as Error).message).catch(() => {});
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
 app.get("/gravacoes/pendentes", async (c: any) => {
   try {
     await ensureGravacoesTable();
@@ -2678,13 +2716,13 @@ app.post("/gravacoes/:id/transcricao", async (c: any) => {
     const now = new Date().toISOString();
     if (await tabelaDaGravacao(pool, id) === "investidor_gravacoes") {
       const { rows: [gi] } = await pool.query(
-        `UPDATE investidor_gravacoes SET transcricao = $2, duracao_seg = $3, estado = 'transcrito', erro = NULL, updated_at = $4
+        `UPDATE investidor_gravacoes SET transcricao = $2, duracao_seg = $3, estado = 'aguarda_analise', erro = NULL, updated_at = $4
          WHERE id = $1 RETURNING *`,
         [id, transcricao, body.duracao_seg ?? null, now],
       );
       if (!gi) return c.json({ error: "Gravacao nao encontrada" }, 404);
-      try { return c.json(await analisarEGravar(pool, id)); }
-      catch { const { rows: [f] } = await pool.query("SELECT * FROM investidor_gravacoes WHERE id = $1", [id]); return c.json(f); }
+      // A análise SOP 4 corre no Mac (Claude Code): o worker apanha-a em /gravacoes/investidores/por-analisar.
+      return c.json(gi);
     }
     await ensureClassificacaoTables(pool);
     const segmentos = Array.isArray(body.segmentos) ? body.segmentos.slice(0, 5000) : null;
@@ -3125,7 +3163,7 @@ app.patch("/chamadas-investidores/:id/registo", async (c: any) => {
 app.post("/chamadas-investidores/:id/analisar", async (c: any) => {
   try {
     await ensureInvestidorGravacoesTable(pool);
-    return c.json(await analisarEGravar(pool, c.req.param("id")));
+    return c.json(await pedirAnaliseInvestidor(pool, c.req.param("id")));
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
@@ -3150,15 +3188,24 @@ app.get("/chamadas-investidores/relatorio", async (c: any) => {
   catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
+// Síntese guardada do período (null se nunca foi pedida). Gerar = pôr em fila
+// para o Mac; o frontend volta a ler até ficar concluída.
 app.get("/chamadas-investidores/sintese", async (c: any) => {
-  try { return c.json((await sinteseChamadasInvestidores(pool, periodoChamadas(c))).sintese); }
+  try { return c.json(await lerSinteseInvestidores(pool, periodoChamadas(c))); }
+  catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/chamadas-investidores/sintese", async (c: any) => {
+  try { return c.json(await pedirSinteseInvestidores(pool, periodoChamadas(c))); }
   catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
 app.get("/chamadas-investidores/relatorio/pdf", async (c: any) => {
   try {
     const periodo = periodoChamadas(c);
-    const { rel, sintese } = await sinteseChamadasInvestidores(pool, periodo);
+    const rel = await relatorioChamadasInvestidores(pool, periodo);
+    const s = await lerSinteseInvestidores(pool, periodo);
+    const sintese = s?.sintese || null;
     const buffer = await streamToBuffer(generateChamadasInvestidoresPDF(rel, sintese));
     return c.body(buffer, 200, {
       "Content-Type": "application/pdf",

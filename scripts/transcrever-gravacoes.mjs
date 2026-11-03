@@ -8,12 +8,16 @@
  *   3. download do audio -> ficheiro temporario
  *   4. Whisper LOCAL (whisper.cpp ou whisper python) -> texto
  *   5. POST /crm/gravacoes/:id/transcricao   { transcricao, duracao_seg, segmentos }
- *      (o backend dispara a analise comercial por Claude automaticamente)
  *   6. em caso de erro -> POST /crm/gravacoes/:id/falha
  *   7. GET  /crm/gravacoes/por-analisar  -> avaliacoes de consultor por fazer.
  *      A IA corre AQUI, no Claude Code do Mac (plano Claude, sem custo de API):
  *      POST /crm/gravacoes/:id/analise-consultor { respostas } devolve o prompt
  *      do passo seguinte ate a analise ficar concluida.
+ *   8. GET  /crm/gravacoes/investidores/por-analisar -> chamadas com investidores
+ *      (SOP 4), mesmo esquema: POST /crm/gravacoes/:id/analise-investidor
+ *      devolve o prompt; o worker responde com { resposta }.
+ *   9. GET  /crm/gravacoes/sinteses-investidores/por-gerar -> sinteses do
+ *      periodo pedidas no CRM: POST /crm/gravacoes/sinteses-investidores/:id/passo.
  *
  * Sem dependencias npm: usa fetch nativo (Node 18+) + ffmpeg/whisper via CLI.
  *
@@ -171,14 +175,14 @@ async function processarUma(g) {
     const duracao = await getDuracaoSeg(audioFile)
     const { texto: transcricao, segmentos } = await transcrever(audioFile, work)
     if (!transcricao) throw new Error('transcricao vazia')
-    log(`  transcrito (${transcricao.length} chars, ${duracao ?? '?'}s). A enviar + analise IA...`)
+    log(`  transcrito (${transcricao.length} chars, ${duracao ?? '?'}s). A enviar...`)
 
     await api(`/crm/gravacoes/${g.id}/transcricao`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ transcricao, duracao_seg: duracao, segmentos }),
     })
-    log('  concluido (transcrito + analisado).')
+    log('  transcricao enviada.')
   } catch (e) {
     err(`  ERRO: ${e.message}`)
     try { await api(`/crm/gravacoes/${g.id}/falha`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ erro: e.message }) }) } catch {}
@@ -240,6 +244,28 @@ async function analisarConsultor(g) {
   }
 }
 
+// Pedido de um so passo (analise SOP 4 de investidor ou sintese do periodo):
+// o CRM devolve o prompt, o Claude Code local responde e o CRM grava.
+async function passoUnico(rota, rotulo) {
+  log(rotulo)
+  const work = mkdtempSync(join(tmpdir(), 'somnium-analise-'))
+  const post = (body) => api(rota, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  try {
+    const passo = await post({})
+    if (!passo?.pedido) throw new Error('resposta inesperada do CRM')
+    log(`  ${passo.pedido.passo} (${passo.pedido.modelo})...`)
+    const { texto } = await claudeLocal(passo.pedido.prompt, passo.pedido.modelo, work)
+    const fim = await post({ resposta: texto })
+    if (!fim?.concluido) throw new Error('resposta inesperada do CRM')
+    log('  concluido, disponivel no CRM.')
+  } catch (e) {
+    err(`  ERRO: ${e.message}`)
+    try { await post({ erro: e.message }) } catch {}
+  } finally {
+    try { rmSync(work, { recursive: true, force: true }) } catch {}
+  }
+}
+
 async function main() {
   let pendentes
   try { pendentes = await api('/crm/gravacoes/pendentes') } catch (e) { err(`Falha a obter pendentes: ${e.message}`); process.exit(1) }
@@ -252,6 +278,12 @@ async function main() {
   let porAnalisar = []
   try { porAnalisar = await api('/crm/gravacoes/por-analisar') } catch (e) { err(`Falha a obter analises: ${e.message}`) }
   for (const g of porAnalisar || []) await analisarConsultor(g)
+  let investidores = []
+  try { investidores = await api('/crm/gravacoes/investidores/por-analisar') } catch (e) { err(`Falha a obter analises de investidores: ${e.message}`) }
+  for (const g of investidores || []) await passoUnico(`/crm/gravacoes/${g.id}/analise-investidor`, `Analise SOP 4 (investidor): gravacao ${g.id} (${g.tipo_chamada})`)
+  let sinteses = []
+  try { sinteses = await api('/crm/gravacoes/sinteses-investidores/por-gerar') } catch (e) { err(`Falha a obter sinteses: ${e.message}`) }
+  for (const s of sinteses || []) await passoUnico(`/crm/gravacoes/sinteses-investidores/${encodeURIComponent(s.id)}/passo`, `Sintese das chamadas a investidores ${s.desde} a ${s.ate}`)
   log('Ciclo concluido.')
 }
 
