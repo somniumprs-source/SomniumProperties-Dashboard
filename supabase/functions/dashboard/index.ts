@@ -1475,11 +1475,9 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
     const parceria = investidores.filter(emParceria);
     const capitalMobilizado = round2(parceria.reduce((s: number, i: any) => s + (i.montanteInvestido || 0), 0));
     const capitalTurns = comEscrituras && capitalMobilizado > 0 ? round2(capitalRealizado / capitalMobilizado * fatorAnual) : null;
-    const entradas = round2(investidores.filter((i: any) => inP(i.dataCapitalTransferido, start, end)).reduce((s: number, i: any) => s + (i.montanteInvestido || 0), 0));
     const churned = parceria.filter((i: any) => i.naoReinveste && inP(i.dataNaoReinveste, start, end));
     const capitalPerdido = round2(churned.reduce((s: number, i: any) => s + (i.montanteInvestido || 0), 0));
     const capitalPerdidoPct = capitalMobilizado > 0 ? round2(capitalPerdido / capitalMobilizado * 100) : null;
-    const netFlow = investidores.some((i: any) => i.dataCapitalTransferido) ? round2(entradas - capitalPerdido) : null;
     const reinvestimento = parceria.length > 0 ? round2(parceria.filter((i: any) => (i.numeroNegocios || 0) > 1).length / parceria.length * 100) : null;
     const top3 = [...parceria].sort((a: any, b: any) => (b.montanteInvestido || 0) - (a.montanteInvestido || 0)).slice(0, 3).reduce((s: number, i: any) => s + (i.montanteInvestido || 0), 0);
     const concentracaoTop3 = capitalMobilizado > 0 ? round2(top3 / capitalMobilizado * 100) : null;
@@ -1592,7 +1590,7 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
       velocidade: { diasAteFechar, capitalTurns, throughput },
       capital: {
         confirmado: capConfirmado, financiamento: faltaFinanciamento(imoveisAll, analisesAtivasRes.rows, capConfirmado.valido),
-        mobilizado: capitalMobilizado, capacidadeDeclarada: round2(capacidadeDeclarada(investidores)), parceria: contagemParceria(investidores), netFlow,
+        mobilizado: capitalMobilizado, capacidadeDeclarada: round2(capacidadeDeclarada(investidores)), parceria: contagemParceria(investidores),
         reinvestimento, concentracaoTop3, capitalPerdido, capitalPerdidoPct,
         saidaInvestidores, taxaConvInvestidor, ticketMedioSlot,
       },

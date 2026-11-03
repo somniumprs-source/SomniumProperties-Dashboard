@@ -19,10 +19,11 @@ export const DEPARTAMENTOS = {
 }
 
 // Núcleo aprovado em 03/11/2026: os indicadores a pôr a medir primeiro.
+// Eliminados do plano pelo CEO a 03/11/2026: F04, F05, G33 e G38.
 export const NUCLEO = [
   'C01', 'C02', 'C03', 'C11', 'C12', 'C15', 'C16', 'I01', 'I09', 'I10',
   'O01', 'O02', 'O04', 'O07', 'O09', 'W04',
-  'F02', 'F04', 'F05', 'F07', 'W01', 'I02', 'I03', 'I04', 'P03', 'P04', 'P05', 'P07',
+  'F02', 'F07', 'W01', 'I02', 'I03', 'I04', 'P03', 'P04', 'P05', 'P07',
 ]
 
 const m = (id, sigla, nome, nomeEn, departamento, estado, explicacao, formula, interpretar, extra = {}) =>
@@ -67,8 +68,6 @@ export const CATALOGO = [
   m('G30', 'NF', 'Negócios fechados', 'Closed deals', 'financeiro', 'medido', 'Negócios com escritura de venda feita.', 'Negócios com escritura de venda no período', 'Regra do CEO: sem escritura não há fecho. Compra, cedência ou pagamento não contam. A data regista-se na ficha do projeto.'),
   m('G31', 'LMN', 'Lucro médio por negócio', 'Average profit per deal', 'financeiro', 'medido', 'Lucro médio dos negócios fechados.', 'Lucro dos fechados ÷ número de fechados', 'Alvo: 15 000 a 20 000 € por negócio. Conta o lucro do negócio; a parte da Somnium é a P05.'),
   m('G32', 'MM', 'Margem média', 'Average margin', 'financeiro', 'medido', 'Lucro dos negócios fechados face ao capital.', 'Lucro ÷ capital, média dos fechados', 'Com poucos negócios, mostrar sempre o número de casos.'),
-  m('G33', 'CPN', 'Custo por negócio', 'Cost per deal', 'financeiro', 'sem_registo', 'Custo da estrutura por negócio fechado.', 'Custos de estrutura classificados ÷ negócios fechados', 'O valor anterior tratava despesas únicas como mensais e foi retirado.', { falta: 'Classificar as despesas e aprovar a regra.' }),
-  m('G38', 'FLC', 'Fluxo líquido de capital', 'Net capital flow', 'financeiro', 'sem_registo', 'Capital que entrou menos capital que saiu no período.', 'Entradas − capital perdido', 'Positivo significa mais capital a entrar do que a sair.', { falta: 'Registar a data de transferência do capital.' }),
   m('G39', 'RC', 'Rotação de capital', 'Capital turnover', 'financeiro', 'medido', 'Quantas vezes por ano o capital completa um negócio.', 'Capital realizado ÷ capital investido, anualizado', 'Só conta com escritura de venda. Sem escrituras, o valor é 0.'),
   m('G40', 'TMS', 'Investimento médio por participação', 'Average ticket per slot', 'financeiro', 'medido', 'Valor médio de cada participação de investidor num negócio.', 'Capital das participações ÷ número de participações', 'Ajuda a estimar quantos investidores cada negócio precisa.'),
   m('G42', 'CAP', 'Capital perdido', 'Capital churn', 'financeiro', 'medido', 'Capital dos investidores que declararam não reinvestir.', 'Soma do montante desses investidores no período', 'Mostrar também em percentagem do capital investido.'),
@@ -157,8 +156,6 @@ export const CATALOGO = [
   m('F01', 'ROG', 'Resultado operacional de gestão', 'Management Operating Result', 'financeiro', 'inativo', 'Contribuições reconhecidas menos custos de estrutura.', 'Contribuições − estrutura', 'Não é EBITDA nem lucro líquido.'),
   m('F02', 'CFM', 'Custos fixos mensais', 'Corporate Overheads', 'financeiro', 'parcial', 'Custos recorrentes da empresa por mês.', 'Mensais + anuais ÷ 12', 'Valor registado, sem garantia de estar completo.', { falta: 'Confirmar se todos os custos fixos estão registados.' }),
   m('F03', 'BFV', 'Desvio face a orçamento e previsão', 'Budget and Forecast Variance', 'financeiro', 'inativo', 'Diferença entre realizado, orçamento e previsão.', 'Realizado − orçamento; realizado − previsão', 'Favorável depende da métrica, não do sinal.'),
-  m('F04', 'CL', 'Caixa livre e folga', 'Unrestricted Cash and Liquidity Headroom', 'financeiro', 'sem_registo', 'Dinheiro realmente livre da empresa, acima da reserva.', 'Saldo − fundos afetos; folga = caixa livre − reserva', 'Capital de investidores não é caixa livre.', { falta: 'Registar o saldo da CGD e as afetações (pendente por decisão do CEO).' }),
-  m('F05', 'RW', 'Autonomia financeira', 'Runway', 'financeiro', 'sem_registo', 'Quantos meses a empresa aguenta com a caixa livre.', 'Caixa livre ÷ consumo mensal', 'Sem saldo não há runway. O valor anterior usava lucro por receber.', { ...consagrada, falta: 'Registar o saldo da CGD e as afetações (pendente por decisão do CEO).' }),
   m('F06', '13W', 'Previsão de tesouraria a 13 semanas', '13-Week Cash Flow Forecast', 'financeiro', 'inativo', 'Saldo previsto semana a semana.', 'Saldo inicial + entradas − saídas', 'Não usado: a previsão acordada é mensal.'),
   m('F07', 'VEN', 'Recebimentos vencidos', 'Overdue Receivables', 'financeiro', 'parcial', 'Valores que já deviam ter sido recebidos.', 'Soma das tranches vencidas e não recebidas', 'Componentes ainda não exigíveis não são dívida.', { falta: 'Registar o valor final do T2 Condeixa e a data da escritura.' }),
   m('F08', 'CFV', 'Desvio da previsão de caixa', 'Cash Forecast Variance', 'financeiro', 'inativo', 'Diferença entre saldo efetivo e previsto.', 'Saldo efetivo − previsto', 'Desvios repetidos revelam factos por registar.'),
@@ -172,7 +169,7 @@ export const CATALOGO = [
 export const POR_MEDIR = {
   comercial:  {},
   obras:      {},
-  financeiro: { caixa: ['F04', 'F05', 'G33'], capital: ['G38'] },
+  financeiro: {},
 }
 
 const POR_ID = new Map(CATALOGO.map(x => [x.id, x]))

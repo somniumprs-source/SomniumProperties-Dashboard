@@ -131,13 +131,14 @@ test('catálogo: IDs e siglas sem repetições', () => {
   assert.deepEqual(siglas.filter((s, i) => siglas.indexOf(s) !== i), [])
 })
 
-test('catálogo: inclui os 70 indicadores do plano', () => {
-  const plano = { A: 11, C: 16, I: 10, P: 10, O: 11, F: 8, W: 4 }
+// Plano de 70, menos F04 e F05 eliminados pelo CEO (G33 e G38 são gerais).
+test('catálogo: inclui os 68 indicadores do plano que ficaram', () => {
+  const plano = { A: 11, C: 16, I: 10, P: 10, O: 11, F: 6, W: 4 }
   for (const [p, n] of Object.entries(plano)) assert.equal(CATALOGO.filter(x => x.id.startsWith(p)).length, n, p)
 })
 
-test('núcleo: 28 indicadores, todos em uso e sem Marketing', () => {
-  assert.equal(new Set(NUCLEO).size, 28)
+test('núcleo: 26 indicadores, todos em uso e sem Marketing', () => {
+  assert.equal(new Set(NUCLEO).size, 26)
   for (const id of NUCLEO) {
     assert.ok(metrica(id), id)
     assert.notEqual(metrica(id).estado, 'inativo', id)
@@ -147,8 +148,9 @@ test('núcleo: 28 indicadores, todos em uso e sem Marketing', () => {
 
 test('pesquisa: encontra por sigla, nomes e sem acentos', () => {
   assert.ok(pesquisar('cac').some(x => x.id === 'A01'))
-  assert.ok(pesquisar('RUNWAY').some(x => x.id === 'F05'))
-  assert.ok(pesquisar('autonomia financeira').some(x => x.id === 'F05'))
+  assert.ok(pesquisar('PROFIT EROSION').some(x => x.id === 'P07'))
+  assert.ok(pesquisar('erosao de lucro').some(x => x.id === 'P07'))
+  for (const id of ['F04', 'F05', 'G33', 'G38']) assert.equal(metrica(id), undefined, id)
   assert.ok(pesquisar('negocios fechados').some(x => x.id === 'G30'))
   assert.equal(pesquisar('').length, CATALOGO.length)
 })
