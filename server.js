@@ -780,7 +780,7 @@ const getObras        = async () => []
 // Cache com TTL para endpoints que fazem queries pesadas
 import { TTLCache } from './src/db/utils/ttlCache.js'
 import pool from './src/db/pg.js'
-import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, haEscrituras, resumoFases, custoRealObra, diasNaFase } from './supabase/functions/_shared/regrasDashboard.js'
+import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, haEscrituras, resumoFases, resumoProjetos, custoRealObra, diasNaFase } from './supabase/functions/_shared/regrasDashboard.js'
 import { alertasConservacao } from './src/db/consentimentos.js'
 import { juntarResponsavel, donosDasRegioes } from './src/db/responsavelRegiao.js'
 import { alertasDeDespesas } from './src/constants/regrasDespesas.js'
@@ -1896,7 +1896,7 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
       pool.query(`SELECT consultor_id, canal, direcao, data_hora FROM consultor_interacoes WHERE canal IS DISTINCT FROM 'Nota' ORDER BY consultor_id, data_hora`).catch(() => ({ rows: [] })),
       pool.query(`SELECT finalidade, canal, data_hora FROM investidor_interacoes WHERE canal IS DISTINCT FROM 'Nota'`).catch(() => ({ rows: [] })),
       pool.query(`SELECT negocio_id, capital FROM projeto_investidores WHERE capital > 0`).catch(() => ({ rows: [] })),
-      pool.query(`SELECT negocio_id, data_fim_prevista, data_fim_real FROM projeto_fases`).catch(() => ({ rows: [] })),
+      pool.query(`SELECT negocio_id, nome, estado, ordem, data_fim_prevista, data_fim_real FROM projeto_fases ORDER BY ordem`).catch(() => ({ rows: [] })),
       pool.query(`SELECT id FROM negocios WHERE deleted_at IS NULL AND analise_final IS NOT NULL`).catch(() => ({ rows: [] })),
       pool.query(`SELECT entidade_id, alteracoes, created_at FROM historico_alteracoes WHERE entidade = 'imoveis' AND alteracoes::text LIKE '%"estado"%'`).catch(() => ({ rows: [] })),
     ])
@@ -2095,11 +2095,12 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
       intervalo: { de: start.toISOString().slice(0,10), ate: end.toISOString().slice(0,10) },
       fecho: { negociosFechados: comEscrituras ? dealsPeriodo : null },
       obras: {
-        negociosAtivos: negocios.filter(n => n.fase !== 'Vendido').length,
+        negociosAtivos: negocios.filter(n => !negocioFechado(n)).length,
         negociosTotal: negocios.length,
         comAnaliseFinal: analisesRes.rows.filter(r => idsNegocios.has(r.id)).length,
         custoReal: round2(custoRealObra(despesas, idsNegocios)),
         fases: resumoFases(fasesRes.rows.filter(f => idsNegocios.has(f.negocio_id))),
+        projetos: resumoProjetos(negocios, fasesRes.rows, despesas),
       },
       funil: {
         atividade: atividadeImoveis,

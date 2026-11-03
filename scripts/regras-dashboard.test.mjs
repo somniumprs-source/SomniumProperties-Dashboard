@@ -4,9 +4,9 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar,
-  negocioFechado, haEscrituras, resumoFases, custoRealObra, mediana, diasNaFase, resumoAnalisesNegocios,
+  negocioFechado, haEscrituras, resumoFases, custoRealObra, mediana, diasNaFase, resumoAnalisesNegocios, resumoProjetos,
 } from '../supabase/functions/_shared/regrasDashboard.js'
-import { CATALOGO, NUCLEO, ESTADOS, DEPARTAMENTOS, metrica, pesquisar } from '../src/lib/catalogoMetricas.js'
+import { CATALOGO, NUCLEO, POR_MEDIR, ESTADOS, DEPARTAMENTOS, metrica, pesquisar } from '../src/lib/catalogoMetricas.js'
 
 test('parceria: reconhece o estado real e separa estado de aporte', () => {
   const inv = [
@@ -103,6 +103,25 @@ test('catálogo: todos os indicadores têm sigla, dois nomes e explicação', ()
     assert.ok(DEPARTAMENTOS[x.departamento], `${x.id} com departamento inválido`)
     if (x.estado === 'parcial' || x.estado === 'sem_registo') assert.ok(x.falta, `${x.id} não diz o que falta`)
   }
+})
+
+test('projetos: mantém negócios sem escritura e calcula prazo e custo', () => {
+  const r = resumoProjetos(
+    [{ id: 'a', movimento: 'Lages', categoria: 'CAEP', dataEstimada: '2027-03-21' }, { id: 'b', movimento: 'Fechado', dataEscrituraVenda: '2026-10-01' }],
+    [{ negocio_id: 'a', nome: 'Aquisição', estado: 'em_curso', data_fim_prevista: '2026-10-21' }, { negocio_id: 'a', nome: 'Demolições', estado: 'pendente' }],
+    [{ negocioId: 'a', custoMensal: 960.9 }],
+    new Date('2026-11-03T12:00:00Z'),
+  )
+  assert.equal(r.length, 1)
+  assert.deepEqual(r[0].fasesEmCurso, ['Aquisição'])
+  assert.equal(r[0].prazos.maiorAtrasoDias, 13)
+  assert.equal(r[0].custoReal, 960.9)
+})
+
+test('por medir: cada indicador sem registo tem um sítio único', () => {
+  const ids = Object.values(POR_MEDIR).flatMap(d => Object.values(d).flat())
+  assert.equal(new Set(ids).size, ids.length)
+  assert.deepEqual([...ids].sort(), CATALOGO.filter(x => x.estado === 'sem_registo').map(x => x.id).sort())
 })
 
 test('catálogo: IDs e siglas sem repetições', () => {

@@ -26,7 +26,7 @@ import {
 } from "../_shared/queries.ts";
 import { calcBurnRateMensal, despesasDaEmpresa } from "../_shared/financeCalc.ts";
 import { TTLCache } from "../_shared/ttlCache.ts";
-import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, haEscrituras, resumoFases, custoRealObra, diasNaFase } from "../_shared/regrasDashboard.js";
+import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, haEscrituras, resumoFases, resumoProjetos, custoRealObra, diasNaFase } from "../_shared/regrasDashboard.js";
 
 // Cache de endpoints pesados — port de endpointCache() em server.js (achado
 // da auditoria: dev tinha cache de 2-5min nestes 13 endpoints, produção
@@ -1354,7 +1354,7 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
       pool.query(`SELECT consultor_id, canal, direcao, data_hora FROM consultor_interacoes WHERE canal IS DISTINCT FROM 'Nota' ORDER BY consultor_id, data_hora`).catch(() => ({ rows: [] as any[] })),
       pool.query(`SELECT finalidade, canal, data_hora FROM investidor_interacoes WHERE canal IS DISTINCT FROM 'Nota'`).catch(() => ({ rows: [] as any[] })),
       pool.query(`SELECT negocio_id, capital FROM projeto_investidores WHERE capital > 0`).catch(() => ({ rows: [] as any[] })),
-      pool.query(`SELECT negocio_id, data_fim_prevista, data_fim_real FROM projeto_fases`).catch(() => ({ rows: [] as any[] })),
+      pool.query(`SELECT negocio_id, nome, estado, ordem, data_fim_prevista, data_fim_real FROM projeto_fases ORDER BY ordem`).catch(() => ({ rows: [] as any[] })),
       pool.query(`SELECT id FROM negocios WHERE deleted_at IS NULL AND analise_final IS NOT NULL`).catch(() => ({ rows: [] as any[] })),
       pool.query(`SELECT entidade_id, alteracoes, created_at FROM historico_alteracoes WHERE entidade = 'imoveis' AND alteracoes::text LIKE '%"estado"%'`).catch(() => ({ rows: [] as any[] })),
     ]);
@@ -1554,11 +1554,12 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
       intervalo: { de: start.toISOString().slice(0, 10), ate: end.toISOString().slice(0, 10) },
       fecho: { negociosFechados: comEscrituras ? dealsPeriodo : null },
       obras: {
-        negociosAtivos: negocios.filter((n: any) => n.fase !== "Vendido").length,
+        negociosAtivos: negocios.filter((n: any) => !negocioFechado(n)).length,
         negociosTotal: negocios.length,
         comAnaliseFinal: analisesRes.rows.filter((r: any) => idsNegocios.has(r.id)).length,
         custoReal: round2(custoRealObra(despesas, idsNegocios)),
         fases: resumoFases(fasesRes.rows.filter((f: any) => idsNegocios.has(f.negocio_id))),
+        projetos: resumoProjetos(negocios, fasesRes.rows, despesas),
       },
       funil: {
         atividade: atividadeImoveis,

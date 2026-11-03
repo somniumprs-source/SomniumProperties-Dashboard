@@ -7,21 +7,18 @@ import { FinanceiroDashboard } from '../components/dashboard/FinanceiroDashboard
 import { ObrasDashboard } from '../components/dashboard/ObrasDashboard.jsx'
 import { Glossario } from '../components/dashboard/Glossario.jsx'
 import { FichaProvider } from '../components/dashboard/Indicador.jsx'
-import { PeriodSelector } from '../components/dashboard/PeriodSelector.jsx'
 import { useKPIs } from '../hooks/useKPIs.js'
 import { KPISkeleton } from '../components/ui/Skeleton.jsx'
-import { KpiCard } from '../components/ui/KpiCard.jsx'
+import { Tabs } from '../components/ui/Tabs.jsx'
 import { apiFetch } from '../lib/api.js'
-import { EUR } from '../constants.js'
-import { CATALOGO } from '../lib/catalogoMetricas.js'
 import { RegiaoToggle } from '../components/RegiaoBadge.jsx'
 
 // As abas têm os mesmos nomes dos departamentos no menu (navConfig.js).
 const DEPT_TABS = [
-  { key: 'comercial',  label: 'Departamento Comercial',    icon: Handshake,    tone: 'gold' },
-  { key: 'obras',      label: 'Departamento de Obras',     icon: Construction, tone: 'amber' },
-  { key: 'financeiro', label: 'Departamento Financeiro',   icon: Wallet,       tone: 'green' },
-  { key: 'marketing',  label: 'Departamento de Marketing', icon: Megaphone,    tone: 'gray' },
+  { key: 'comercial',  label: 'Departamento Comercial',    icon: Handshake },
+  { key: 'obras',      label: 'Departamento de Obras',     icon: Construction },
+  { key: 'financeiro', label: 'Departamento Financeiro',   icon: Wallet },
+  { key: 'marketing',  label: 'Departamento de Marketing', icon: Megaphone },
 ]
 
 const REFRESH_INTERVAL_MS = 30_000
@@ -128,13 +125,17 @@ export function Dashboard() {
   const leituras = [kpis?.updatedAt && new Date(kpis.updatedAt).getTime(), blocos.dash?.em, blocos.pulse?.em, blocos.analises?.em].filter(Boolean)
   const updatedAt = leituras.length ? hora(Math.min(...leituras)) : null
 
-  // Número de cabeçalho de cada card de departamento (valor grande + caption).
-  const deptMeta = {
-    comercial:  { value: dashData?.funil?.atividade?.adicionados?.valor ?? '—', sub: 'Imóveis adicionados' },
-    obras:      { value: dashData?.obras?.negociosAtivos ?? '—', sub: 'Negócios ativos' },
-    financeiro: { value: finKpis ? EUR(finKpis.lucroRealTotal) : '—', sub: 'Faturação real' },
-    marketing:  { value: '—', sub: 'Em espera' },
-  }
+  // Contagem de situações a precisar de ação em cada departamento.
+  const alertas = pulse?.alertas
+  const contar = (...v) => v.reduce((a, b) => a + (b || 0), 0) || null
+  const abas = DEPT_TABS.map(t => ({
+    ...t,
+    count: {
+      comercial: contar(dashData?.funil?.backlogPorContactar, alertas?.imoveisParados, alertas?.investSemContacto, alertas?.consFollowUpAtrasado),
+      obras: contar(dashData?.obras?.fases?.atrasadas),
+      financeiro: contar(finKpis?.tranchesAtrasadas?.length),
+    }[t.key] ?? undefined,
+  }))
 
   return (
     <FichaProvider>
@@ -159,57 +160,21 @@ export function Dashboard() {
             os números antigos ficam visíveis sem flash. */}
         {loading && !error && !dashData && !kpis && <KPISkeleton count={8} />}
 
-        {/* Alertas transversais: contagens reais, sem pontuação nem metas por aprovar */}
-        {pulse && (pulse.alertas.imoveisParados > 0 || pulse.alertas.investSemContacto > 0 || pulse.alertas.consFollowUpAtrasado > 0) && (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-line bg-surface-raised px-4 sm:px-5 py-3 shadow-xs text-caption">
-            {pulse.alertas.imoveisParados > 0 && <span className="text-danger">{pulse.alertas.imoveisParados} imóveis parados</span>}
-            {pulse.alertas.investSemContacto > 0 && <span className="text-warning">{pulse.alertas.investSemContacto} investidores sem contacto</span>}
-            {pulse.alertas.consFollowUpAtrasado > 0 && <span className="text-warning">{pulse.alertas.consFollowUpAtrasado} follow-ups atrasados</span>}
-          </div>
-        )}
-
-        {/* Seletor de departamento + seletor de período global */}
-        <div className="flex flex-col gap-3">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {DEPT_TABS.map((t) => (
-              <KpiCard
-                key={t.key}
-                icon={t.icon}
-                label={t.label}
-                value={deptMeta[t.key]?.value}
-                sub={deptMeta[t.key]?.sub}
-                tone={t.tone}
-                size="md"
-                active={dept === t.key}
-                rotuloCompleto
-                onClick={() => setDept(t.key)}
-              />
-            ))}
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <button
-              type="button"
-              aria-pressed={dept === 'glossario'}
-              onClick={() => setDept('glossario')}
-              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${dept === 'glossario' ? 'border-accent ring-1 ring-accent text-ink' : 'border-line text-ink-muted hover:text-ink'}`}>
-              <BookOpen className="w-4 h-4" aria-hidden="true" />
-              Glossário ({CATALOGO.length})
-            </button>
-            {(dept === 'comercial' || dept === 'financeiro') && (
-              <div className="flex items-center gap-3">
-                {dashData?.intervalo && (
-                  <span className="text-[11px] text-ink-muted hidden sm:inline">{dashData.intervalo.de} a {dashData.intervalo.ate}</span>
-                )}
-                <PeriodSelector value={periodo} onChange={setPeriodo} />
-              </div>
-            )}
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Tabs variant="underline" items={abas} value={dept} onChange={setDept} className="max-w-full" />
+          <button
+            type="button"
+            aria-pressed={dept === 'glossario'}
+            onClick={() => setDept('glossario')}
+            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${dept === 'glossario' ? 'border-accent ring-1 ring-accent text-ink' : 'border-line text-ink-muted hover:text-ink'}`}>
+            <BookOpen className="w-4 h-4" aria-hidden="true" />
+            Glossário
+          </button>
         </div>
 
-        {/* Conteúdo por departamento */}
-        {dept === 'comercial' && <ComercialDashboard data={dashData} comKpis={comKpis} />}
+        {dept === 'comercial' && <ComercialDashboard data={dashData} comKpis={comKpis} alertas={alertas} periodo={periodo} onPeriodo={setPeriodo} />}
         {dept === 'obras' && <ObrasDashboard data={dashData} />}
-        {dept === 'financeiro' && <FinanceiroDashboard data={dashData} finKpis={finKpis} analises={analises} />}
+        {dept === 'financeiro' && <FinanceiroDashboard data={dashData} finKpis={finKpis} analises={analises} periodo={periodo} onPeriodo={setPeriodo} />}
         {dept === 'glossario' && <Glossario />}
 
         {dept === 'marketing' && (

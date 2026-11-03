@@ -79,7 +79,7 @@ export const CATALOGO = [
   m('G53', 'RA', 'Retorno anualizado médio', 'Average annualised return', 'financeiro', 'parcial', 'Retorno anualizado das análises dos negócios reais.', 'Média ponderada pelo capital', 'É previsto.', { falta: 'Separar previsto de realizado.' }),
 
   // ── Obras ────────────────────────────────────────────────────────────────
-  m('G46', 'NA', 'Negócios ativos', 'Active deals', 'obras', 'medido', 'Negócios ainda não vendidos.', 'Negócios com fase diferente de Vendido', 'Não significa obra em curso: a obra pode ainda não ter começado.'),
+  m('G46', 'NA', 'Negócios ativos', 'Active deals', 'obras', 'medido', 'Negócios ainda sem escritura de venda.', 'Negócios sem escritura de venda', 'Não significa obra em curso: a obra pode ainda não ter começado.'),
 
   // ── Indicadores gerais retirados ─────────────────────────────────────────
   m('G49', 'ROIC', 'Retorno sobre o capital investido', 'Return on invested capital', 'geral', 'inativo', 'Lucro face ao capital investido. Foi a North Star antiga.', 'Lucro ÷ capital investido, anualizado', 'Os investidores financiam 100%, por isso não mede o retorno da Somnium.', consagrada),
@@ -167,6 +167,13 @@ export const CATALOGO = [
   m('W03', 'ACR', 'Ciclo e conclusão de cedências', 'Assignment Cycle and Completion Rate', 'obras', 'inativo', 'Prazo de cedência e cedências concluídas.', 'Dias entre eventos; concluídas ÷ com desfecho', 'Cedência concluída não é negócio fechado.'),
   m('W04', 'CEE', 'Exposição a prazos contratuais', 'Contract Expiry Exposure', 'obras', 'sem_registo', 'Operações com prazos próximos e condições por cumprir.', 'Operações e valores por prazo', 'Priorizar pela consequência contratual.', { falta: 'Registar os prazos de CPCV, cedência e condições.' }),
 ]
+
+// Onde cada indicador por medir aparece, por departamento e subdivisão.
+export const POR_MEDIR = {
+  comercial:  { imoveis: ['C01', 'C12', 'C15', 'G13', 'G29'], investidores: ['G15', 'I09'], consultores: ['G27'] },
+  obras:      { projetos: ['O04'], prazos: ['O09', 'W04'] },
+  financeiro: { caixa: ['F04', 'F05', 'G33'], capital: ['I02', 'I04', 'G38', 'G39'], rentabilidade: ['G30', 'G31', 'G32', 'P05', 'P07'] },
+}
 
 const POR_ID = new Map(CATALOGO.map(x => [x.id, x]))
 export const metrica = (id) => POR_ID.get(id)

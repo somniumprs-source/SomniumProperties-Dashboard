@@ -114,3 +114,19 @@ export function resumoAnalisesNegocios(analises) {
     retornoAnualizado: capital > 0 ? Math.round(anualizado / capital * 100) / 100 : null,
   };
 }
+
+// Um negócio só sai da lista de projetos com escritura de venda.
+export function resumoProjetos(negocios, fases, despesas, hoje = new Date()) {
+  return negocios.filter((n) => !negocioFechado(n)).map((n) => {
+    const doProjeto = fases.filter((f) => f.negocio_id === n.id);
+    return {
+      id: n.id,
+      nome: n.movimento,
+      modelo: n.categoria,
+      fasesEmCurso: doProjeto.filter((f) => f.estado === "em_curso").map((f) => f.nome),
+      prazos: resumoFases(doProjeto, hoje),
+      custoReal: custoRealObra(despesas, new Set([n.id])),
+      vendaPrevista: n.dataEstimada || null,
+    };
+  });
+}

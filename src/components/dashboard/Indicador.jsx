@@ -3,7 +3,7 @@ import { Info } from 'lucide-react'
 import { KpiCard } from '../ui/KpiCard.jsx'
 import { Modal } from '../ui/Modal.jsx'
 import { Badge } from '../ui/Badge.jsx'
-import { metrica, ESTADOS, DEPARTAMENTOS, NUCLEO, CATALOGO } from '../../lib/catalogoMetricas.js'
+import { metrica, ESTADOS, DEPARTAMENTOS } from '../../lib/catalogoMetricas.js'
 
 // Cada número do Dashboard passa por aqui: o catálogo decide o nome, o estado
 // de medição e a ficha explicativa, para o ecrã nunca divergir do Glossário.
@@ -55,10 +55,14 @@ export function FichaMetrica({ m }) {
 export function Indicador({ id, value, sub, delta, melhor, tone = 'gold' }) {
   const m = metrica(id)
   const abrir = useFicha()
-  const detalhe = m.estado === 'parcial' ? [sub, 'Parcial'].filter(Boolean).join(' · ') : (sub ?? m.sigla)
   return (
     <div className="relative">
-      <KpiCard label={m.nome} value={value ?? 'Sem dados'} sub={detalhe} delta={delta} melhor={melhor} tone={tone} size="md" rotuloCompleto className="h-full pr-8" />
+      <KpiCard label={m.nome} value={value ?? 'Sem dados'} sub={sub} delta={delta} melhor={melhor} tone={tone} size="md" rotuloCompleto className="h-full pr-8" />
+      {m.estado === 'parcial' && (
+        <span title={`Parcial: ${m.falta}`} className="absolute top-3.5 right-8 w-1.5 h-1.5 rounded-full bg-warning">
+          <span className="sr-only">Medição parcial: {m.falta}</span>
+        </span>
+      )}
       <button
         type="button"
         onClick={() => abrir(id)}
@@ -71,19 +75,17 @@ export function Indicador({ id, value, sub, delta, melhor, tone = 'gold' }) {
   )
 }
 
-// Indicadores do departamento que ainda não têm dados: mostra o que falta
-// registar em vez de um número enganador.
-export function PorMedir({ departamento }) {
+// Fechado por defeito: indica o que falta registar sem encher o ecrã.
+export function PorMedir({ ids }) {
   const abrir = useFicha()
-  const lista = CATALOGO.filter(x => x.departamento === departamento && x.estado === 'sem_registo')
-    .sort((a, b) => NUCLEO.includes(b.id) - NUCLEO.includes(a.id))
-  if (!lista.length) return null
+  if (!ids?.length) return null
   return (
-    <div className="bg-surface-raised rounded-xl border border-line shadow-xs p-4">
-      <h3 className="text-ui font-semibold text-ink">Ainda por medir ({lista.length})</h3>
-      <p className="text-caption text-ink-muted mb-3">Não mostram número porque ainda não existe registo.</p>
-      <ul className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-2">
-        {lista.map(x => (
+    <details className="rounded-xl border border-line bg-surface-raised">
+      <summary className="cursor-pointer px-4 py-2.5 text-sm font-medium text-ink-muted hover:text-ink">
+        {ids.length} {ids.length === 1 ? 'indicador' : 'indicadores'} por medir
+      </summary>
+      <ul className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-2 px-4 pb-3">
+        {ids.map(metrica).map(x => (
           <li key={x.id}>
             <button type="button" onClick={() => abrir(x.id)} className="text-left rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">
               <span className="text-sm font-medium text-ink">{x.nome}</span>
@@ -92,6 +94,6 @@ export function PorMedir({ departamento }) {
           </li>
         ))}
       </ul>
-    </div>
+    </details>
   )
 }
