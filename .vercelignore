@@ -11,6 +11,9 @@ supabase/functions/*
 !supabase/functions/_shared
 supabase/functions/_shared/*
 !supabase/functions/_shared/roles.ts
+# Regras do Dashboard partilhadas entre o site e os backends (importadas pelo frontend).
+!supabase/functions/_shared/regrasDashboard.js
+!supabase/functions/_shared/rubricasAnalise.js
 server.js
 docs
 tmp
