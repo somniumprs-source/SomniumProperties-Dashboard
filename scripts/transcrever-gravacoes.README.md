@@ -7,6 +7,12 @@ Fluxo: upload no CRM -> Supabase Storage (bucket privado `Gravacoes`) -> este
 worker (cada 3 min) descarrega, transcreve com Whisper LOCAL, devolve o texto ao
 CRM, e o backend corre a analise comercial (Claude) automaticamente.
 
+Avaliacao dos consultores (cold call, discovery, acompanhamento): a IA corre
+tambem neste Mac, no Claude Code com a sessao do plano Claude, por isso nao ha
+custo de API. O worker pede o prompt ao CRM (`/gravacoes/:id/analise-consultor`),
+corre-o com `claude -p` e devolve o texto. Sem o Claude Code, as gravacoes ficam
+em "A analisar..." ate o Mac as apanhar.
+
 ## Setup (uma so vez)
 
 ### 1. Instalar o motor de transcricao
@@ -28,6 +34,13 @@ pip3 install -U openai-whisper
 which whisper    # confirma o caminho; se nao estiver no PATH do plist, define WHISPER_PY
 ```
 Nao precisa de `WHISPER_MODEL`; usa `WHISPER_PY_MODEL` (default: medium, auto-descarregado).
+
+### 1b. Claude Code (avaliacao dos consultores)
+```
+curl -fsSL https://claude.ai/install.sh | bash
+~/.local/bin/claude      # uma vez: /login com a conta do plano Claude, depois /exit
+```
+Nao definir `ANTHROPIC_API_KEY` no plist: o worker retira-a para nunca usar a API paga.
 
 ### 2. Copiar worker para a pasta de execucao do launchd
 ```
@@ -61,6 +74,7 @@ launchctl load   ~/Library/LaunchAgents/com.somnium.transcrever-gravacoes.plist
 | `WHISPER_PY` | `whisper` | Binario whisper python (fallback) |
 | `WHISPER_PY_MODEL` | `medium` | Modelo do whisper python |
 | `FFMPEG_BIN`/`FFPROBE_BIN` | `ffmpeg`/`ffprobe` | Conversao/duracao |
+| `CLAUDE_BIN` | `claude` | Claude Code com sessao no plano (avaliacao dos consultores) |
 | `INTERNAL_API_KEY` | (obrigatoria) | Autentica o worker nas rotas `/gravacoes` (`x-api-key`) |
 | `SUPABASE_ANON_KEY` | (obrigatoria) | Bearer para o gateway: o `crm` tem `verify_jwt = true` |
 

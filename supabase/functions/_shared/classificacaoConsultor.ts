@@ -8,6 +8,9 @@
  * acompanhamento) → avaliação "proposta" → o associado aceita, ajusta ou
  * rejeita cada nota → só então a classe passa para a ficha.
  *
+ * A IA corre no Mac do worker (Claude Code, plano Claude): sem custo de API.
+ * O servidor só prepara os prompts e trata as respostas (passoAnaliseConsultor).
+ *
  * A IA propõe, os associados decidem. Tetos por tipo de evidência, cobertura,
  * regras mínimas e bloqueios são calculados em código (classificacaoConsultorCalc).
  *
@@ -19,9 +22,7 @@ import {
   qualificarImovel, diasDepois, taxa, ETAPAS, GUIOES,
 } from './classificacaoConsultorCalc.ts'
 import { agendarContactoPessoa } from './contactoPessoa.ts'
-import Anthropic from '@anthropic-ai/sdk'
 
-const env = (k) => (globalThis.Deno ? globalThis.Deno.env.get(k) : process.env[k])
 const uuid = () => globalThis.crypto.randomUUID()
 const agora = () => new Date().toISOString()
 
@@ -277,34 +278,15 @@ function parseJson(texto) {
   return JSON.parse(m?.[0] || texto || '{}')
 }
 
-async function claude(modelo, prompt, maxTokens) {
-  const key = env('ANTHROPIC_API_KEY')
-  if (!key) throw new Error('ANTHROPIC_API_KEY nao configurada')
-  const client = new Anthropic({ apiKey: key })
-  // Fallback do lado do servidor: se o modelo recusar, outro modelo responde
-  // na mesma chamada (em vez de a análise falhar).
-  let response
-  try {
-    response = await client.beta.messages.create({
-      model: modelo,
-      max_tokens: maxTokens,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      messages: [{ role: 'user', content: prompt }],
-    })
-  } catch (e) {
-    // Conta sem a beta de fallback (400) ou sem o modelo (404): chamada simples,
-    // e no 404 o modelo que o resto do CRM já usa.
-    if (e?.status !== 400 && e?.status !== 404) throw e
-    console.error(`[classificacao] ${modelo}: ${e.message} — a repetir sem fallback`)
-    response = await client.messages.create({
-      model: e.status === 404 ? 'claude-sonnet-4-6' : modelo,
-      max_tokens: maxTokens,
-      messages: [{ role: 'user', content: prompt }],
-    })
-  }
-  if (response.stop_reason === 'refusal') throw new Error('A IA recusou analisar esta transcrição')
-  return { dados: parseJson(textoDaResposta(response)), modelo: response.model || modelo, usage: response.usage || null }
+// Protocolo sem estado com o worker: cada pedido traz as respostas que o worker
+// já tem; quando falta uma, a análise para e devolve o prompt a correr no Mac.
+class PedidoIA {
+  constructor(passo, modelo, prompt) { this.passo = passo; this.modelo = modelo; this.prompt = prompt }
+}
+function respostaOuPedido(respostas, passo, modelo, prompt) {
+  const r = respostas?.[passo]
+  if (!r?.texto) throw new PedidoIA(passo, modelo, prompt)
+  return { dados: parseJson(r.texto), modelo: r.modelo || modelo }
 }
 
 // ── Métricas automáticas (oportunidades, compromissos, negócios) ──
@@ -366,22 +348,24 @@ async function evidenciasAceites(pool, consultorId) {
 }
 
 // ── Análise de uma gravação ──────────────────────────────────
-export async function analisarGravacaoConsultor(pool, gravacaoId) {
+// Devolve { pedido: { passo, modelo, prompt } } enquanto faltar uma resposta da
+// IA, ou { concluido: true, gravacao } no fim.
+export async function passoAnaliseConsultor(pool, gravacaoId, respostas = {}) {
   await ensureClassificacaoTables(pool)
   const { rows: [g] } = await pool.query('SELECT * FROM consultor_gravacoes WHERE id = $1', [gravacaoId])
   if (!g) throw new Error('Gravacao nao encontrada')
-  if (!g.etapa_consultor) return null // gravação só do SOP 2
+  if (!g.etapa_consultor) return { concluido: true, gravacao: g } // gravação só do SOP 2
   if (!g.consentimento_em) throw new Error('Sem consentimento registado: a gravação não é processada')
   const segmentos = segmentosDe(g)
   if (!segmentos.length) throw new Error('Sem transcricao para analisar')
   const { rows: [consultor] } = await pool.query('SELECT * FROM consultores WHERE id = $1', [g.consultor_id])
   const { versao, valores: params } = await lerParametros(pool)
-  await pool.query("UPDATE consultor_gravacoes SET estado_consultor = 'a_analisar', erro_consultor = NULL WHERE id = $1", [gravacaoId])
+  await pool.query("UPDATE consultor_gravacoes SET estado_consultor = 'a_analisar', erro_consultor = NULL, updated_at = $2 WHERE id = $1", [gravacaoId, agora()])
 
   try {
     const etapa = g.etapa_consultor
     const modeloExtracao = params.modelos[etapa] || PARAMETROS_PADRAO.modelos.discovery
-    const ext = await claude(modeloExtracao, promptExtracao(etapa, consultor, segmentos, params), 16000)
+    const ext = respostaOuPedido(respostas, 'extracao', modeloExtracao, promptExtracao(etapa, consultor, segmentos, params))
     const extracao = ext.dados || {}
     const porSeg = new Map(segmentos.map(s => [s.i, s]))
     const novas = (Array.isArray(extracao.evidencias) ? extracao.evidencias : [])
@@ -394,7 +378,7 @@ export async function analisarGravacaoConsultor(pool, gravacaoId) {
     if (etapa !== 'cold_call') {
       const aceites = await evidenciasAceites(pool, g.consultor_id)
       const metricas = await metricasConsultor(pool, g.consultor_id, params)
-      const pont = await claude(params.modelos.pontuacao, promptPontuacao(etapa, consultor, novas, aceites, metricas, params), 8000)
+      const pont = respostaOuPedido(respostas, 'pontuacao', params.modelos.pontuacao, promptPontuacao(etapa, consultor, novas, aceites, metricas, params))
       analise.modelos.pontuacao = pont.modelo
       const propostos = pont.dados?.criterios || {}
       const notasIa = {}
@@ -443,8 +427,9 @@ export async function analisarGravacaoConsultor(pool, gravacaoId) {
     const { rows: [final] } = await pool.query(
       `UPDATE consultor_gravacoes SET analise_consultor = $2, estado_consultor = 'analisado', erro_consultor = NULL, updated_at = $3
         WHERE id = $1 RETURNING *`, [gravacaoId, JSON.stringify(analise), agora()])
-    return final
+    return { concluido: true, gravacao: final }
   } catch (e) {
+    if (e instanceof PedidoIA) return { pedido: { passo: e.passo, modelo: e.modelo, prompt: e.prompt } }
     await pool.query("UPDATE consultor_gravacoes SET estado_consultor = 'erro', erro_consultor = $2 WHERE id = $1",
       [gravacaoId, String(e.message || e).slice(0, 500)]).catch(() => {})
     throw e
@@ -452,6 +437,22 @@ export async function analisarGravacaoConsultor(pool, gravacaoId) {
 }
 
 // ── Leitura para a ficha (aba Avaliação) ─────────────────────
+// Worker: gravações à espera da análise (ou presas em a_analisar há >30 min).
+export async function gravacoesPorAnalisar(pool) {
+  await ensureClassificacaoTables(pool)
+  const { rows } = await pool.query(
+    `SELECT id, etapa_consultor FROM consultor_gravacoes
+      WHERE etapa_consultor IS NOT NULL AND consentimento_em IS NOT NULL AND transcricao IS NOT NULL
+        AND (estado_consultor = 'aguarda_analise' OR (estado_consultor = 'a_analisar' AND updated_at < $1))
+      ORDER BY created_at ASC LIMIT 5`, [new Date(Date.now() - 30 * 60_000).toISOString()])
+  return rows
+}
+
+export async function falhaAnaliseConsultor(pool, gravacaoId, erro) {
+  await pool.query("UPDATE consultor_gravacoes SET estado_consultor = 'erro', erro_consultor = $2, updated_at = $3 WHERE id = $1",
+    [gravacaoId, String(erro || 'Falha na análise').slice(0, 500), agora()])
+}
+
 export async function lerAvaliacaoConsultor(pool, consultorId) {
   await ensureClassificacaoTables(pool)
   const { rows: [c] } = await pool.query(

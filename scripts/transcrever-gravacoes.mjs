@@ -10,6 +10,10 @@
  *   5. POST /crm/gravacoes/:id/transcricao   { transcricao, duracao_seg, segmentos }
  *      (o backend dispara a analise comercial por Claude automaticamente)
  *   6. em caso de erro -> POST /crm/gravacoes/:id/falha
+ *   7. GET  /crm/gravacoes/por-analisar  -> avaliacoes de consultor por fazer.
+ *      A IA corre AQUI, no Claude Code do Mac (plano Claude, sem custo de API):
+ *      POST /crm/gravacoes/:id/analise-consultor { respostas } devolve o prompt
+ *      do passo seguinte ate a analise ficar concluida.
  *
  * Sem dependencias npm: usa fetch nativo (Node 18+) + ffmpeg/whisper via CLI.
  *
@@ -21,6 +25,7 @@
  *   WHISPER_PY         binario do whisper python (fallback, default: whisper)
  *   WHISPER_PY_MODEL   modelo do whisper python (default: medium)
  *   FFMPEG_BIN/FFPROBE_BIN  (default: ffmpeg/ffprobe no PATH)
+ *   CLAUDE_BIN         Claude Code (default: claude), com sessao iniciada no plano
  */
 import { spawn } from 'node:child_process'
 import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -36,6 +41,7 @@ const WHISPER_PY = process.env.WHISPER_PY || 'whisper'
 const WHISPER_PY_MODEL = process.env.WHISPER_PY_MODEL || 'medium'
 const FFMPEG = process.env.FFMPEG_BIN || 'ffmpeg'
 const FFPROBE = process.env.FFPROBE_BIN || 'ffprobe'
+const CLAUDE_BIN = process.env.CLAUDE_BIN || 'claude'
 
 // Sob launchd, o fd de log redireccionado pode devolver EAGAIN/UNKNOWN numa
 // escrita; sem listener de 'error' isso emite um 'error' nao tratado e mata o
@@ -181,12 +187,71 @@ async function processarUma(g) {
   }
 }
 
+// Corre um prompt no Claude Code local. Usa a sessao do plano Claude: o env
+// vai sem ANTHROPIC_API_KEY para nunca cair na API paga. Sem ferramentas: a
+// transcricao e texto de terceiros e so ha que responder com JSON.
+async function claudeLocal(prompt, modelo, workDir) {
+  const env = { ...process.env }
+  delete env.ANTHROPIC_API_KEY
+  delete env.ANTHROPIC_AUTH_TOKEN
+  const tentar = (args) => new Promise((resolve) => {
+    let stdout = '', stderr = ''
+    const child = spawn(CLAUDE_BIN, ['-p', '--output-format', 'json', '--tools', '', ...args], { env, cwd: workDir })
+    const t = setTimeout(() => { try { child.kill('SIGKILL') } catch {} }, 15 * 60_000)
+    child.stdout.on('data', d => { stdout += d })
+    child.stderr.on('data', d => { stderr += d })
+    child.on('error', e => { clearTimeout(t); resolve({ code: -1, stdout, stderr: String(e.message) }) })
+    child.on('close', code => { clearTimeout(t); resolve({ code, stdout, stderr }) })
+    child.stdin.end(prompt)
+  })
+  // Se o plano nao tiver o modelo pedido, repete com o modelo por defeito.
+  let r = await tentar(modelo ? ['--model', modelo] : [])
+  let out = null
+  try { out = JSON.parse(r.stdout) } catch { /* sem JSON */ }
+  if (modelo && (r.code !== 0 || out?.is_error)) {
+    err(`  claude (${modelo}) falhou: ${(out?.result || r.stderr || '').slice(0, 200)} - a repetir com o modelo por defeito`)
+    r = await tentar([])
+    try { out = JSON.parse(r.stdout) } catch { out = null }
+  }
+  if (r.code !== 0 || !out || out.is_error) throw new Error(`Claude Code falhou: ${(out?.result || r.stderr || r.stdout || '').slice(-300)}`)
+  return { texto: String(out.result || ''), modelo: modelo || 'claude-code' }
+}
+
+async function analisarConsultor(g) {
+  log(`Analise do consultor: gravacao ${g.id} (${g.etapa_consultor})`)
+  const work = mkdtempSync(join(tmpdir(), 'somnium-analise-'))
+  const respostas = {}
+  try {
+    for (let i = 0; i < 4; i++) {
+      const passo = await api(`/crm/gravacoes/${g.id}/analise-consultor`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ respostas }),
+      })
+      if (passo?.concluido) { log('  avaliacao proposta, pronta para rever no CRM.'); return }
+      if (!passo?.pedido) throw new Error('resposta inesperada do CRM')
+      log(`  passo ${passo.pedido.passo} (${passo.pedido.modelo})...`)
+      respostas[passo.pedido.passo] = await claudeLocal(passo.pedido.prompt, passo.pedido.modelo, work)
+    }
+    throw new Error('analise nao concluiu')
+  } catch (e) {
+    err(`  ERRO na analise: ${e.message}`)
+    try { await api(`/crm/gravacoes/${g.id}/analise-consultor`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ erro: e.message }) }) } catch {}
+  } finally {
+    try { rmSync(work, { recursive: true, force: true }) } catch {}
+  }
+}
+
 async function main() {
   let pendentes
   try { pendentes = await api('/crm/gravacoes/pendentes') } catch (e) { err(`Falha a obter pendentes: ${e.message}`); process.exit(1) }
-  if (!Array.isArray(pendentes) || pendentes.length === 0) { log('Sem gravacoes pendentes.'); return }
-  log(`${pendentes.length} gravacao(oes) pendente(s).`)
-  for (const g of pendentes) await processarUma(g)
+  if (!Array.isArray(pendentes) || pendentes.length === 0) log('Sem gravacoes pendentes.')
+  else {
+    log(`${pendentes.length} gravacao(oes) pendente(s).`)
+    for (const g of pendentes) await processarUma(g)
+  }
+  // Depois das transcricoes: avaliacoes de consultor (incluindo as acabadas de transcrever).
+  let porAnalisar = []
+  try { porAnalisar = await api('/crm/gravacoes/por-analisar') } catch (e) { err(`Falha a obter analises: ${e.message}`) }
+  for (const g of porAnalisar || []) await analisarConsultor(g)
   log('Ciclo concluido.')
 }
 

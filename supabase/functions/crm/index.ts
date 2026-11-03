@@ -47,7 +47,7 @@ import { tarefaAtrasada } from "../_shared/regrasTarefas.ts";
 import { inserirTarefasDoModelo, concluirRecebimentoFee, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase, pedeDocumento, documentoDoItem, documentosEmFalta, contextoDocumentos } from "../_shared/projetoTarefas.ts";
 import { baseLegal, mapaEstados, registar, retirar, retirados } from "../_shared/consentimentos.ts";
 import {
-  ensureClassificacaoTables, analisarGravacaoConsultor, lerAvaliacaoConsultor, lerAvaliacao, validarAvaliacao, descartarAvaliacao,
+  ensureClassificacaoTables, passoAnaliseConsultor, gravacoesPorAnalisar, falhaAnaliseConsultor, lerAvaliacaoConsultor, lerAvaliacao, validarAvaliacao, descartarAvaliacao,
   atualizarCompromisso, lerParametros, guardarParametros, painelRede, apagarDadosGravacoes, atualizarQualificacao, corrigirQualificacao,
   sugestoesConsultores, sugestoesTrimestrais, gerarTarefasSugestao, limparAudiosAntigos,
 } from "../_shared/classificacaoConsultor.ts";
@@ -2606,6 +2606,21 @@ app.get("/consultores/:id/gravacoes", async (c: any) => {
 });
 
 // Worker: gravacoes a aguardar transcricao, com signed URL para o audio.
+// Worker: avaliações de consultor por fazer. A IA corre no Mac (Claude Code,
+// plano Claude): o worker pede o passo seguinte, corre o prompt e devolve o texto.
+app.get("/gravacoes/por-analisar", async (c: any) => {
+  try { return c.json(await gravacoesPorAnalisar(pool)); } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/gravacoes/:id/analise-consultor", async (c: any) => {
+  try {
+    const id = c.req.param("id");
+    const body = await c.req.json().catch(() => ({}));
+    if (body?.erro) { await falhaAnaliseConsultor(pool, id, body.erro); return c.json({ ok: true }); }
+    return c.json(await passoAnaliseConsultor(pool, id, body?.respostas || {}));
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
 app.get("/gravacoes/pendentes", async (c: any) => {
   try {
     await ensureGravacoesTable();
@@ -2698,9 +2713,9 @@ app.post("/gravacoes/:id/transcricao", async (c: any) => {
     } else {
       await pool.query(`UPDATE consultor_gravacoes SET estado = 'analisado' WHERE id = $1`, [id]);
     }
-    // Avaliação do consultor em segundo plano: duas chamadas à IA podem passar
-    // o tempo de resposta da função.
-    if (g.etapa_consultor) emSegundoPlano(analisarGravacaoConsultor(pool, id));
+    // Avaliação do consultor: a IA corre no Mac do worker (Claude Code, plano
+    // Claude), que a apanha em /gravacoes/por-analisar.
+    if (g.etapa_consultor) await pool.query("UPDATE consultor_gravacoes SET estado_consultor = 'aguarda_analise', erro_consultor = NULL WHERE id = $1", [id]);
     const { rows: [final] } = await pool.query("SELECT * FROM consultor_gravacoes WHERE id = $1", [id]);
     return c.json(final);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
@@ -2777,12 +2792,6 @@ async function soAssociados(c: any): Promise<any> {
 }
 const SO_ASSOCIADOS = { error: "Só os associados usam a classificação de consultores" };
 
-// Tarefa que continua depois da resposta (Supabase Edge Runtime).
-function emSegundoPlano(p: Promise<any>) {
-  const seguro = p.catch((e: any) => console.error("[classificacao]", e?.message || e));
-  try { (globalThis as any).EdgeRuntime?.waitUntil?.(seguro); } catch { /* sem runtime: corre na mesma */ }
-}
-
 // UPDATE com etapa, autor e consentimento de uma gravação do consultor.
 function dadosEtapaConsultor(id: string, body: any, estadoComConsentimento: string): [string, any[]] {
   const etapa = ["cold_call", "discovery", "acompanhamento"].includes(body.etapa_consultor) ? body.etapa_consultor : null;
@@ -2820,10 +2829,10 @@ app.post("/gravacoes/:id/analisar-consultor", async (c: any) => {
     await ensureClassificacaoTables(pool);
     const id = c.req.param("id");
     const { rows: [g] } = await pool.query(
-      `UPDATE consultor_gravacoes SET estado_consultor = 'a_analisar', erro_consultor = NULL
+      `UPDATE consultor_gravacoes SET estado_consultor = 'aguarda_analise', erro_consultor = NULL
         WHERE id = $1 AND etapa_consultor IS NOT NULL AND consentimento_em IS NOT NULL AND transcricao IS NOT NULL RETURNING *`, [id]);
     if (!g) return c.json({ error: "A gravação precisa de etapa, consentimento e transcrição" }, 400);
-    emSegundoPlano(analisarGravacaoConsultor(pool, id));
+    // O worker do Mac apanha-a no próximo ciclo; o ecrã acompanha pelo estado.
     return c.json(g);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });

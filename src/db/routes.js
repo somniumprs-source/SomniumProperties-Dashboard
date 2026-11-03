@@ -53,7 +53,7 @@ import { tarefaAtrasada } from '../constants/regrasTarefas.js'
 import { inserirTarefasDoModelo, concluirRecebimentoFee, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase, pedeDocumento, documentoDoItem, documentosEmFalta, contextoDocumentos } from './projetoTarefas.js'
 import { baseLegal, mapaEstados, registar, retirar, retirados } from './consentimentos.js'
 import {
-  ensureClassificacaoTables, analisarGravacaoConsultor, lerAvaliacaoConsultor, lerAvaliacao, validarAvaliacao, descartarAvaliacao,
+  ensureClassificacaoTables, passoAnaliseConsultor, gravacoesPorAnalisar, falhaAnaliseConsultor, lerAvaliacaoConsultor, lerAvaliacao, validarAvaliacao, descartarAvaliacao,
   atualizarCompromisso, lerParametros, guardarParametros, painelRede, apagarDadosGravacoes, atualizarQualificacao, corrigirQualificacao,
   sugestoesConsultores, sugestoesTrimestrais, gerarTarefasSugestao, limparAudiosAntigos,
 } from './classificacaoConsultor.js'
@@ -1949,6 +1949,19 @@ router.get('/consultores/:id/gravacoes', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// Worker: avaliações de consultor por fazer. A IA corre no Mac (Claude Code,
+// plano Claude): o worker pede o passo seguinte, corre o prompt e devolve o texto.
+router.get('/gravacoes/por-analisar', async (req, res) => {
+  try { res.json(await gravacoesPorAnalisar(pool)) } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/gravacoes/:id/analise-consultor', async (req, res) => {
+  try {
+    if (req.body?.erro) { await falhaAnaliseConsultor(pool, req.params.id, req.body.erro); return res.json({ ok: true }) }
+    res.json(await passoAnaliseConsultor(pool, req.params.id, req.body?.respostas || {}))
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 // Worker: gravacoes a aguardar transcricao, com signed URL para descarregar o audio.
 router.get('/gravacoes/pendentes', async (req, res) => {
   try {
@@ -2042,9 +2055,9 @@ router.post('/gravacoes/:id/transcricao', async (req, res) => {
     } else {
       await pool.query(`UPDATE consultor_gravacoes SET estado = 'analisado' WHERE id = $1`, [req.params.id])
     }
-    // Avaliação do consultor (proposta para revisão humana).
-    // Em segundo plano: duas chamadas à IA podem passar o tempo de resposta do worker.
-    if (g.etapa_consultor) analisarGravacaoConsultor(pool, req.params.id).catch(e => console.error('[classificacao] analise:', e.message))
+    // Avaliação do consultor: a IA corre no Mac do worker (Claude Code, plano
+    // Claude), que a apanha em /gravacoes/por-analisar.
+    if (g.etapa_consultor) await pool.query("UPDATE consultor_gravacoes SET estado_consultor = 'aguarda_analise', erro_consultor = NULL WHERE id = $1", [req.params.id])
     const { rows: [final] } = await pool.query('SELECT * FROM consultor_gravacoes WHERE id = $1', [req.params.id])
     res.json(final)
   } catch (e) { res.status(500).json({ error: e.message }) }
@@ -2155,11 +2168,10 @@ router.post('/gravacoes/:id/analisar-consultor', async (req, res) => {
     if (!(await soAssociados(req, res))) return
     await ensureClassificacaoTables(pool)
     const { rows: [g] } = await pool.query(
-      `UPDATE consultor_gravacoes SET estado_consultor = 'a_analisar', erro_consultor = NULL
+      `UPDATE consultor_gravacoes SET estado_consultor = 'aguarda_analise', erro_consultor = NULL
         WHERE id = $1 AND etapa_consultor IS NOT NULL AND consentimento_em IS NOT NULL AND transcricao IS NOT NULL RETURNING *`, [req.params.id])
     if (!g) return res.status(400).json({ error: 'A gravação precisa de etapa, consentimento e transcrição' })
-    // Em segundo plano (duas chamadas à IA); o ecrã acompanha pelo estado.
-    analisarGravacaoConsultor(pool, req.params.id).catch(e => console.error('[classificacao] analise:', e.message))
+    // O worker do Mac apanha-a no próximo ciclo; o ecrã acompanha pelo estado.
     res.json(g)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })

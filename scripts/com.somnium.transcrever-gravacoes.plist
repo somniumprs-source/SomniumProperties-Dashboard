@@ -31,7 +31,7 @@
     <dict>
         <!-- ~/bin tem o ffmpeg (usado pelo whisper); ~/Library/Python/3.9/bin tem o whisper. -->
         <key>PATH</key>
-        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/Users/alexandremendes/bin:/Users/alexandremendes/Library/Python/3.9/bin</string>
+        <string>/Users/alexandremendes/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/Users/alexandremendes/bin:/Users/alexandremendes/Library/Python/3.9/bin</string>
 
         <!-- Base das Edge Functions (producao). Deixa como esta salvo se mudar de projecto. -->
         <key>SOMNIUM_API_BASE</key>
@@ -60,6 +60,11 @@
 
         <key>FFMPEG_BIN</key>
         <string>/Users/alexandremendes/bin/ffmpeg</string>
+
+        <!-- Claude Code com sessao iniciada no plano Claude: faz a avaliacao dos
+             consultores aqui no Mac, sem custo de API. -->
+        <key>CLAUDE_BIN</key>
+        <string>/Users/alexandremendes/.local/bin/claude</string>
     </dict>
 </dict>
 </plist>

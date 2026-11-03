@@ -58,7 +58,7 @@ function ChamadaCard({ g, avaliacaoPendente, busy, onAnalisar, onRetomar, onApag
   const [aberto, setAberto] = useState(false)
   const [verTranscricao, setVerTranscricao] = useState(false)
   const [consent, setConsent] = useState({ consentimento: false, consentimento_modo: 'verbal_gravado' })
-  const estado = g.estado_consultor === 'a_analisar' ? 'a_analisar' : g.estado
+  const estado = ['a_analisar', 'aguarda_analise'].includes(g.estado_consultor) ? 'a_analisar' : g.estado
   const em = ESTADO_META[estado] || ESTADO_META.pendente
   const ac = g.analise_consultor || {}
   const ext = ac.extracao || {}
@@ -176,7 +176,7 @@ export function ChamadasConsultor({ consultorId, onUpdate }) {
   }, [consultorId])
   useEffect(() => { load() }, [load])
 
-  const temPendentes = chamadas.some(g => EM_PROCESSAMENTO.includes(g.estado) || g.estado_consultor === 'a_analisar')
+  const temPendentes = chamadas.some(g => EM_PROCESSAMENTO.includes(g.estado) || ['a_analisar', 'aguarda_analise'].includes(g.estado_consultor))
   useEffect(() => {
     if (!temPendentes) return
     const t = setInterval(load, 15000)
