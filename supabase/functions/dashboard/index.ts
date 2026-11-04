@@ -26,7 +26,7 @@ import {
 } from "../_shared/queries.ts";
 import { calcBurnRateMensal, despesasDaEmpresa } from "../_shared/financeCalc.ts";
 import { TTLCache } from "../_shared/ttlCache.ts";
-import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, escrituraRegistada, resumoFases, resumoProjetos, custoRealObra, imoveisContactados, motivosPerda, cumprimentoTarefas, capitalConfirmado, faltaFinanciamento, resumoBloqueios, respostas24h, custoFinalProjetos, diasNaFase } from "../_shared/regrasDashboard.js";
+import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, escrituraRegistada, resumoFases, resumoProjetos, custoRealObra, imoveisContactados, motivosPerda, cumprimentoTarefas, capitalConfirmado, faltaFinanciamento, resumoBloqueios, respostas24h, custoFinalProjetos, diasNaFase, ESTADOS_COM_PROXIMO_PASSO, diasProximoPassoUltrapassado } from "../_shared/regrasDashboard.js";
 
 // Cache de endpoints pesados — port de endpointCache() em server.js (achado
 // da auditoria: dev tinha cache de 2-5min nestes 13 endpoints, produção
@@ -3804,8 +3804,22 @@ app.get("/alertas", endpointCache(300000), async (c: any) => {
 
     // ── Imóveis parados na mesma fase >5 dias ──
     const ESTADOS_NEG = new Set(["Descartado", "Nao interessa", "Não interessa", "Cancelado"]);
-    const ESTADOS_FINAIS = new Set([...ESTADOS_NEG, "Vendido", "Wholesaling", "Negócio em Curso", "Pendentes", "CAEP", "Fix and Flip"]);
+    const ESTADOS_FINAIS = new Set([...ESTADOS_NEG, "Vendido", "Wholesaling", "Negócio em Curso", "CAEP", "Fix and Flip"]);
     for (const im of imoveis) {
+      if (ESTADOS_COM_PROXIMO_PASSO.has(im.estado)) {
+        const diasAtraso = diasProximoPassoUltrapassado(im.dataFollowUp, now);
+        if (diasAtraso > 0) {
+          alerts.push({
+            tipo: "imovel_parado",
+            severidade: diasAtraso > 15 ? "critico" : diasAtraso > 7 ? "aviso" : "info",
+            entidade: im.nome,
+            mensagem: `Próximo passo ultrapassado há ${diasAtraso} dia${diasAtraso === 1 ? "" : "s"} ("${im.estado}")`,
+            estado: im.estado,
+            id: im.id,
+          });
+        }
+        continue;
+      }
       if (ESTADOS_FINAIS.has(im.estado)) continue;
       const ultimaData = im.dataPropostaAceite ?? im.dataProposta ?? im.dataEstudoMercado ?? im.dataVisita ?? im.dataChamada ?? im.dataAdicionado;
       if (!ultimaData) continue;
@@ -4033,7 +4047,10 @@ app.get("/weekly-pulse", async (c: any) => {
     // Alertas críticos
     const ESTADOS_NEG = new Set(["Descartado", "Nao interessa", "Não interessa", "Cancelado"]);
     const imoveisParados = imoveis.filter((i) => {
-      if (ESTADOS_NEG.has(i.estado) || ["Vendido", "Wholesaling", "Negócio em Curso", "Pendentes", "CAEP", "Fix and Flip"].includes(i.estado)) return false;
+      // Pendentes e Follow Up esperam por uma data marcada: só ficam parados
+      // quando o próximo passo (data_follow_up) já passou.
+      if (ESTADOS_COM_PROXIMO_PASSO.has(i.estado)) return diasProximoPassoUltrapassado(i.dataFollowUp, now) > 0;
+      if (ESTADOS_NEG.has(i.estado) || ["Vendido", "Wholesaling", "Negócio em Curso", "CAEP", "Fix and Flip"].includes(i.estado)) return false;
       const ultima = i.dataPropostaAceite ?? i.dataProposta ?? i.dataEstudoMercado ?? i.dataVisita ?? i.dataChamada ?? i.dataAdicionado;
       if (!ultima) return false;
       return ((now as any) - (new Date(ultima) as any)) / 86400000 > 7;

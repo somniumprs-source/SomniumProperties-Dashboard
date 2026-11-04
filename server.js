@@ -780,7 +780,7 @@ const getObras        = async () => []
 // Cache com TTL para endpoints que fazem queries pesadas
 import { TTLCache } from './src/db/utils/ttlCache.js'
 import pool from './src/db/pg.js'
-import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, escrituraRegistada, resumoFases, resumoProjetos, custoRealObra, imoveisContactados, motivosPerda, cumprimentoTarefas, capitalConfirmado, faltaFinanciamento, resumoBloqueios, respostas24h, custoFinalProjetos, diasNaFase } from './supabase/functions/_shared/regrasDashboard.js'
+import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, escrituraRegistada, resumoFases, resumoProjetos, custoRealObra, imoveisContactados, motivosPerda, cumprimentoTarefas, capitalConfirmado, faltaFinanciamento, resumoBloqueios, respostas24h, custoFinalProjetos, diasNaFase, ESTADOS_COM_PROXIMO_PASSO, diasProximoPassoUltrapassado } from './supabase/functions/_shared/regrasDashboard.js'
 import { alertasConservacao } from './src/db/consentimentos.js'
 import { juntarResponsavel, donosDasRegioes } from './src/db/responsavelRegiao.js'
 import { alertasDeDespesas } from './src/constants/regrasDespesas.js'
@@ -2397,7 +2397,10 @@ app.get('/api/weekly-pulse', async (req, res) => {
     // Alertas críticos
     const ESTADOS_NEG = new Set(['Descartado','Nao interessa','Não interessa','Cancelado'])
     const imoveisParados = imoveis.filter(i => {
-      if (ESTADOS_NEG.has(i.estado) || ['Vendido','Wholesaling','Negócio em Curso','Pendentes','CAEP','Fix and Flip'].includes(i.estado)) return false
+      // Pendentes e Follow Up esperam por uma data marcada: só ficam parados
+      // quando o próximo passo (data_follow_up) já passou.
+      if (ESTADOS_COM_PROXIMO_PASSO.has(i.estado)) return diasProximoPassoUltrapassado(i.dataFollowUp, now) > 0
+      if (ESTADOS_NEG.has(i.estado) || ['Vendido','Wholesaling','Negócio em Curso','CAEP','Fix and Flip'].includes(i.estado)) return false
       const ultima = i.dataPropostaAceite ?? i.dataProposta ?? i.dataEstudoMercado ?? i.dataVisita ?? i.dataChamada ?? i.dataAdicionado
       if (!ultima) return false
       return (now - new Date(ultima)) / 86400000 > 7
@@ -5280,8 +5283,22 @@ app.get('/api/alertas', endpointCache(300000), async (req, res) => {
 
     // ── Imóveis parados na mesma fase >5 dias ──
     const ESTADOS_NEG = new Set(['Descartado', 'Nao interessa', 'Não interessa', 'Cancelado'])
-    const ESTADOS_FINAIS = new Set([...ESTADOS_NEG, 'Vendido', 'Wholesaling', 'Negócio em Curso', 'Pendentes', 'CAEP', 'Fix and Flip'])
+    const ESTADOS_FINAIS = new Set([...ESTADOS_NEG, 'Vendido', 'Wholesaling', 'Negócio em Curso', 'CAEP', 'Fix and Flip'])
     for (const im of imoveis) {
+      if (ESTADOS_COM_PROXIMO_PASSO.has(im.estado)) {
+        const diasAtraso = diasProximoPassoUltrapassado(im.dataFollowUp, now)
+        if (diasAtraso > 0) {
+          alerts.push({
+            tipo: 'imovel_parado',
+            severidade: diasAtraso > 15 ? 'critico' : diasAtraso > 7 ? 'aviso' : 'info',
+            entidade: im.nome,
+            mensagem: `Próximo passo ultrapassado há ${diasAtraso} dia${diasAtraso === 1 ? '' : 's'} ("${im.estado}")`,
+            estado: im.estado,
+            id: im.id,
+          })
+        }
+        continue
+      }
       if (ESTADOS_FINAIS.has(im.estado)) continue
       const ultimaData = im.dataPropostaAceite ?? im.dataProposta ?? im.dataEstudoMercado ?? im.dataVisita ?? im.dataChamada ?? im.dataAdicionado
       if (!ultimaData) continue

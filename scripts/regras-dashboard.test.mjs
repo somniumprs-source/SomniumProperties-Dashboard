@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import {
   ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar,
   negocioFechado, escrituraRegistada, imoveisContactados, motivosPerda, cumprimentoTarefas, contribuicaoSomnium, capitalConfirmado, faltaFinanciamento, resumoBloqueios, respostas24h, VALIDADE_CONFIRMACAO_DIAS, resumoFases, custoRealObra, mediana, diasNaFase, resumoAnalisesNegocios, resumoProjetos,
+  ESTADOS_COM_PROXIMO_PASSO, diasProximoPassoUltrapassado,
 } from '../supabase/functions/_shared/regrasDashboard.js'
 import { CATALOGO, NUCLEO, POR_MEDIR, ESTADOS, DEPARTAMENTOS, metrica, pesquisar } from '../src/lib/catalogoMetricas.js'
 
@@ -270,6 +271,16 @@ test('custo final previsto: previsão manual só em rubricas que acumulam', asyn
   const e = erosaoLucro({ lucro_bruto: 35000 }, analise, comPrevisao)
   assert.deepEqual(e, { lucroReferencia: 35000, lucroPrevisto: 20500, erosao: 14500 })
   assert.equal(erosaoLucro(null, analise, comPrevisao), null)
+})
+
+test('parados: Pendentes e Follow Up só depois de ultrapassado o próximo passo', () => {
+  const hoje = new Date(2026, 10, 4, 15, 0)
+  assert.ok(ESTADOS_COM_PROXIMO_PASSO.has('Pendentes') && ESTADOS_COM_PROXIMO_PASSO.has('Follow UP'))
+  assert.equal(diasProximoPassoUltrapassado('2026-11-04', hoje), 0) // é hoje: ainda não passou
+  assert.equal(diasProximoPassoUltrapassado('2026-11-10', hoje), 0)
+  assert.equal(diasProximoPassoUltrapassado(null, hoje), 0)         // sem data marcada
+  assert.equal(diasProximoPassoUltrapassado('2026-11-03', hoje), 1)
+  assert.equal(diasProximoPassoUltrapassado(new Date(2026, 9, 20), hoje), 15)
 })
 
 // O build do Vite não lê o servidor: um erro de sintaxe em routes.js só

@@ -85,6 +85,23 @@ export function mediana(valores) {
   return v.length % 2 ? v[meio] : (v[meio - 1] + v[meio]) / 2;
 }
 
+// Pendentes e Follow Up não estão parados enquanto aguardam o próximo passo
+// marcado (data_follow_up): só contam como parados depois de essa data passar.
+// Sem data marcada não há passo ultrapassado, logo não contam.
+export const ESTADOS_COM_PROXIMO_PASSO = new Set(["Pendentes", "Pendente", "Follow UP", "Follow Up"]);
+
+// Dias completos desde a data do próximo passo (0 se ainda não passou ou não há data).
+export function diasProximoPassoUltrapassado(dataProximoPasso, hoje = new Date()) {
+  if (!dataProximoPasso) return 0;
+  const d = new Date(dataProximoPasso);
+  if (isNaN(d)) return 0;
+  const inicio = (x) => Date.UTC(x.getFullYear(), x.getMonth(), x.getDate());
+  const dataDia = typeof dataProximoPasso === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dataProximoPasso)
+    ? Date.UTC(+dataProximoPasso.slice(0, 4), +dataProximoPasso.slice(5, 7) - 1, +dataProximoPasso.slice(8, 10))
+    : inicio(d);
+  return Math.max(0, Math.round((inicio(hoje) - dataDia) / DIA_MS));
+}
+
 // Dias na fase atual: última alteração real do campo `estado` no histórico.
 // Imóveis fora do funil ficam de fora; sem histórico não se estima nada.
 export function diasNaFase(imoveis, historico, hoje = new Date()) {
