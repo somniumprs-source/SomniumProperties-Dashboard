@@ -2862,7 +2862,12 @@ app.post("/gravacoes/:id/analise-sop2", async (c: any) => {
     if (!g) return c.json({ error: "Gravacao nao encontrada" }, 404);
     if (!g.transcricao?.trim()) throw new Error("Sem transcricao para analisar");
     if (body?.resposta == null) {
-      await pool.query(`UPDATE consultor_gravacoes SET estado = 'a_analisar', updated_at = $2 WHERE id = $1`, [id, new Date().toISOString()]);
+      // Reserva atómica (dois Macs): só um fica com a gravação.
+      const { rowCount } = await pool.query(
+        `UPDATE consultor_gravacoes SET estado = 'a_analisar', updated_at = $2
+          WHERE id = $1 AND (estado = 'aguarda_analise' OR (estado = 'a_analisar' AND updated_at < $3))`,
+        [id, new Date().toISOString(), new Date(Date.now() - 30 * 60_000).toISOString()]);
+      if (!rowCount) return c.json({ ocupado: true });
       const prompt = `${buildGravacaoPrompt(await nomeConsultor(g.consultor_id))}\n\n--- TRANSCRICAO ---\n${g.transcricao}`;
       return c.json({ pedido: { passo: "analise", modelo: "sonnet", prompt } });
     }

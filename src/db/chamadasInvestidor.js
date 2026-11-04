@@ -222,8 +222,12 @@ export async function passoAnaliseInvestidor(pool, id, resposta) {
   if (!g) throw new Error('Gravacao nao encontrada')
   if (!g.transcricao?.trim()) throw new Error('Sem transcricao para analisar')
   if (resposta == null) {
+    // Reserva atómica: com dois Macs a correr o worker, só um fica com a chamada.
+    const { rowCount } = await pool.query(
+      `UPDATE investidor_gravacoes SET estado = 'a_analisar', updated_at = $2
+        WHERE id = $1 AND (estado = 'aguarda_analise' OR (estado = 'a_analisar' AND updated_at < $3))`, [id, agora(), limiteObsoleto()])
+    if (!rowCount) return { ocupado: true }
     const { rows: [inv] } = await pool.query('SELECT * FROM investidores WHERE id = $1', [g.investidor_id])
-    await pool.query(`UPDATE investidor_gravacoes SET estado = 'a_analisar', updated_at = $2 WHERE id = $1`, [id, agora()])
     return { pedido: { passo: 'analise', modelo: MODELO_IA_INV, prompt: `${buildPrompt(g.tipo_chamada, inv)}\n\n--- TRANSCRICAO ---\n${g.transcricao}` } }
   }
   const analise = parseJson(resposta)
@@ -395,7 +399,11 @@ export async function passoSinteseInvestidores(pool, id, resposta) {
     melhorias_script: g.analise?.melhorias_script, dados_em_falta: g.analise?.dados_recolhidos?.dados_em_falta,
   }))
   const estat = { totais: rel.totais, nota_media: rel.nota_media, passos: rel.passos, conversao: rel.conversao, conformidade: rel.conformidade, temperatura: rel.temperatura }
-  await pool.query(`UPDATE investidor_chamadas_sinteses SET estado = 'a_gerar', updated_at = $2 WHERE id = $1`, [id, agora()])
+  // Reserva atómica (dois Macs): só um gera a síntese.
+  const { rowCount } = await pool.query(
+    `UPDATE investidor_chamadas_sinteses SET estado = 'a_gerar', updated_at = $2
+      WHERE id = $1 AND (estado = 'aguarda' OR (estado = 'a_gerar' AND updated_at < $3))`, [id, agora(), limiteObsoleto()])
+  if (!rowCount) return { ocupado: true }
   return { pedido: { passo: 'sintese', modelo: MODELO_IA_INV, prompt: `És o director comercial da Somnium Properties. Analisa o conjunto das chamadas a investidores (Cold Call e Follow-up) do período ${periodo.desde} a ${periodo.ate}, avaliadas contra o SOP 4, e diz o que a equipa deve mudar para converter mais investidores em Entrevista Estratégica.
 
 ESTATÍSTICAS DO PERÍODO

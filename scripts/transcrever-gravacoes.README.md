@@ -64,6 +64,14 @@ launchctl load   ~/Library/LaunchAgents/com.somnium.transcrever-gravacoes.plist
 - Para correr ja (sem esperar pelo intervalo):
   `launchctl start com.somnium.transcrever-gravacoes`
 
+## Varios Macs
+
+O worker pode correr em mais do que um Mac ao mesmo tempo (Alexandre e João):
+cada transcricao, analise, sintese e pedido da fila IA e reservado de forma
+atomica, e o outro Mac salta-o ("ja esta a ser analisada noutro Mac"). Quem
+estiver com o Mac ligado faz o trabalho. No plist de cada Mac, trocar os
+caminhos `/Users/alexandremendes/...` pelos do utilizador.
+
 ## Variaveis de ambiente (no plist)
 
 | Var | Default | Para que serve |

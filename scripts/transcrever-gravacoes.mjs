@@ -239,6 +239,7 @@ async function analisarConsultor(g) {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ respostas }),
       })
       if (passo?.concluido) { log('  avaliacao proposta, pronta para rever no CRM.'); return }
+      if (passo?.ocupado) { log('  ja esta a ser analisada noutro Mac, salto.'); return }
       if (!passo?.pedido) throw new Error('resposta inesperada do CRM')
       log(`  passo ${passo.pedido.passo} (${passo.pedido.modelo})...`)
       respostas[passo.pedido.passo] = await claudeLocal(passo.pedido.prompt, passo.pedido.modelo, work)
@@ -260,6 +261,7 @@ async function passoUnico(rota, rotulo) {
   const post = (body) => api(rota, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   try {
     const passo = await post({})
+    if (passo?.ocupado) { log('  ja esta a ser analisada noutro Mac, salto.'); return }
     if (!passo?.pedido) throw new Error('resposta inesperada do CRM')
     log(`  ${passo.pedido.passo} (${passo.pedido.modelo})...`)
     const { texto } = await claudeLocal(passo.pedido.prompt, passo.pedido.modelo, work)

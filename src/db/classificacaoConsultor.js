@@ -359,7 +359,14 @@ export async function passoAnaliseConsultor(pool, gravacaoId, respostas = {}) {
   if (!segmentos.length) throw new Error('Sem transcricao para analisar')
   const { rows: [consultor] } = await pool.query('SELECT * FROM consultores WHERE id = $1', [g.consultor_id])
   const { versao, valores: params } = await lerParametros(pool)
-  await pool.query("UPDATE consultor_gravacoes SET estado_consultor = 'a_analisar', erro_consultor = NULL, updated_at = $2 WHERE id = $1", [gravacaoId, agora()])
+  // Primeiro passo: reserva atómica (dois Macs a correr o worker, só um analisa).
+  if (!Object.keys(respostas || {}).length) {
+    const { rowCount } = await pool.query(
+      `UPDATE consultor_gravacoes SET estado_consultor = 'a_analisar', erro_consultor = NULL, updated_at = $2
+        WHERE id = $1 AND (estado_consultor = 'aguarda_analise' OR (estado_consultor = 'a_analisar' AND updated_at < $3))`,
+      [gravacaoId, agora(), new Date(Date.now() - 30 * 60_000).toISOString()])
+    if (!rowCount) return { ocupado: true }
+  }
 
   try {
     const etapa = g.etapa_consultor
