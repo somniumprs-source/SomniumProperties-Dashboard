@@ -12,6 +12,7 @@ import { confirmar } from '../ui/ConfirmDialog.jsx'
 
 const TIPO_LABELS_ENVIADO = {
   dossier_investidor: 'Dossier de Investimento',
+  dossie_investidor: 'Dossiê de Investidor (KYC)',
   proposta_investimento: 'Proposta de Investimento',
   proposta_investimento_anonima: 'Proposta de Investimento (Anonima)',
   proposta_cedencia_posicao: 'Proposta de Cedencia de Posicao',

@@ -2547,6 +2547,21 @@ function TabInvestidores({ negocio, readOnly }) {
     load()
   }
 
+  // Dossiê de Investidor (SOP 12, 8.7): gera, arquiva na ficha do investidor,
+  // marca o checklist da Pré-aquisição e descarrega o PDF.
+  const [gerandoDossie, setGerandoDossie] = useState(null)
+  async function gerarDossie(l) {
+    setGerandoDossie(l.investidor_id)
+    try {
+      const r = await apiFetch(`/api/crm/projetos/${negocio.id}/investidores/${l.investidor_id}/dossie`, { method: 'POST' })
+      const body = await r.json().catch(() => ({}))
+      if (!r.ok) { toast?.(`Erro ao gerar o dossiê: ${body.error || r.status}`, 'error', 4000); return }
+      const falhados = (body.anexos || []).filter(a => a.erro).length
+      toast?.(falhados ? `Dossiê gerado. ${falhados} anexo(s) não incorporado(s): ver índice.` : 'Dossiê gerado e arquivado na ficha do investidor', falhados ? 'warning' : 'success', 4000)
+      try { await openDocument(`/api/crm/investidores/${l.investidor_id}/documentos/${body.id}/ficheiro`, { download: true, filename: body.nome }) } catch { /* já notificado */ }
+    } finally { setGerandoDossie(null) }
+  }
+
   const disponiveis = todosInvestidores.filter(i => !lista.find(l => l.investidor_id === i.id))
 
   // CAEP: a % da Somnium no lucro vive no projecto (negocio.comissao_pct) e os
@@ -2641,6 +2656,14 @@ function TabInvestidores({ negocio, readOnly }) {
                     Confirmar Contacto
                   </button>
                 ) : null
+              )}
+              {!readOnly && (
+                <button onClick={() => gerarDossie(l)} disabled={gerandoDossie === l.investidor_id}
+                  title="Gerar Dossiê de Investidor (KYC, conformidade e anexos) e arquivar na ficha"
+                  className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-lg border border-line text-ink-muted hover:bg-surface-muted whitespace-nowrap disabled:opacity-50">
+                  <FileDown className="w-3.5 h-3.5" />
+                  {gerandoDossie === l.investidor_id ? 'A gerar...' : 'Dossiê'}
+                </button>
               )}
               {!readOnly && (
                 <button onClick={() => apagar(l.id)} className="opacity-0 group-hover:opacity-100 text-ink-muted/70 hover:text-danger">

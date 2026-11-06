@@ -923,7 +923,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
     { key: 'relatorios_imovel', label: 'Relatórios', icon: FileBarChart, show: type === 'Imóveis' },
     { key: 'checklist', label: 'Checklist', icon: ListChecks, show: type === 'Imóveis' },
     { key: 'documentos', label: `Documentos (${data?.documentos?.length ?? 0})`, icon: FolderOpen, show: type === 'Investidores' },
-    { key: 'dados_empresa', label: 'Dados Empresa', icon: Building, show: type === 'Investidores' },
+    { key: 'dados_empresa', label: 'Dados Legais', icon: Building, show: type === 'Investidores' },
     { key: 'documentos_consultor', label: 'Documentos', icon: FolderOpen, show: type === 'Consultores' },
     { key: 'relatorios', label: `Reuniões (${reunioes.length})`, icon: CalendarCheck, show: (type === 'Investidores' || type === 'Consultores') },
     { key: 'avaliacao', label: 'Avaliação', icon: Star, show: type === 'Investidores' || type === 'Consultores' },
@@ -1091,7 +1091,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       /* Dados legais de empresa (investidor pessoa colectiva) */
       ) : type === 'Investidores' && activeTab === 'dados_empresa' ? (
         <div className="p-4 sm:p-6">
-          <DadosEmpresaInvestidorTab investidorId={data.id} dadosEmpresa={data.dados_empresa} onUpdate={loadData} />
+          <DadosEmpresaInvestidorTab investidorId={data.id} dadosEmpresa={data.dados_empresa} titularCapital={data.titular_capital} onUpdate={loadData} />
         </div>
 
       /* Relatórios reuniões (investidores/consultores) */

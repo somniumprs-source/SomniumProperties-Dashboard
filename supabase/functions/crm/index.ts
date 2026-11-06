@@ -40,6 +40,11 @@ import { estadoIA, emFilaIA, enfileirarIA, jsonDaResposta, pedidosIAPendentes, i
 import { isConfigured as firefliesConfigured, syncFireflies } from "../_shared/firefliesSync.ts";
 import { runEstudoLocalizacao } from "../_shared/estudoLocalizacao.ts";
 import { streamToBuffer } from "../_shared/pdfkitGuard.ts";
+import PDFKitGuard from "../_shared/pdfkitGuard.ts";
+import * as PDFLib from "pdf-lib";
+import { LOGO_WHITE_PNG } from "../_shared/logoWhite.ts";
+import { DOC_COLORS } from "../_shared/docTheme.ts";
+import { carregarDadosDossie, gerarDossieInvestidor, marcarChecklistDossie } from "../_shared/pdfDossieInvestidor.ts";
 import { removeFromStorage, supabase, uploadPublic, uploadPrivate } from "../_shared/storage.ts";
 import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
 import { isWholesaling } from "../_shared/modelos.ts";
@@ -1356,6 +1361,11 @@ const INV_ESTADO_CAMPOS_OBRIGATORIOS: Record<string, { campo: string; label: str
 app.use("/investidores", requireModuleOrOwnInvestidor("crm.investidores"));
 app.use("/investidores/*", requireModuleOrOwnInvestidor("crm.investidores"));
 rotasBaseLegal("/investidores", "investidor");
+// Titular do capital (migração 0097): garantir a coluna antes do CRUD, senão o
+// crud.update descarta o campo em silêncio. Idempotente e em cache por isolate.
+const garantirTitularCapital = async (_c: any, next: any) => { await ensureColumn("investidores", "titular_capital JSONB"); return next(); };
+app.use("/investidores", garantirTitularCapital);
+app.use("/investidores/*", garantirTitularCapital);
 crudRoutes("/investidores", Investidores, {
   onCreate: async (item: any) => {
     if (driveConfigured()) {
@@ -7047,6 +7057,56 @@ app.delete("/projetos/despesas/:despesaId", async (c: any) => {
     }
     return c.json({ ok: true });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ── Dossiê de Investidor (SOP 12, 8.7) — port de routes.js ──
+// Gera o PDF consolidado (KYC, investimento, conformidade e anexos), arquiva-o
+// em documentos_investidor (bucket privado + Drive) e marca no checklist da
+// Pré-aquisição os itens «Dossiê consolidado» e «Arquivado no CRM».
+app.post("/projetos/:negocioId/investidores/:investidorId/dossie", async (c: any) => {
+  try {
+    if (!supabase) return c.json({ error: "Storage indisponível" }, 503);
+    // Dados KYC de todos os investidores do projecto: vedado a parceiros e investidores.
+    const u = await resolveCrmUser(c).catch(() => null);
+    if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return c.json({ error: "Sem permissão para esta operação" }, 403);
+    await ensureColumn("investidores", "titular_capital JSONB");
+    const negocioId = c.req.param("negocioId");
+    const investidorId = c.req.param("investidorId");
+    const dados = await carregarDadosDossie(pool, negocioId, investidorId);
+    const baixar = async (a: any) => {
+      if (a.storage_path) {
+        const { data, error } = await supabase!.storage.from(INVESTIDORES_DOCS_BUCKET).download(a.storage_path);
+        if (error || !data) return null;
+        return new Uint8Array(await data.arrayBuffer());
+      }
+      if (a.url) { const r = await fetch(a.url); return r.ok ? new Uint8Array(await r.arrayBuffer()) : null; }
+      return null;
+    };
+    const { bytes, anexos } = await gerarDossieInvestidor(dados, {
+      deps: { PDFDocument: PDFKitGuard, PDFLib, logo: LOGO_WHITE_PNG, cores: DOC_COLORS }, baixar,
+    });
+
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const nomeBase = `Dossie_Investidor_${String(dados.investidor.nome || "investidor").replace(/[^\w]+/g, "_")}_${String(dados.negocio.movimento || "").replace(/[^\w]+/g, "_")}.pdf`;
+    const storagePath = `${investidorId}/${id}_${nomeBase}`;
+    await uploadPrivate(INVESTIDORES_DOCS_BUCKET, storagePath, bytes, "application/pdf");
+    const notas = `Gerado no CRM com ${anexos.filter((a: any) => !a.erro).length} anexo(s)`;
+    await pool.query(
+      `INSERT INTO documentos_investidor (id, investidor_id, imovel_id, tipo, nome, notas, storage_path, direcao, created_at)
+       VALUES ($1, $2, $3, 'dossie_investidor', $4, $5, $6, 'enviado', $7)`,
+      [id, investidorId, dados.negocio.imovel_id || null, nomeBase, notas, storagePath, now],
+    );
+    if (driveConfigured()) {
+      uploadDocumentoInvestidor(investidorId, bytes, nomeBase, "application/pdf")
+        .then((fileId: string | null) => { if (fileId) pool.query("UPDATE documentos_investidor SET drive_file_id = $1 WHERE id = $2", [fileId, id]).catch(() => {}); })
+        .catch((e: any) => console.error("[drive] dossiê investidor:", e.message));
+    }
+    const autor = getAuditUser().userNome || u?.nome || u?.email || null;
+    const fases = await marcarChecklistDossie(pool, negocioId, investidorId, autor, nomeBase);
+    for (const f of fases) await recalcularFase(pool, f);
+    return c.json({ id, investidor_id: investidorId, nome: nomeBase, anexos }, 201);
+  } catch (e) { return c.json({ error: (e as Error).message }, (e as any).status || 500); }
 });
 
 // ── GET investidores por projecto — port de routes.js 4256-4268 ──

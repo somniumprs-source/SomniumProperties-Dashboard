@@ -6415,6 +6415,59 @@ router.delete('/projetos/despesas/:despesaId', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// ── Dossiê de Investidor (SOP 12, 8.7) ───────────────────────
+// Gera o PDF consolidado (KYC, investimento, conformidade e anexos), arquiva-o
+// em documentos_investidor (bucket privado + Drive) e marca no checklist da
+// Pré-aquisição os itens «Dossiê consolidado» e «Arquivado no CRM».
+router.post('/projetos/:negocioId/investidores/:investidorId/dossie', async (req, res) => {
+  try {
+    if (!supabaseStorage) return res.status(503).json({ error: 'Storage indisponível (sem SUPABASE_SERVICE_KEY)' })
+    // Dados KYC de todos os investidores do projecto: vedado a parceiros e investidores.
+    const u = await resolveCrmUser(req).catch(() => null)
+    if (u && ['parceiro', 'investidor'].includes(u.role)) return res.status(403).json({ error: 'Sem permissão para esta operação' })
+    const { negocioId, investidorId } = req.params
+    const [{ default: PDFKit }, PDFLib, dossie, { DOC_COLORS }] = await Promise.all([
+      import('pdfkit'), import('pdf-lib'), import('./pdfDossieInvestidor.js'), import('./docTheme.js'),
+    ])
+    const logoPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../public/logo-transparent.png')
+    const logo = await readFile(logoPath).catch(() => null)
+    const dados = await dossie.carregarDadosDossie(pool, negocioId, investidorId)
+    const baixar = async (a) => {
+      if (a.storage_path) {
+        const { data, error } = await supabaseStorage.storage.from(INVESTIDORES_DOCS_BUCKET).download(a.storage_path)
+        if (error || !data) return null
+        return new Uint8Array(await data.arrayBuffer())
+      }
+      if (a.url) { const r = await fetch(a.url); return r.ok ? new Uint8Array(await r.arrayBuffer()) : null }
+      return null
+    }
+    const { bytes, anexos } = await dossie.gerarDossieInvestidor(dados, { deps: { PDFDocument: PDFKit, PDFLib, logo, cores: DOC_COLORS }, baixar })
+
+    const id = randomUUID()
+    const now = new Date().toISOString()
+    const nomeBase = `Dossie_Investidor_${(dados.investidor.nome || 'investidor').replace(/[^\w]+/g, '_')}_${(dados.negocio.movimento || '').replace(/[^\w]+/g, '_')}.pdf`
+    const storagePath = `${investidorId}/${id}_${nomeBase}`
+    const { error: upErr } = await supabaseStorage.storage.from(INVESTIDORES_DOCS_BUCKET)
+      .upload(storagePath, Buffer.from(bytes), { contentType: 'application/pdf', upsert: true })
+    if (upErr) return res.status(500).json({ error: `Upload falhou: ${upErr.message}` })
+    const notas = `Gerado no CRM com ${anexos.filter(a => !a.erro).length} anexo(s)`
+    await pool.query(
+      `INSERT INTO documentos_investidor (id, investidor_id, imovel_id, tipo, nome, notas, storage_path, direcao, created_at)
+       VALUES ($1, $2, $3, 'dossie_investidor', $4, $5, $6, 'enviado', $7)`,
+      [id, investidorId, dados.negocio.imovel_id || null, nomeBase, notas, storagePath, now]
+    )
+    if (driveConfigured()) {
+      uploadDocumentoInvestidor(investidorId, Buffer.from(bytes), nomeBase, 'application/pdf')
+        .then(fileId => { if (fileId) pool.query('UPDATE documentos_investidor SET drive_file_id = $1 WHERE id = $2', [fileId, id]).catch(() => {}) })
+        .catch(e => console.error('[drive] dossiê investidor:', e.message))
+    }
+    const autor = getAuditUser().userNome || u?.nome || u?.email || null
+    const fases = await dossie.marcarChecklistDossie(pool, negocioId, investidorId, autor, nomeBase)
+    for (const f of fases) await recalcularFase(pool, f)
+    res.status(201).json({ id, investidor_id: investidorId, nome: nomeBase, anexos })
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }) }
+})
+
 // ── INVESTIDORES por projeto (F2.8) ──────────────────────────
 router.get('/projetos/:negocioId/investidores', async (req, res) => {
   try {

@@ -1709,6 +1709,7 @@ export async function initSchema() {
       -- dos registos existentes, aqui só garantimos a coluna).
       DO $$ BEGIN
         ALTER TABLE investidores ADD COLUMN IF NOT EXISTS ref_investidor TEXT;
+        ALTER TABLE investidores ADD COLUMN IF NOT EXISTS titular_capital JSONB;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 

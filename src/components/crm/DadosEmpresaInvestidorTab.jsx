@@ -1,6 +1,7 @@
 /**
- * Tab de dados legais de empresa (investidor pessoa colectiva).
- * Firma/NIPC/NISS/capital/sede/IBAN + lista repetivel de socios.
+ * Tab de dados legais do investidor: empresa (pessoa colectiva, com sócios e
+ * representantes) e titular do capital quando é outra pessoa (o investidor
+ * actua como representante). Ambos alimentam o Dossiê de Investidor.
  */
 import { useState } from 'react'
 import { Building2, Plus, Trash2 } from 'lucide-react'
@@ -16,6 +17,33 @@ const EMPRESA_VAZIA = {
 const SOCIO_VAZIO = {
   nome: '', estado_civil: '', naturalidade: '', nif: '', cartao_cidadao: '', cartao_cidadao_validade: '', morada: '',
 }
+
+const TITULAR_VAZIO = {
+  nome: '', relacao: '', estado_civil: '', naturalidade: '', nif: '', cartao_cidadao: '', cartao_cidadao_validade: '',
+  morada: '', email: '', iban: '',
+}
+
+const TITULAR_CAMPOS = [
+  { key: 'nome', label: 'Nome completo' },
+  { key: 'relacao', label: 'Relação com o investidor', placeholder: 'Ex.: capital da mãe, representada pelo investidor' },
+  ...SOCIO_CAMPOS_BASE(),
+  { key: 'email', label: 'Email' },
+  { key: 'iban', label: 'IBAN de origem' },
+]
+
+function SOCIO_CAMPOS_BASE() {
+  return [
+    { key: 'estado_civil', label: 'Estado Civil' },
+    { key: 'naturalidade', label: 'Naturalidade' },
+    { key: 'nif', label: 'NIF' },
+    { key: 'cartao_cidadao', label: 'Cartão de Cidadão' },
+    { key: 'cartao_cidadao_validade', label: 'Validade CC' },
+    { key: 'morada', label: 'Residência' },
+  ]
+}
+
+const preenchido = (obj, ignorar = []) => Object.entries(obj || {}).some(([k, v]) =>
+  !ignorar.includes(k) && (Array.isArray(v) ? v.length > 0 : String(v ?? '').trim() !== ''))
 
 function normalizeDadosEmpresa(raw) {
   if (!raw || typeof raw !== 'object') return { ...EMPRESA_VAZIA }
@@ -47,9 +75,10 @@ const SOCIO_CAMPOS = [
   { key: 'morada', label: 'Residência' },
 ]
 
-export function DadosEmpresaInvestidorTab({ investidorId, dadosEmpresa: initial, onUpdate, readOnly = false }) {
+export function DadosEmpresaInvestidorTab({ investidorId, dadosEmpresa: initial, titularCapital, onUpdate, readOnly = false }) {
   const toast = useToast()
   const [form, setForm] = useState(() => normalizeDadosEmpresa(initial))
+  const [titular, setTitular] = useState(() => ({ ...TITULAR_VAZIO, ...(titularCapital && typeof titularCapital === 'object' ? titularCapital : {}) }))
   const [saving, setSaving] = useState(false)
 
   const inputClass = 'w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-accent/40'
@@ -76,7 +105,11 @@ export function DadosEmpresaInvestidorTab({ investidorId, dadosEmpresa: initial,
       await apiFetch(`/api/crm/investidores/${investidorId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dados_empresa: form }),
+        // Vazio grava null: dados_empresa preenchido marca o investidor como empresa.
+        body: JSON.stringify({
+          dados_empresa: preenchido(form) ? form : null,
+          titular_capital: preenchido(titular) ? titular : null,
+        }),
       })
       if (onUpdate) onUpdate()
     } catch (err) {
@@ -152,6 +185,27 @@ export function DadosEmpresaInvestidorTab({ investidorId, dadosEmpresa: initial,
             </div>
           ))
         )}
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <h3 className="text-sm font-semibold text-ink">Titular do Capital</h3>
+          <p className="text-xs text-ink-muted mt-0.5">Preencher só quando o capital pertence a outra pessoa e o investidor actua como seu representante.</p>
+        </div>
+        <div className="bg-surface rounded-xl p-4 border border-line grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {TITULAR_CAMPOS.map(c => (
+            <div key={c.key} className={c.key === 'relacao' ? 'sm:col-span-2' : ''}>
+              <label className="block text-xs font-medium text-ink-muted mb-1">{c.label}</label>
+              <input
+                value={titular[c.key] || ''}
+                placeholder={c.placeholder || ''}
+                onChange={e => setTitular(t => ({ ...t, [c.key]: e.target.value }))}
+                className={inputClass}
+                disabled={readOnly}
+              />
+            </div>
+          ))}
+        </div>
       </div>
 
       {!readOnly && (

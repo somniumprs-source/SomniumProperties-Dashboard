@@ -213,7 +213,7 @@ export const FASES_CAEP = [
       ] },
       // SOP 12, 8.7: fecha o ciclo de entrada e arranca os reportes periódicos.
       { t: 'Dossiê de Investidor e comunicação de boas-vindas', porInvestidor: true, checklist: [
-        { k: 'dossie', t: 'Dossiê consolidado (KYC, NDA, declaração de risco, minutas, parecer, contrato assinado e comprovativo)' },
+        { k: 'dossie', t: 'Dossiê consolidado (KYC, NDA, declaração de risco, minutas, parecer, contrato assinado e comprovativo)', docInvestidor: 'dossie_investidor', porProjeto: true },
         { k: 'arquivo', t: 'Dossiê arquivado no CRM com acesso restrito' },
         { k: 'boas_vindas', t: 'Email de boas-vindas com o calendário de reportes e o ponto de contacto' },
         { k: 'rgpd', t: 'Prazo de conservação do dossiê definido (RGPD)' },
