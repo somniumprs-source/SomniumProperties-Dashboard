@@ -40,6 +40,7 @@ const TIPO_LABEL = {
   tarefa_incompleta:             'Tarefa sem responsável ou prazo',
   despesa_por_documentar:        'Despesa sem documento',
   fecho_contabilidade:           'Fecho do mês (contabilidade)',
+  documento_empresa:             'Documento da empresa',
 }
 
 const HEALTH_COLOR = pct =>
@@ -221,6 +222,9 @@ export function Alertas() {
                   <p className="text-xs">{a.mensagem}</p>
                   {a.status && <span className="text-xs opacity-60 shrink-0">{a.status}</span>}
                   {a.responsavel && <span className="text-xs opacity-60 shrink-0" title={`Responsável da região ${a.regiao}`}>· {a.responsavel.split(' ')[0]}</span>}
+                  {a.tipo === 'documento_empresa' && (
+                    <a href="/administracao/documentos" className="text-xs px-2.5 py-1 rounded-lg border border-line bg-surface-raised text-ink hover:bg-surface shrink-0">Abrir</a>
+                  )}
                 </div>
               </div>
             ))}

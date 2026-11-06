@@ -782,6 +782,7 @@ import { TTLCache } from './src/db/utils/ttlCache.js'
 import pool from './src/db/pg.js'
 import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, escrituraRegistada, resumoFases, resumoProjetos, custoRealObra, imoveisContactados, motivosPerda, cumprimentoTarefas, capitalConfirmado, faltaFinanciamento, resumoBloqueios, respostas24h, custoFinalProjetos, diasNaFase, ESTADOS_COM_PROXIMO_PASSO, diasProximoPassoUltrapassado } from './supabase/functions/_shared/regrasDashboard.js'
 import { alertasConservacao } from './src/db/consentimentos.js'
+import { alertasDocumentosEmpresa } from './src/constants/documentosEmpresa.js'
 import { juntarResponsavel, donosDasRegioes } from './src/db/responsavelRegiao.js'
 import { alertasDeDespesas } from './src/constants/regrasDespesas.js'
 import { normalizarEstadoTarefa, faltaNaTarefa, tarefaConcluida, tarefaAtrasada } from './src/constants/regrasTarefas.js'
@@ -5446,6 +5447,12 @@ app.get('/api/alertas', endpointCache(300000), async (req, res) => {
 
     // ── RGPD: dados a rever pelo prazo de conservação (auditoria D4) ──
     try { alerts.push(...await alertasConservacao(pool)) } catch (e) { console.warn('[alertas] conservação:', e.message) }
+
+    // Documentação da empresa a expirar ou expirada (Administração › Documentos)
+    try {
+      const { rows: docsEmp } = await pool.query(`SELECT id, categoria, nome, data_validade FROM documentos_empresa WHERE data_validade IS NOT NULL`)
+      alerts.push(...alertasDocumentosEmpresa(docsEmp))
+    } catch (e) { if (!/does not exist/.test(e.message)) console.warn('[alertas] documentos empresa:', e.message) }
 
     // Tarefas abertas sem responsável ou sem prazo (auditoria D11)
     try {

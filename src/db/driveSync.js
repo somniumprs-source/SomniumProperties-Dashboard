@@ -419,6 +419,22 @@ export async function uploadDocumentoInvestidor(investidorId, bytes, fileName, m
   }
 }
 
+// Documentação da empresa (Administração › Documentos): espelho no Drive em
+// "Documentação Empresa/<categoria>" dentro da pasta de topo do CRM.
+let documentacaoEmpresaFolderId = null
+export async function uploadDocumentoEmpresa(categoria, bytes, fileName, mimeType) {
+  const drive = getDrive()
+  if (!drive) return null
+  try {
+    if (!documentacaoEmpresaFolderId) documentacaoEmpresaFolderId = await ensureSubfolder(drive, PIPELINE_FOLDER_ID, 'Documentação Empresa')
+    const folderId = await ensureSubfolder(drive, documentacaoEmpresaFolderId, categoria || 'Outros')
+    return await uploadBytesToFolder(drive, folderId, await toBuffer(bytes), fileName, mimeType || 'application/octet-stream', { dedup: false })
+  } catch (e) {
+    console.error('[drive] Erro ao enviar documento da empresa:', e.message)
+    return null
+  }
+}
+
 /**
  * Criar pasta do imóvel com subpastas no Drive.
  * Retorna o ID da pasta criada.

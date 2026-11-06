@@ -46,6 +46,7 @@ import { isWholesaling } from "../_shared/modelos.ts";
 import { avaliarEntrada, painelRequisitos, carregarDadosEntrada } from "../_shared/dealBreakers.ts";
 import { PROMPT_EXTRATOR, MODELO_EXTRATOR, lerExtracao, contextoImovel, paraAnalise, camposParaFicha, nomesPreenchidos, contextoDespesa, leituraDaFatura, camposDaDespesa, nomesDaDespesa, avisoDeValor } from "../_shared/extratorDocumentos.ts";
 import { documentosDe, temDocumento, anteriorARegra } from "../_shared/regrasDespesas.ts";
+import { CATEGORIAS_DOCUMENTOS_EMPRESA } from "../_shared/documentosEmpresa.ts";
 import { validarModeloImovel, validarCategoriaNegocio } from "../_shared/modeloNegocio.ts";
 import { donosDasRegioes } from "../_shared/responsavelRegiao.ts";
 import { tarefaAtrasada } from "../_shared/regrasTarefas.ts";
@@ -64,7 +65,7 @@ const isDirecaoResposta = (direcao: string) => direcao === "Recebido" || direcao
 import {
   createImovelFolder, isConfigured as driveConfigured, listImovelFiles,
   moveImovelFolder, uploadDocToFolder, uploadUserFileToFolder, uploadComprovativoToFolder, downloadDriveFile,
-  createInvestidorFolder, uploadDocumentoInvestidor, moverParaElementosApagados, ensureInvestidorFolderShared,
+  createInvestidorFolder, uploadDocumentoInvestidor, uploadDocumentoEmpresa, moverParaElementosApagados, ensureInvestidorFolderShared,
 } from "../_shared/driveSync.ts";
 import {
   autoOrganize, ensureLabels, isConfigured as gmailConfigured, organizeBatch, organizeMessage,
@@ -2219,6 +2220,178 @@ app.delete("/consultores/:id/documentos/:docId", async (c: any) => {
     if (!d) return c.json({ error: "Documento não encontrado" }, 404);
     await removeFromStorage(CONS_DOCS_BUCKET, d.ficheiro_path);
     await pool.query("DELETE FROM consultor_documentos WHERE id = $1", [c.req.param("docId")]);
+    return c.json({ ok: true });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ── Documentação da empresa (Administração › Documentos, só admin) — port de routes.js ──
+// Linhas criadas à mão (com ou sem ficheiro); ficheiro no bucket privado
+// "Empresa" + espelho no Drive em "Documentação Empresa/<categoria>".
+// Tabela da migração 0096 — as migrações não são auto-aplicadas em produção.
+let _docsEmpresaEnsured = false;
+async function ensureDocumentosEmpresa() {
+  if (_docsEmpresaEnsured) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS documentos_empresa (
+      id TEXT PRIMARY KEY, categoria TEXT NOT NULL, nome TEXT NOT NULL, entidade TEXT, codigo_acesso TEXT,
+      data_emissao TEXT, data_validade TEXT, notas TEXT, ficheiro_nome TEXT, ficheiro_path TEXT, mime TEXT,
+      tamanho INTEGER, drive_file_id TEXT, created_at TEXT DEFAULT (NOW()::TEXT), updated_at TEXT DEFAULT (NOW()::TEXT)
+    );
+    CREATE INDEX IF NOT EXISTS idx_docs_empresa_categoria ON documentos_empresa(categoria);
+    CREATE INDEX IF NOT EXISTS idx_docs_empresa_validade ON documentos_empresa(data_validade);
+  `);
+  _docsEmpresaEnsured = true;
+}
+const DOCS_EMPRESA_BUCKET = "Empresa";
+const DOCS_EMPRESA_CAMPOS = ["categoria", "nome", "entidade", "codigo_acesso", "data_emissao", "data_validade", "notas"];
+const DOCS_EMPRESA_SELECT = `SELECT id, categoria, nome, entidade, codigo_acesso, data_emissao, data_validade, notas,
+  ficheiro_nome, mime, tamanho, drive_file_id, created_at, updated_at FROM documentos_empresa`;
+
+// Só administradores (documentação societária e fiscal da empresa).
+async function requireAdminDocsEmpresa(c: any, next: any) {
+  const u = await resolveCrmUser(c);
+  if (!u) return CRM_AUTH_CONFIGURED ? c.json({ error: "Não autenticado" }, 401) : next();
+  if (!u.ativo) return c.json({ error: "Conta inactiva" }, 403);
+  if (u.role !== "admin") return c.json({ error: "Só administradores" }, 403);
+  return next();
+}
+app.use("/empresa-documentos", requireAdminDocsEmpresa);
+app.use("/empresa-documentos/*", requireAdminDocsEmpresa);
+
+function camposDocEmpresa(body: Record<string, any>) {
+  const out: Record<string, any> = {};
+  for (const k of DOCS_EMPRESA_CAMPOS) {
+    if (body[k] === undefined) continue;
+    const v = typeof body[k] === "string" ? body[k].trim() : body[k];
+    out[k] = v === "" ? null : v;
+  }
+  if ("categoria" in out && !CATEGORIAS_DOCUMENTOS_EMPRESA.includes(out.categoria)) out.categoria = "Outros";
+  for (const k of ["data_emissao", "data_validade"]) {
+    if (out[k] && !/^\d{4}-\d{2}-\d{2}$/.test(out[k])) throw Object.assign(new Error(`Data inválida em ${k}`), { status: 400 });
+  }
+  return out;
+}
+function formParaObjecto(form: FormData) {
+  const o: Record<string, any> = {};
+  for (const k of DOCS_EMPRESA_CAMPOS) { const v = form.get(k); if (typeof v === "string") o[k] = v; }
+  return o;
+}
+async function anexarFicheiroDocEmpresa(doc: any, file: File) {
+  assertSafeUpload(file, 15 * 1024 * 1024, OFFICE_ALLOWED_EXT);
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const mime = file.type || "application/octet-stream";
+  const safe = file.name.normalize("NFD").replace(/[^\w.\- ]+/g, "_");
+  const storagePath = `${doc.id}/${crypto.randomUUID()}_${safe}`;
+  await uploadPrivate(DOCS_EMPRESA_BUCKET, storagePath, bytes, mime);
+  await pool.query(
+    `UPDATE documentos_empresa SET ficheiro_nome = $1, ficheiro_path = $2, mime = $3, tamanho = $4, drive_file_id = NULL, updated_at = $5 WHERE id = $6`,
+    [file.name, storagePath, file.type || null, file.size, new Date().toISOString(), doc.id],
+  );
+  // Substituição: o ficheiro antigo sai do Storage e o espelho antigo vai para "Elementos apagados do CRM".
+  if (doc.ficheiro_path) await removeFromStorage(DOCS_EMPRESA_BUCKET, doc.ficheiro_path);
+  if (doc.drive_file_id) moverParaElementosApagados(doc.drive_file_id).catch(() => {});
+  if (driveConfigured()) {
+    uploadDocumentoEmpresa(doc.categoria, bytes, file.name, mime)
+      .then((fileId: string | null) => {
+        if (fileId) { pool.query("UPDATE documentos_empresa SET drive_file_id = $1 WHERE id = $2 AND ficheiro_path = $3", [fileId, doc.id, storagePath]).catch(() => {}); return; }
+        alertarFalhaUploadDrive("documentação da empresa", file.name);
+      })
+      .catch((e: any) => { console.error("[drive] espelho documento empresa:", e.message); alertarFalhaUploadDrive("documentação da empresa", file.name); });
+  }
+}
+const erroStatus = (e: any) => (e?.status === 400 ? 400 : 500);
+
+app.get("/empresa-documentos", async (c: any) => {
+  try {
+    await ensureDocumentosEmpresa();
+    const { rows } = await pool.query(`${DOCS_EMPRESA_SELECT} ORDER BY categoria, nome`);
+    return c.json(rows);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/empresa-documentos", async (c: any) => {
+  try {
+    const _rl = await checkUploadLimit(c); if (_rl) return _rl;
+    await ensureDocumentosEmpresa();
+    const form = await c.req.formData();
+    const cp = camposDocEmpresa(formParaObjecto(form));
+    if (!cp.nome) return c.json({ error: "O nome do documento é obrigatório" }, 400);
+    const fRaw = form.get("ficheiro");
+    const file = fRaw instanceof File && fRaw.size > 0 ? fRaw : null;
+    if (file) assertSafeUpload(file, 15 * 1024 * 1024, OFFICE_ALLOWED_EXT);
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const categoria = cp.categoria || "Outros";
+    await pool.query(
+      `INSERT INTO documentos_empresa (id, categoria, nome, entidade, codigo_acesso, data_emissao, data_validade, notas, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)`,
+      [id, categoria, cp.nome, cp.entidade ?? null, cp.codigo_acesso ?? null, cp.data_emissao ?? null, cp.data_validade ?? null, cp.notas ?? null, now],
+    );
+    if (file) await anexarFicheiroDocEmpresa({ id, categoria }, file);
+    const { rows: [doc] } = await pool.query(`${DOCS_EMPRESA_SELECT} WHERE id = $1`, [id]);
+    return c.json(doc, 201);
+  } catch (e) { return c.json({ error: (e as Error).message }, erroStatus(e)); }
+});
+
+app.put("/empresa-documentos/:id", async (c: any) => {
+  try {
+    await ensureDocumentosEmpresa();
+    const cp = camposDocEmpresa(await c.req.json().catch(() => ({})));
+    if ("nome" in cp && !cp.nome) return c.json({ error: "O nome do documento é obrigatório" }, 400);
+    const keys = Object.keys(cp);
+    if (keys.length) {
+      const sets = keys.map((k, i) => `${k} = $${i + 1}`).join(", ");
+      const { rowCount } = await pool.query(
+        `UPDATE documentos_empresa SET ${sets}, updated_at = $${keys.length + 1} WHERE id = $${keys.length + 2}`,
+        [...keys.map((k) => cp[k]), new Date().toISOString(), c.req.param("id")],
+      );
+      if (!rowCount) return c.json({ error: "Documento não encontrado" }, 404);
+    }
+    const { rows: [doc] } = await pool.query(`${DOCS_EMPRESA_SELECT} WHERE id = $1`, [c.req.param("id")]);
+    if (!doc) return c.json({ error: "Documento não encontrado" }, 404);
+    return c.json(doc);
+  } catch (e) { return c.json({ error: (e as Error).message }, erroStatus(e)); }
+});
+
+app.post("/empresa-documentos/:id/ficheiro", async (c: any) => {
+  try {
+    const _rl = await checkUploadLimit(c); if (_rl) return _rl;
+    await ensureDocumentosEmpresa();
+    const form = await c.req.formData();
+    const fRaw = form.get("ficheiro");
+    if (!(fRaw instanceof File) || fRaw.size === 0) return c.json({ error: "Anexe um PDF, imagem ou documento Office (máx. 15MB)" }, 400);
+    const { rows: [atual] } = await pool.query("SELECT id, categoria, ficheiro_path, drive_file_id FROM documentos_empresa WHERE id = $1", [c.req.param("id")]);
+    if (!atual) return c.json({ error: "Documento não encontrado" }, 404);
+    await anexarFicheiroDocEmpresa(atual, fRaw);
+    const { rows: [doc] } = await pool.query(`${DOCS_EMPRESA_SELECT} WHERE id = $1`, [c.req.param("id")]);
+    return c.json(doc);
+  } catch (e) { return c.json({ error: (e as Error).message }, erroStatus(e)); }
+});
+
+app.get("/empresa-documentos/:id/ficheiro", async (c: any) => {
+  try {
+    await ensureDocumentosEmpresa();
+    const { rows: [d] } = await pool.query("SELECT ficheiro_nome, ficheiro_path, mime FROM documentos_empresa WHERE id = $1", [c.req.param("id")]);
+    if (!d) return c.json({ error: "Documento não encontrado" }, 404);
+    if (!d.ficheiro_path) return c.json({ error: "Este documento ainda não tem ficheiro anexado" }, 404);
+    if (!supabase) return c.json({ error: "Storage indisponível" }, 503);
+    const { data: blob, error } = await supabase.storage.from(DOCS_EMPRESA_BUCKET).download(d.ficheiro_path);
+    if (error || !blob) return c.json({ error: "Ficheiro não encontrado no Storage" }, 404);
+    return c.body(new Uint8Array(await blob.arrayBuffer()), 200, {
+      "Content-Type": d.mime || "application/octet-stream",
+      "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(d.ficheiro_nome || "documento")}`,
+    });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.delete("/empresa-documentos/:id", async (c: any) => {
+  try {
+    await ensureDocumentosEmpresa();
+    const { rows: [d] } = await pool.query("SELECT ficheiro_path, drive_file_id FROM documentos_empresa WHERE id = $1", [c.req.param("id")]);
+    if (!d) return c.json({ error: "Documento não encontrado" }, 404);
+    await pool.query("DELETE FROM documentos_empresa WHERE id = $1", [c.req.param("id")]);
+    if (d.ficheiro_path) await removeFromStorage(DOCS_EMPRESA_BUCKET, d.ficheiro_path);
+    if (d.drive_file_id) moverParaElementosApagados(d.drive_file_id).catch(() => {});
     return c.json({ ok: true });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });

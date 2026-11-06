@@ -37,6 +37,7 @@ const RelatoriosAdmin = lazy(() => import('./pages/RelatoriosAdmin.jsx').then(m 
 const Administracao = lazy(() => import('./pages/Administracao.jsx').then(m => ({ default: m.Administracao })))
 const AdministracaoSOP = lazy(() => import('./pages/AdministracaoSOP.jsx').then(m => ({ default: m.AdministracaoSOP })))
 const AdministracaoChamadas = lazy(() => import('./pages/AdministracaoChamadas.jsx').then(m => ({ default: m.AdministracaoChamadas })))
+const AdministracaoDocumentos = lazy(() => import('./pages/AdministracaoDocumentos.jsx').then(m => ({ default: m.AdministracaoDocumentos })))
 const Marketing = lazy(() => import('./pages/Marketing.jsx').then(m => ({ default: m.Marketing })))
 const Agenda = lazy(() => import('./pages/Agenda.jsx').then(m => ({ default: m.Agenda })))
 
@@ -142,6 +143,7 @@ function AppRoutes() {
               <Route path="relatorios" element={<RelatoriosAdmin />} />
               <Route path="sop" element={<AdministracaoSOP />} />
               <Route path="chamadas" element={<AdministracaoChamadas />} />
+              <Route path="documentos" element={<AdministracaoDocumentos />} />
               <Route path="regiao" element={<Navigate to="/administracao/sop" replace />} />
             </Route>
             <Route path="/admin/utilizadores" element={<ErrorBoundary><Utilizadores /></ErrorBoundary>} />

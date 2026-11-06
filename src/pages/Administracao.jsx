@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { BookOpen, CalendarClock, Timer, FileBarChart, Headphones } from 'lucide-react'
+import { BookOpen, CalendarClock, Timer, FileBarChart, Headphones, FolderLock } from 'lucide-react'
 import { Suspense } from 'react'
 import { Header } from '../components/layout/Header.jsx'
 import { BrandLoader } from '../components/ui/BrandLoader.jsx'
@@ -12,6 +12,7 @@ const TABS = [
   { key: 'sop',        label: 'SOPs',                icon: BookOpen },
   { key: 'relatorios', label: 'Relatórios',           icon: FileBarChart },
   { key: 'chamadas',   label: 'Avaliação de calls', icon: Headphones },
+  { key: 'documentos', label: 'Documentos',         icon: FolderLock },
 ]
 
 const SUBTITLES = {
@@ -20,6 +21,7 @@ const SUBTITLES = {
   sop:        'Procedimentos operacionais por departamento',
   relatorios: 'Sínteses semanais de reuniões e estudos estratégicos da Somnium Properties',
   chamadas:   'KPIs de cold, discovery e close call e pivot para parceria (SOP 2)',
+  documentos: 'Documentação da Somnium Properties: RCBE, certidões, licenças, seguros e validades',
 }
 
 export function Administracao() {

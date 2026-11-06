@@ -6,6 +6,7 @@ import { RECORD_RESTRICTED_ROLES } from "../_shared/roles.ts";
 import { resolveOrProvisionUser } from "../_shared/userResolve.ts";
 import pool from "../_shared/pg.ts";
 import { alertasConservacao } from "../_shared/consentimentos.ts";
+import { alertasDocumentosEmpresa } from "../_shared/documentosEmpresa.ts";
 import { juntarResponsavel, donosDasRegioes } from "../_shared/responsavelRegiao.ts";
 import { alertasDeDespesas } from "../_shared/regrasDespesas.ts";
 import { normalizarEstadoTarefa, faltaNaTarefa, tarefaConcluida, tarefaAtrasada } from "../_shared/regrasTarefas.ts";
@@ -3961,6 +3962,12 @@ app.get("/alertas", endpointCache(300000), async (c: any) => {
 
     // ── RGPD: dados a rever pelo prazo de conservação (auditoria D4) ──
     try { alerts.push(...await alertasConservacao(pool)); } catch (e: any) { console.warn("[alertas] conservação:", e.message); }
+
+    // Documentação da empresa a expirar ou expirada (Administração › Documentos)
+    try {
+      const { rows: docsEmp } = await pool.query(`SELECT id, categoria, nome, data_validade FROM documentos_empresa WHERE data_validade IS NOT NULL`);
+      alerts.push(...alertasDocumentosEmpresa(docsEmp));
+    } catch (e: any) { if (!/does not exist/.test(e.message)) console.warn("[alertas] documentos empresa:", e.message); }
 
     // Tarefas abertas sem responsável ou sem prazo (auditoria D11)
     try {
