@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { CheckCircle2, Circle, Plus, Trash2, Upload, FileText, BarChart3, ChevronRight, FileDown, AlertTriangle, RefreshCw, Home, Layers, History, FileSpreadsheet, Pencil, Eye, CalendarClock, ClipboardCheck, Calculator, Receipt, Hammer, FolderOpen, HandCoins, CalendarCheck, Building, Trees, Footprints, ArrowUpDown, Zap, Car, MoreHorizontal, Camera } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { BrandLoader, useMinLoading } from '../components/ui/BrandLoader.jsx'
@@ -2613,13 +2613,26 @@ function TabInvestidores({ negocio, readOnly }) {
         <div className="space-y-2">
           {lista.map(l => (
             <div key={l.id} className="flex items-center gap-3 p-3 rounded-lg border border-line bg-surface-raised group">
-              <div className="w-8 h-8 rounded-full bg-brand-gold text-brand-dark flex items-center justify-center font-bold text-xs flex-shrink-0">
-                {(l.investidor_nome || '?').slice(0, 2).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-ink truncate">{l.investidor_nome}</p>
-                {l.investidor_email && <p className="text-[10px] text-ink-muted truncate">{l.investidor_email}</p>}
-              </div>
+              {/* Equipa: nome e iniciais abrem o perfil do investidor no Comercial. */}
+              {(() => {
+                const conteudo = (
+                  <>
+                    <div className="w-8 h-8 rounded-full bg-brand-gold text-brand-dark flex items-center justify-center font-bold text-xs flex-shrink-0">
+                      {(l.investidor_nome || '?').slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-medium text-ink truncate ${readOnly ? '' : 'group-hover/inv:underline'}`}>{l.investidor_nome}</p>
+                      {l.investidor_email && <p className="text-[10px] text-ink-muted truncate">{l.investidor_email}</p>}
+                    </div>
+                  </>
+                )
+                return readOnly ? conteudo : (
+                  <Link to={`/crm?tab=Investidores&detail=${l.investidor_id}`} title="Abrir perfil do investidor"
+                    className="group/inv flex flex-1 min-w-0 items-center gap-3 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
+                    {conteudo}
+                  </Link>
+                )
+              })()}
               <div className="flex gap-3 items-center text-right num">
                 <div>
                   <p className="text-[9px] uppercase tracking-wider text-ink-muted">Capital</p>
