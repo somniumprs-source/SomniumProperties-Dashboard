@@ -78,7 +78,9 @@ const SOCIO_CAMPOS = [
 export function DadosEmpresaInvestidorTab({ investidorId, dadosEmpresa: initial, titularCapital, onUpdate, readOnly = false }) {
   const toast = useToast()
   const [form, setForm] = useState(() => normalizeDadosEmpresa(initial))
+  const formBruto = form
   const [titular, setTitular] = useState(() => ({ ...TITULAR_VAZIO, ...(titularCapital && typeof titularCapital === 'object' ? titularCapital : {}) }))
+  const titularBruto = titular
   const [saving, setSaving] = useState(false)
 
   const inputClass = 'w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-accent/40'
@@ -102,7 +104,12 @@ export function DadosEmpresaInvestidorTab({ investidorId, dadosEmpresa: initial,
   async function handleSave() {
     setSaving(true)
     try {
-      await apiFetch(`/api/crm/investidores/${investidorId}`, {
+      // Texto colado de tabelas traz tabulações e espaços nas pontas.
+      const limpar = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k,
+        typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : Array.isArray(v) ? v.map(x => (x && typeof x === 'object' ? limpar(x) : x)) : v]))
+      const form = limpar(formBruto)
+      const titular = limpar(titularBruto)
+      const r = await apiFetch(`/api/crm/investidores/${investidorId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         // Vazio grava null: dados_empresa preenchido marca o investidor como empresa.
@@ -111,6 +118,12 @@ export function DadosEmpresaInvestidorTab({ investidorId, dadosEmpresa: initial,
           titular_capital: preenchido(titular) ? titular : null,
         }),
       })
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        throw new Error(err.error || `Erro ${r.status}`)
+      }
+      setForm(form); setTitular(titular)
+      toast('Dados legais guardados', 'success')
       if (onUpdate) onUpdate()
     } catch (err) {
       toast(friendlyError(err.message || 'Erro ao guardar dados da empresa'), 'error')

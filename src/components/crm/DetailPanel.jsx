@@ -816,7 +816,9 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       // montante_investido (investidores) é calculado a partir de
       // projeto_investidores — nunca enviar o valor do form, para não
       // sobrescrever com um valor potencialmente desactualizado.
-      const { negocios, consultores, imoveis, tarefas, timeline, analises, documentos, checklist, interacoes, montante_investido, ...rest } = form
+      // dados_empresa e titular_capital editam-se no separador Dados Legais: enviar
+      // aqui o valor de quando a ficha abriu apagava o que lá se acabou de gravar.
+      const { negocios, consultores, imoveis, tarefas, timeline, analises, documentos, checklist, interacoes, montante_investido, dados_empresa, titular_capital, ...rest } = form
       // Remover campos virtuais (prefixo _) que vêm da lista enriquecida e não existem na BD
       const cleanForm = { ...Object.fromEntries(Object.entries(rest).filter(([k]) => !k.startsWith('_'))), ...extra }
       // Entrada numa fase de follow-up: a fase, o motivo e a tarefa vão pela
