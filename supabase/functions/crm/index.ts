@@ -2406,6 +2406,107 @@ app.delete("/empresa-documentos/:id", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
+// ── Marca Pessoal (Marketing › Marca Pessoal, só admin) — port de routes.js ──
+// O conteúdo base das publicações vive no frontend (src/constants/marcaPessoal.js).
+// Esta tabela guarda só o que muda na app e publicações novas. Apagar a linha de
+// uma publicação base repõe o original. Tabela da migração 0098.
+let _marcaPessoalEnsured = false;
+async function ensureMarcaPessoal() {
+  if (_marcaPessoalEnsured) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS marca_pessoal_posts (
+      id TEXT PRIMARY KEY, mes INTEGER, semana INTEGER, ordem INTEGER, tipo TEXT, pilar TEXT, tema TEXT,
+      objetivo TEXT, formato TEXT, canal TEXT, guiao TEXT, linkedin TEXT, instagram TEXT, data_prevista TEXT,
+      estado TEXT, link_publicacao TEXT, data_publicacao TEXT, notas TEXT, arquivado BOOLEAN,
+      created_at TEXT DEFAULT (NOW()::TEXT), updated_at TEXT DEFAULT (NOW()::TEXT)
+    );
+  `);
+  _marcaPessoalEnsured = true;
+}
+app.use("/marca-pessoal/*", requireAdminDocsEmpresa);
+
+const MP_ESTADOS_VALIDOS = ["Por produzir", "Em produção", "Pronto", "Agendado", "Publicado"];
+const MP_CAMPOS_TEXTO = ["tipo", "pilar", "tema", "objetivo", "formato", "canal", "guiao", "linkedin", "instagram", "estado", "link_publicacao", "notas"];
+const MP_CAMPOS_INT = ["mes", "semana", "ordem"];
+const MP_CAMPOS_DATA = ["data_prevista", "data_publicacao"];
+function erro400(msg: string) { return Object.assign(new Error(msg), { status: 400 }); }
+function camposMarcaPessoal(body: Record<string, any>) {
+  const out: Record<string, any> = {};
+  for (const k of MP_CAMPOS_TEXTO) {
+    if (body[k] === undefined) continue;
+    const v = typeof body[k] === "string" ? body[k].trim() : body[k];
+    out[k] = v === "" || v === null ? null : String(v).slice(0, 20000);
+  }
+  for (const k of MP_CAMPOS_INT) {
+    if (body[k] === undefined) continue;
+    const n = body[k] === "" || body[k] === null ? null : Number(body[k]);
+    if (n !== null && (!Number.isInteger(n) || n < 1 || n > 12)) throw erro400(`Valor inválido em ${k}`);
+    out[k] = n;
+  }
+  for (const k of MP_CAMPOS_DATA) {
+    if (body[k] === undefined) continue;
+    const v = body[k] || null;
+    if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) throw erro400(`Data inválida em ${k}`);
+    out[k] = v;
+  }
+  if (body.arquivado !== undefined) out.arquivado = !!body.arquivado;
+  if (out.estado && !MP_ESTADOS_VALIDOS.includes(out.estado)) throw erro400("Estado inválido");
+  if (out.tipo && !["Literacia", "Prova"].includes(out.tipo)) throw erro400("Tipo inválido");
+  if (out.link_publicacao && !/^https?:\/\//i.test(out.link_publicacao)) throw erro400("O link tem de começar por http:// ou https://");
+  return out;
+}
+async function gravarMarcaPessoal(id: string, campos: Record<string, any>) {
+  const cols = Object.keys(campos);
+  const vals = [id, ...cols.map((k) => campos[k]), new Date().toISOString()];
+  const sets = [...cols.map((k) => `${k} = EXCLUDED.${k}`), "updated_at = EXCLUDED.updated_at"];
+  const { rows: [row] } = await pool.query(
+    `INSERT INTO marca_pessoal_posts (id, ${cols.map((k) => k + ", ").join("")}updated_at)
+     VALUES ($1, ${cols.map((_, i) => `$${i + 2}, `).join("")}$${cols.length + 2})
+     ON CONFLICT (id) DO UPDATE SET ${sets.join(", ")} RETURNING *`, vals);
+  return row;
+}
+
+app.get("/marca-pessoal/posts", async (c: any) => {
+  try {
+    await ensureMarcaPessoal().catch((e) => console.warn("[marca-pessoal] ensure:", (e as Error).message));
+    const { rows } = await pool.query("SELECT * FROM marca_pessoal_posts ORDER BY id");
+    return c.json(rows);
+  } catch (e) {
+    if (/does not exist/.test((e as Error).message)) return c.json([]);
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+app.post("/marca-pessoal/posts", async (c: any) => {
+  try {
+    await ensureMarcaPessoal();
+    const campos = camposMarcaPessoal(await c.req.json().catch(() => ({})));
+    if (!campos.tema) return c.json({ error: "Indica o tema da publicação" }, 400);
+    if (!campos.estado) campos.estado = "Por produzir";
+    return c.json(await gravarMarcaPessoal(`mp-${crypto.randomUUID()}`, campos), 201);
+  } catch (e) { return c.json({ error: (e as Error).message }, (e as any).status || 500); }
+});
+
+app.put("/marca-pessoal/posts/:id", async (c: any) => {
+  try {
+    await ensureMarcaPessoal();
+    const id = c.req.param("id");
+    if (!/^[\w-]{1,80}$/.test(id)) return c.json({ error: "Identificador inválido" }, 400);
+    const campos = camposMarcaPessoal(await c.req.json().catch(() => ({})));
+    if (!Object.keys(campos).length) return c.json({ error: "Nada para guardar" }, 400);
+    return c.json(await gravarMarcaPessoal(id, campos));
+  } catch (e) { return c.json({ error: (e as Error).message }, (e as any).status || 500); }
+});
+
+// Publicação base: repõe o conteúdo original. Publicação nova: apaga-a.
+app.delete("/marca-pessoal/posts/:id", async (c: any) => {
+  try {
+    await ensureMarcaPessoal();
+    await pool.query("DELETE FROM marca_pessoal_posts WHERE id = $1", [c.req.param("id")]);
+    return c.json({ ok: true });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
 app.get("/consultores/:id/interacoes", async (c: any) => {
   try {
     const { rows } = await pool.query(

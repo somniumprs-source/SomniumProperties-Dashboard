@@ -7845,6 +7845,109 @@ router.delete('/empresa-documentos/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// ── Marca Pessoal (Marketing › Marca Pessoal, só admin) ─────────────────────
+// O conteúdo base das publicações vive no frontend (src/constants/marcaPessoal.js).
+// Esta tabela guarda só o que muda na app (estado, textos editados, notas, link)
+// e publicações novas. Apagar a linha de uma publicação base repõe o original.
+// Port em supabase/functions/crm/index.ts (produção).
+let _marcaPessoalEnsured = false
+async function ensureMarcaPessoal() {
+  if (_marcaPessoalEnsured) return
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS marca_pessoal_posts (
+      id TEXT PRIMARY KEY, mes INTEGER, semana INTEGER, ordem INTEGER, tipo TEXT, pilar TEXT, tema TEXT,
+      objetivo TEXT, formato TEXT, canal TEXT, guiao TEXT, linkedin TEXT, instagram TEXT, data_prevista TEXT,
+      estado TEXT, link_publicacao TEXT, data_publicacao TEXT, notas TEXT, arquivado BOOLEAN,
+      created_at TEXT DEFAULT (NOW()::TEXT), updated_at TEXT DEFAULT (NOW()::TEXT)
+    );
+  `)
+  _marcaPessoalEnsured = true
+}
+const MP_ESTADOS_VALIDOS = ['Por produzir', 'Em produção', 'Pronto', 'Agendado', 'Publicado']
+const MP_CAMPOS_TEXTO = ['tipo', 'pilar', 'tema', 'objetivo', 'formato', 'canal', 'guiao', 'linkedin', 'instagram', 'estado', 'link_publicacao', 'notas']
+const MP_CAMPOS_INT = ['mes', 'semana', 'ordem']
+const MP_CAMPOS_DATA = ['data_prevista', 'data_publicacao']
+function camposMarcaPessoal(body) {
+  const out = {}
+  for (const k of MP_CAMPOS_TEXTO) {
+    if (body[k] === undefined) continue
+    const v = typeof body[k] === 'string' ? body[k].trim() : body[k]
+    out[k] = v === '' || v === null ? null : String(v).slice(0, 20000)
+  }
+  for (const k of MP_CAMPOS_INT) {
+    if (body[k] === undefined) continue
+    const n = body[k] === '' || body[k] === null ? null : Number(body[k])
+    if (n !== null && (!Number.isInteger(n) || n < 1 || n > 12)) throw Object.assign(new Error(`Valor inválido em ${k}`), { status: 400 })
+    out[k] = n
+  }
+  for (const k of MP_CAMPOS_DATA) {
+    if (body[k] === undefined) continue
+    const v = body[k] || null
+    if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) throw Object.assign(new Error(`Data inválida em ${k}`), { status: 400 })
+    out[k] = v
+  }
+  if (body.arquivado !== undefined) out.arquivado = !!body.arquivado
+  if (out.estado && !MP_ESTADOS_VALIDOS.includes(out.estado)) throw Object.assign(new Error('Estado inválido'), { status: 400 })
+  if (out.tipo && !['Literacia', 'Prova'].includes(out.tipo)) throw Object.assign(new Error('Tipo inválido'), { status: 400 })
+  if (out.link_publicacao && !/^https?:\/\//i.test(out.link_publicacao)) throw Object.assign(new Error('O link tem de começar por http:// ou https://'), { status: 400 })
+  return out
+}
+async function gravarMarcaPessoal(id, campos) {
+  const cols = Object.keys(campos)
+  const vals = [id, ...cols.map(k => campos[k]), new Date().toISOString()]
+  const sets = [...cols.map(k => `${k} = EXCLUDED.${k}`), 'updated_at = EXCLUDED.updated_at']
+  const { rows: [row] } = await pool.query(
+    `INSERT INTO marca_pessoal_posts (id, ${cols.map(k => k + ', ').join('')}updated_at)
+     VALUES ($1, ${cols.map((_, i) => `$${i + 2}, `).join('')}$${cols.length + 2})
+     ON CONFLICT (id) DO UPDATE SET ${sets.join(', ')} RETURNING *`, vals)
+  return row
+}
+
+router.get('/marca-pessoal/posts', async (req, res) => {
+  if (await requireAdminAudit(req, res)) return
+  try {
+    // Leitura não depende de conseguir criar a tabela (ex.: dev em modo só leitura).
+    await ensureMarcaPessoal().catch(e => console.warn('[marca-pessoal] ensure:', e.message))
+    const { rows } = await pool.query('SELECT * FROM marca_pessoal_posts ORDER BY id')
+    res.json(rows)
+  } catch (e) {
+    if (/does not exist/.test(e.message)) return res.json([])
+    res.status(500).json({ error: e.message })
+  }
+})
+
+router.post('/marca-pessoal/posts', async (req, res) => {
+  if (await requireAdminAudit(req, res)) return
+  try {
+    await ensureMarcaPessoal()
+    const campos = camposMarcaPessoal(req.body || {})
+    if (!campos.tema) return res.status(400).json({ error: 'Indica o tema da publicação' })
+    if (!campos.estado) campos.estado = 'Por produzir'
+    res.status(201).json(await gravarMarcaPessoal(`mp-${randomUUID()}`, campos))
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }) }
+})
+
+router.put('/marca-pessoal/posts/:id', async (req, res) => {
+  if (await requireAdminAudit(req, res)) return
+  try {
+    await ensureMarcaPessoal()
+    if (!/^[\w-]{1,80}$/.test(req.params.id)) return res.status(400).json({ error: 'Identificador inválido' })
+    const campos = camposMarcaPessoal(req.body || {})
+    if (!Object.keys(campos).length) return res.status(400).json({ error: 'Nada para guardar' })
+    res.json(await gravarMarcaPessoal(req.params.id, campos))
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }) }
+})
+
+// Publicação base: repõe o conteúdo original. Publicação nova: apaga-a.
+router.delete('/marca-pessoal/posts/:id', async (req, res) => {
+  if (await requireAdminAudit(req, res)) return
+  try {
+    await ensureMarcaPessoal()
+    await pool.query('DELETE FROM marca_pessoal_posts WHERE id = $1', [req.params.id])
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 router.get('/auditoria', async (req, res) => {
   if (await requireAdminAudit(req, res)) return
   try {
