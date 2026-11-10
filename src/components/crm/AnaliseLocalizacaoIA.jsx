@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Sparkles, Search, Check, X, MapPin, Footprints, Car, Bike, Bus, Star, Loader2, ChevronDown, ChevronRight, ThumbsUp, TrendingDown } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
-import { pesquisarPOIs, procurarLugar, pontoManual, CATEGORIAS, GRUPOS as GRUPOS_ATUAIS } from '../../../supabase/functions/_shared/analiseLocalizacaoIA.js'
+import { pesquisarPOIs, procurarLugar, pontoManual, nomeApresentado, CATEGORIAS, GRUPOS as GRUPOS_ATUAIS } from '../../../supabase/functions/_shared/analiseLocalizacaoIA.js'
 import { gerarEstudoPNG } from '../../../supabase/functions/_shared/estudoMapaOSM.js'
 
 const MapaLocalizacao = lazy(() => import('./MapaLocalizacao.jsx'))
@@ -377,7 +377,7 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onEstudo
                           <li key={p.id} className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 ${p.estado === 'excluido' ? 'opacity-45' : ''} ${p.estado === 'validado' ? 'bg-emerald-50/40' : ''}`}>
                             <div className="flex-1 min-w-0">
                               <div className="text-sm text-ink truncate">
-                                <span className="font-medium">{p.nome}</span>
+                                <span className="font-medium">{nomeApresentado(p)}</span>
                                 <span className="text-[11px] text-ink-muted ml-2">{p.categoria_label}</span>
                               </div>
                               <div className="text-[11px] text-ink-muted truncate">{[p.linhas && `Linhas ${p.linhas}`, p.endereco].filter(Boolean).join(' · ')}</div>
@@ -408,7 +408,7 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onEstudo
                     <select value={destaque} onChange={e => setDestaque(e.target.value)}
                       className="w-full px-3 py-1.5 rounded-lg border border-line text-sm">
                       <option value="">Sem destaque</option>
-                      {validados.map(p => <option key={p.id} value={p.nome}>{p.nome} ({p.categoria_label})</option>)}
+                      {validados.map(p => <option key={p.id} value={nomeApresentado(p)}>{nomeApresentado(p)} ({p.categoria_label})</option>)}
                     </select>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

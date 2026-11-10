@@ -48,21 +48,13 @@ export const CATEGORIAS = [
   // Acessos e transportes
   { id: 'autocarros', grupo: 'transportes', label: 'Paragem de autocarro', raio: 800, max: 1, semNome: 'Paragem de autocarro',
     osm: ['[highway=bus_stop]', '[amenity=bus_station]'], ok: (t) => (t.highway === 'bus_stop' || t.amenity === 'bus_station') && !temRede(t, 'metrobus|metro mondego'),
-    // Ex.: «Paragem SMTUC Rua do Brasil (Colégios)».
-    nomeDe: (t) => (t.name ? `${t.amenity === 'bus_station' ? 'Terminal' : 'Paragem'}${t.network ? ` ${t.network}` : ''} ${t.name}` : 'Paragem de autocarro') },
+  },
   { id: 'metro', grupo: 'transportes', label: 'Metro e Metrobus', raio: 2500, max: 1,
     osm: ['[station~"^(subway|light_rail)$"]', '[public_transport][network~"metro",i]', '[highway=bus_stop][name~"metrobus",i]'],
     ok: (t) => ['subway', 'light_rail'].includes(t.station) || (!!(t.public_transport || t.highway === 'bus_stop') && temRede(t, 'metrobus|metro mondego|metropolitano|metro do porto')),
-    // Ex.: «Estação Arregaça (Metro Mondego)».
-    nomeDe: (t) => {
-      const nome = String(t.name || '').trim()
-      const base = re('^esta[cç][aã]o').test(nome) ? nome : `Estação ${nome}`
-      const rede = t.network || t.operator || ''
-      return rede && !base.toLowerCase().includes(rede.toLowerCase()) ? `${base} (${rede})` : base
-    } },
+  },
   { id: 'comboio', grupo: 'transportes', label: 'Estações de comboio', raio: 12000, max: 2,
-    osm: ['[railway=station]'], ok: (t) => t.railway === 'station' && !['subway', 'light_rail'].includes(t.station) && !!t.name,
-    nomeDe: (t) => (re('^esta[cç][aã]o').test(t.name) ? t.name : `Estação ${t.name}`) },
+    osm: ['[railway=station]'], ok: (t) => t.railway === 'station' && !['subway', 'light_rail'].includes(t.station) && !!t.name },
   { id: 'autoestradas', grupo: 'transportes', label: 'Acessos às autoestradas', raio: 30000, max: 4, fixo: true },
   { id: 'aeroportos', grupo: 'transportes', label: 'Aeroportos', raio: 400000, max: 2, fixo: true },
   // Saúde
@@ -114,6 +106,22 @@ const AEROPORTOS = [
   { id: 'aeroporto:OPO', nome: 'Aeroporto do Porto (Francisco Sá Carneiro)', lat: 41.2481, lng: -8.6814 },
   { id: 'aeroporto:FAO', nome: 'Aeroporto de Faro', lat: 37.0144, lng: -7.9659 },
 ]
+
+// Nome a mostrar (estudo, lista, mapa, análise IA). Transportes sempre «tipo + rede + nome»
+// (decisão do João): «Estação Metro Mondego Arregaça», «Paragem SMTUC Rua do Brasil (Colégios)»,
+// «Estação CP Coimbra-B». Normaliza também os nomes guardados por pesquisas antigas.
+const TRANSPORTE = { metro: { tipo: 'Estação', rede: '' }, comboio: { tipo: 'Estação', rede: 'CP' }, autocarros: { tipo: 'Paragem', rede: '' } }
+export function nomeApresentado(p) {
+  let n = String(p?.nome || '').trim()
+  const t = TRANSPORTE[p?.categoria]
+  if (!t || n === 'Paragem de autocarro') return n
+  const rede = String(p?.rede || '').trim() || t.rede
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  // Tira o que já vier no nome (tipo no início, rede no início ou entre parênteses no fim).
+  n = n.replace(/^(esta[cç][aã]o|paragem|terminal)\s+/i, '')
+  if (rede) n = n.replace(new RegExp(`^${esc(rede)}\\s+`, 'i'), '').replace(new RegExp(`\\s*\\(${esc(rede)}\\)$`, 'i'), '')
+  return [t.tipo, rede, n].filter(Boolean).join(' ')
+}
 
 // ── Serviços gratuitos do OpenStreetMap (sem chave nem faturação) ──
 // Nominatim (moradas), Overpass (locais) e OSRM da FOSSGIS (tempos a pé e de
@@ -378,7 +386,7 @@ export async function pesquisarPOIs({ origemTexto, centro: centroDado, aoProgres
 
   // Transporte público: paragem de autocarro/Metrobus mais próxima do imóvel (não há rotas de TP gratuitas).
   const paragens = pois.filter((p) => p.categoria === 'autocarros' || p.categoria === 'metro').sort((a, b) => a.linha_reta_m - b.linha_reta_m)
-  const tp = paragens[0] ? { nome: paragens[0].nome, linhas: paragens[0].linhas, rede: paragens[0].rede, categoria: paragens[0].categoria_label, pe: paragens[0].pe, linha_reta_m: paragens[0].linha_reta_m } : null
+  const tp = paragens[0] ? { nome: nomeApresentado(paragens[0]), linhas: paragens[0].linhas, rede: paragens[0].rede, categoria: paragens[0].categoria_label, pe: paragens[0].pe, linha_reta_m: paragens[0].linha_reta_m } : null
 
   return {
     origem: { texto: origemTexto || '', resolvida: origem.resolvida, lat: origem.lat, lng: origem.lng, fonte: origem.fonte },
@@ -555,7 +563,7 @@ export async function construirPedidoAnalise(pool, imovelId) {
     const ps = validados.filter((p) => p.categoria === cat.id).sort((a, b) => a.linha_reta_m - b.linha_reta_m)
     if (ps.length === 0) return `- ${GRUPOS[cat.grupo]} / ${cat.label}: nenhum aprovado num raio de ${fmtDist(cat.raio)}.`
     return `- ${GRUPOS[cat.grupo]} / ${cat.label}:\n` + ps.map((p) =>
-      `    • ${p.nome}${p.endereco ? ` (${p.endereco})` : ''}${p.linhas ? ` [linhas ${p.linhas}${p.rede ? `, ${p.rede}` : ''}]` : ''}: ${fmtDist(p.linha_reta_m)} em linha reta; ${Object.entries(MEIOS).map(([k, l]) => `${l} ${p[k]?.estimado ? '≈' : ''}${fmtMin(p[k]?.s)} (${fmtDist(p[k]?.m)})`).join('; ')}${p.rating ? `; ${String(p.rating).replace('.', ',')}★ (${p.avaliacoes || 0} avaliações)` : ''}`).join('\n')
+      `    • ${nomeApresentado(p)}${p.endereco ? ` (${p.endereco})` : ''}${p.linhas ? ` [linhas ${p.linhas}${p.rede ? `, ${p.rede}` : ''}]` : ''}: ${fmtDist(p.linha_reta_m)} em linha reta; ${Object.entries(MEIOS).map(([k, l]) => `${l} ${p[k]?.estimado ? '≈' : ''}${fmtMin(p[k]?.s)} (${fmtDist(p[k]?.m)})`).join('; ')}${p.rating ? `; ${String(p.rating).replace('.', ',')}★ (${p.avaliacoes || 0} avaliações)` : ''}`).join('\n')
   }).join('\n')
 
   const ficha = [

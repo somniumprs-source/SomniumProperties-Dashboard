@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { nomeApresentado } from '../../../supabase/functions/_shared/analiseLocalizacaoIA.js'
 
 // Verde fica reservado ao imóvel; aprovados a azul.
 const COR = { validado: '#2563eb', proposto: '#ca8a04', excluido: '#9ca3af' }
@@ -68,12 +69,12 @@ export default function MapaLocalizacao({ origem, pois, onDecidir }) {
         radius: p.estado === 'validado' ? 8 : 6, color: '#fff', weight: 2,
         fillColor: COR[p.estado] || COR.proposto, fillOpacity: p.estado === 'excluido' ? 0.6 : 0.95,
       })
-      c.bindTooltip(esc(p.nome))
+      c.bindTooltip(esc(nomeApresentado(p)))
       c.bindPopup(() => {
         const el = document.createElement('div')
         el.style.minWidth = '200px'
         el.innerHTML = `
-          <div style="font-weight:700;font-size:13px">${esc(p.nome)}</div>
+          <div style="font-weight:700;font-size:13px">${esc(nomeApresentado(p))}</div>
           <div style="font-size:11px;color:#666;margin-bottom:6px">${esc(p.categoria_label)} · ${ROTULO[p.estado] || ''}</div>
           ${p.linhas ? `<div style="font-size:11px;margin-bottom:4px">Linhas ${esc(p.linhas)}</div>` : ''}
           <div style="font-size:11px;margin-bottom:8px">A pé ${min(p.pe?.s)} · Bicicleta ${min(p.bicicleta?.s)} · Carro ${min(p.carro?.s)}</div>

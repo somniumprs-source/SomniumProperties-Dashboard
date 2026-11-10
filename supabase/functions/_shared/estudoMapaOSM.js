@@ -9,6 +9,7 @@
  */
 
 import { composeEstudoSvg } from './estudoSvg.js'
+import { nomeApresentado } from './analiseLocalizacaoIA.js'
 
 const EM_BROWSER = typeof window !== 'undefined'
 const UA = EM_BROWSER ? {} : { 'User-Agent': 'SomniumCRM/1.0 (estudo-localizacao)' }
@@ -163,7 +164,7 @@ export function resultadosDosAprovados(dados) {
   return (dados?.pois || [])
     .filter((p) => p.estado === 'validado' && p.carro?.s != null)
     .map((p) => ({
-      categoria: p.nome, icone: '📍', seccao: SECCAO[p.grupo] || 'comercio', endereco: p.endereco || p.nome,
+      categoria: nomeApresentado(p), icone: '📍', seccao: SECCAO[p.grupo] || 'comercio', endereco: p.endereco || p.nome,
       tipo_local: p.categoria_label, lat: p.lat, lng: p.lng, fora_do_mapa: false,
       distancia_metros: p.carro.m, distancia_texto: fmtDist(p.carro.m), duracao_segundos: p.carro.s, duracao_texto: fmtMin(p.carro.s), status: 'OK',
       pe: p.pe ? { status: 'OK', distancia_metros: p.pe.m, distancia_texto: fmtDist(p.pe.m), duracao_segundos: p.pe.s, duracao_texto: fmtMin(p.pe.s) } : null,
