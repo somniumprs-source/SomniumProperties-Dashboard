@@ -17,8 +17,14 @@ const FINALIDADES = [
   { value: 'HS', label: 'Habitação Secundária' },
 ]
 
+// Derrama de Gaia (sede da Somnium), 2026. A escolha depende da faturação prevista para o ano.
+const DERRAMAS_GAIA = [
+  { value: '1.25', label: '1,25% (faturação do ano acima de 150 mil €)' },
+  { value: '0.9', label: '0,9% (faturação do ano até 150 mil €)' },
+]
+
 const REGIMES = [
-  { value: 'Empresa', label: 'Empresa (IRC PME)' },
+  { value: 'Empresa', label: 'Empresa (IRC 19%)' },
   { value: 'Particular', label: 'Particular (IRS)' },
   { value: 'Sem', label: 'Sem regime fiscal (valor bruto)' },
 ]
@@ -253,7 +259,7 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <Select label="Regime Fiscal" field="regime_fiscal" value={form.regime_fiscal} options={REGIMES} onChange={handleChange} />
           {form.regime_fiscal === 'Empresa' ? <>
-            <Input label="Derrama Municipal %" field="derrama_perc" value={form.derrama_perc} onChange={handleChange} step="0.05" placeholder="1.25" />
+            <Select label="Derrama Municipal (Gaia)" field="derrama_perc" value={form.derrama_perc != null ? String(form.derrama_perc) : '1.25'} options={DERRAMAS_GAIA} onChange={(f, v) => handleChange(f, parseFloat(v))} />
             <Input label="% Distribuição Dividendos" field="perc_dividendos" value={form.perc_dividendos} onChange={handleChange} step="10" placeholder="100" />
           </> : form.regime_fiscal === 'Sem' ? null : <>
             <Select label="Categoria IRS" field="categoria_irs" value={form.categoria_irs || 'G'} options={CATEGORIAS_IRS} onChange={handleChange} />
