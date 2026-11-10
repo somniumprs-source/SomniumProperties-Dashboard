@@ -38,9 +38,7 @@ import {
 import { analyzeReuniao, pedirAnaliseReuniao, aplicarAnaliseReuniao } from "../_shared/meetingAnalysis.ts";
 import { estadoIA, emFilaIA, enfileirarIA, jsonDaResposta, pedidosIAPendentes, iniciarIA, concluirIA, falharIA } from "../_shared/filaIA.ts";
 import { isConfigured as firefliesConfigured, syncFireflies } from "../_shared/firefliesSync.ts";
-import { runEstudoLocalizacao } from "../_shared/estudoLocalizacao.ts";
-import { gerarEstudoComAprovados } from "../_shared/estudoMapaOSM.js";
-import { TIPO_FILA_LOCALIZACAO, lerAnaliseLocalizacao, guardarPesquisa, atualizarDecisoes, construirPedidoAnalise, marcarAnalisePedida, aplicarAnaliseLocalizacao, aplicarAFicha } from "../_shared/analiseLocalizacaoIA.js";
+import { TIPO_FILA_LOCALIZACAO, registarEstudo, lerAnaliseLocalizacao, guardarPesquisa, atualizarDecisoes, construirPedidoAnalise, marcarAnalisePedida, aplicarAnaliseLocalizacao, aplicarAFicha } from "../_shared/analiseLocalizacaoIA.js";
 import { streamToBuffer } from "../_shared/pdfkitGuard.ts";
 import PDFKitGuard from "../_shared/pdfkitGuard.ts";
 import * as PDFLib from "pdf-lib";
@@ -5835,13 +5833,18 @@ app.post("/imoveis/:id/analise-localizacao-ia/analisar", async (c: any) => {
     return c.json({ dados: await marcarAnalisePedida(pool, id), em_fila: true });
   } catch (e) { return c.json({ error: (e as Error).message }, 400); }
 });
+// A imagem é gerada no browser (a Edge Function não tem CPU para a compor); aqui só se guarda e regista.
 app.post("/imoveis/:id/analise-localizacao-ia/estudo", async (c: any) => {
   try {
-    if (!supabase) return c.json({ error: "Supabase Storage não configurado" }, 500);
     const id = c.req.param("id");
-    const dados = await lerAnaliseLocalizacao(pool, id);
-    const body = await c.req.json().catch(() => ({}));
-    return c.json(await gerarEstudoComAprovados({ pool, supabaseStorage: supabase, imovelId: id, dados, runEstudoLocalizacao, highlights: Array.isArray(body?.highlights) ? body.highlights : undefined, destaque: body?.destaque }));
+    const body = await c.req.parseBody();
+    const file = body["imagem"] as File | undefined;
+    if (!file || typeof file === "string") return c.json({ error: "Imagem do estudo em falta" }, 400);
+    const tipo = file.type === "image/png" ? "image/png" : "image/jpeg";
+    const url = await uploadPublic("Imoveis", `imoveis/${id}/localizacao_estudo_${Date.now()}.${tipo === "image/png" ? "png" : "jpg"}`, new Uint8Array(await file.arrayBuffer()), tipo);
+    let meta: any = {};
+    try { meta = JSON.parse(String(body["meta"] || "{}")); } catch { /* sem meta */ }
+    return c.json(await registarEstudo(pool, id, { url, meta }));
   } catch (e) { console.error("[analise-localizacao-ia/estudo]", e); return c.json({ error: (e as Error).message }, 400); }
 });
 app.post("/imoveis/:id/analise-localizacao-ia/aplicar", async (c: any) => {

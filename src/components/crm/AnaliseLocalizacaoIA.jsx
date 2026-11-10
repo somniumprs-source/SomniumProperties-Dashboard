@@ -1,14 +1,13 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Sparkles, Search, Check, X, MapPin, Footprints, Car, Bike, Bus, Star, Loader2, ChevronDown, ChevronRight, ThumbsUp, TrendingDown } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
-import { pesquisarPOIs, procurarLugar, pontoManual, CATEGORIAS } from '../../../supabase/functions/_shared/analiseLocalizacaoIA.js'
+import { pesquisarPOIs, procurarLugar, pontoManual, CATEGORIAS, GRUPOS as GRUPOS_ATUAIS } from '../../../supabase/functions/_shared/analiseLocalizacaoIA.js'
+import { gerarEstudoPNG } from '../../../supabase/functions/_shared/estudoMapaOSM.js'
 
 const MapaLocalizacao = lazy(() => import('./MapaLocalizacao.jsx'))
 
-const GRUPOS = {
-  saude: 'Saúde', educacao: 'Educação', comercio: 'Comércio', restauracao: 'Restauração',
-  transportes: 'Transportes', desporto: 'Desporto', lazer: 'Lazer e cultura', servicos: 'Serviços',
-}
+// Grupos atuais primeiro; os antigos só aparecem em pesquisas feitas antes de 11/2026.
+const GRUPOS = { ...GRUPOS_ATUAIS, desporto: 'Desporto', restauracao: 'Restauração', servicos: 'Serviços' }
 const FILTROS = [
   { v: 'todos', l: 'Todos' }, { v: 'proposto', l: 'Por aprovar' }, { v: 'validado', l: 'Aprovados' }, { v: 'excluido', l: 'Excluídos' },
 ]
@@ -185,10 +184,13 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onEstudo
         titulo: h.titulo, descricao: h.descricao, subtitulo: h.subtitulo, accent: i === 0 && hl[0].titulo.trim() ? 'gold' : 'red',
         ...(h.badge ? { badge: Array.isArray(h.badge) ? h.badge : String(h.badge).split(/[;,]\s*/).filter(Boolean) } : {}),
       }))
-      const r = await apiFetch(`${base}/estudo`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ highlights, destaque: destaque || null }),
-      })
+      // A imagem é composta aqui no browser; o servidor só a guarda.
+      const { blob, resultados } = await gerarEstudoPNG({ dados, imovel, highlights, destaque: destaque || null, aoProgresso: t => setProgresso({ passo: 1, total: 2, texto: t }) })
+      setProgresso({ passo: 2, total: 2, texto: 'A guardar o estudo…' })
+      const fd = new FormData()
+      fd.append('imagem', blob, 'estudo-localizacao.jpg')
+      fd.append('meta', JSON.stringify({ resultados, highlights, destaque: destaque || null, origem: dados.origem?.texto || imovel.morada || '' }))
+      const r = await apiFetch(`${base}/estudo`, { method: 'POST', body: fd })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error)
       onEstudoGerado?.(j.localizacao_imagem)
@@ -196,6 +198,7 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onEstudo
       toast(`Estudo de localização gerado com ${validados.length} pontos aprovados`, 'success')
     } catch (e) { toast('Erro: ' + e.message, 'error') }
     setGerandoEstudo(false)
+    setProgresso(null)
   }
 
   // Sem destaques guardados, propõe o transporte público à porta (como o «SMTUC à porta» da Lages).
@@ -279,12 +282,12 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onEstudo
                 {pesquisando ? 'A procurar…' : pois.length ? 'Procurar de novo' : 'Procurar pontos de interesse'}
               </button>
             </div>
-            {pesquisando && progresso && (
+            {(pesquisando || gerandoEstudo) && progresso && (
               <div className="space-y-1">
                 <div className="h-1.5 rounded-full bg-surface overflow-hidden border border-line">
                   <div className="h-full bg-brand-gold transition-all" style={{ width: `${Math.round((progresso.passo / progresso.total) * 100)}%` }} />
                 </div>
-                <p className="text-[11px] text-ink-muted">{progresso.texto} Pode demorar um ou dois minutos; não feches a ficha.</p>
+                <p className="text-[11px] text-ink-muted">{progresso.texto} {pesquisando ? 'Pode demorar um ou dois minutos; não feches a ficha.' : ''}</p>
               </div>
             )}
             {dados?.origem && (
@@ -432,7 +435,7 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onEstudo
                   {gerandoEstudo ? 'A gerar o estudo…' : `Gerar estudo de localização com os aprovados (${validados.length})`}
                 </button>
               </div>
-              {validados.length === 0 && <p className="text-[11px] text-ink-muted">Aprova pelo menos um ponto de interesse para gerar o estudo e a análise. No estudo, os 9 mais próximos ficam numerados no mapa.</p>}
+              {validados.length === 0 && <p className="text-[11px] text-ink-muted">Aprova pelo menos um ponto de interesse para gerar o estudo e a análise. No estudo, todos os aprovados ficam numerados no mapa, com a legenda por baixo.</p>}
               {emFila && <p className="text-[11px] text-ink-muted">A análise corre no Mac da equipa (plano Claude). Esta área atualiza sozinha quando estiver pronta.</p>}
               {erroFila && !emFila && <p className="text-[11px] text-rose-700">A última análise falhou: {erroFila}</p>}
             </div>

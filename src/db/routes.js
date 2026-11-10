@@ -46,9 +46,7 @@ import { exportDepartment } from './excelExport.js'
 import { listarFaturas, exportarZip, marcarEnviadas } from './contabilidade.js'
 import { scrapePhotosFromLink } from './linkScraper.js'
 import { generateDocx, getAvailableTypes } from './docxGenerator.js'
-import { runEstudoLocalizacao } from '../lib/estudoLocalizacao.js'
-import { gerarEstudoComAprovados } from '../../supabase/functions/_shared/estudoMapaOSM.js'
-import { TIPO_FILA_LOCALIZACAO, lerAnaliseLocalizacao, guardarPesquisa, atualizarDecisoes, construirPedidoAnalise, marcarAnalisePedida, aplicarAnaliseLocalizacao, aplicarAFicha } from '../../supabase/functions/_shared/analiseLocalizacaoIA.js'
+import { TIPO_FILA_LOCALIZACAO, registarEstudo, lerAnaliseLocalizacao, guardarPesquisa, atualizarDecisoes, construirPedidoAnalise, marcarAnalisePedida, aplicarAnaliseLocalizacao, aplicarAFicha } from '../../supabase/functions/_shared/analiseLocalizacaoIA.js'
 import { FASES_FIX_FLIP, FASES_POR_CATEGORIA, getTemplateFases, getFaseConfigGlobal } from './fasesFixFlip.js'
 import { avaliarEntrada, painelRequisitos, carregarDadosEntrada } from './dealBreakers.js'
 import { carregarChecklist, gravarManual } from './checklistImovel.js'
@@ -4997,10 +4995,20 @@ router.post('/imoveis/:id/analise-localizacao-ia/analisar', async (req, res) => 
     res.json({ dados: await marcarAnalisePedida(pool, req.params.id), em_fila: true })
   } catch (e) { res.status(400).json({ error: e.message }) }
 })
-router.post('/imoveis/:id/analise-localizacao-ia/estudo', async (req, res) => {
+// A imagem é gerada no browser (CPU); aqui só se guarda no Storage e se regista.
+router.post('/imoveis/:id/analise-localizacao-ia/estudo', uploadRateLimit, uploadImovel.single('imagem'), async (req, res) => {
   try {
-    const dados = await lerAnaliseLocalizacao(pool, req.params.id)
-    res.json(await gerarEstudoComAprovados({ pool, supabaseStorage, imovelId: req.params.id, dados, runEstudoLocalizacao, highlights: Array.isArray(req.body?.highlights) ? req.body.highlights : undefined, destaque: req.body?.destaque }))
+    if (!req.file) return res.status(400).json({ error: 'Imagem do estudo em falta' })
+    if (!supabaseStorage) return res.status(500).json({ error: 'Supabase Storage não configurado' })
+    const tipo = req.file.mimetype === 'image/png' ? 'image/png' : 'image/jpeg'
+    const storagePath = `imoveis/${req.params.id}/localizacao_estudo_${Date.now()}.${tipo === 'image/png' ? 'png' : 'jpg'}`
+    const { error } = await supabaseStorage.storage.from('Imoveis').upload(storagePath, await readFile(req.file.path), { contentType: tipo, upsert: true })
+    await unlink(req.file.path).catch(() => {})
+    if (error) throw new Error(`Supabase Storage: ${error.message}`)
+    const url = supabaseStorage.storage.from('Imoveis').getPublicUrl(storagePath).data.publicUrl
+    let meta = {}
+    try { meta = JSON.parse(req.body?.meta || '{}') } catch { /* sem meta */ }
+    res.json(await registarEstudo(pool, req.params.id, { url, meta }))
   } catch (e) { console.error('[analise-localizacao-ia/estudo]', e); res.status(400).json({ error: e.message }) }
 })
 router.post('/imoveis/:id/analise-localizacao-ia/aplicar', async (req, res) => {

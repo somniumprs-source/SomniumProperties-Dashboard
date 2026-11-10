@@ -1,17 +1,11 @@
 // @ts-nocheck
 /**
- * Gerador automático de Estudos de Localização para imóveis CRM.
- *
- * Pipeline:
- *  1. Distance Matrix API (Google) — distâncias e tempos a partir da morada do imóvel
- *  2. Composição de SVG branded Somnium (mapa radial + tabela + cards por secção)
- *  3. Rasterização SVG → PNG (PDFKit não aceita SVG)
- *  4. Upload para Supabase Storage (bucket Imoveis)
- *  5. UPDATE imoveis.localizacao_imagem + pois_distancias
+ * Composição da imagem do Estudo de Localização (SVG no layout Somnium:
+ * cabeçalho, mapa com legenda numerada, destaques, tabela de tempos e cartões
+ * por secção). JS simples, sem dependências: corre no browser (a imagem é
+ * gerada e rasterizada no browser, porque a Edge Function não tem CPU para
+ * isso) e no Node.
  */
-
-import { rasterizarSvgParaPng } from "./resvgWasm.ts"
-import { Buffer } from "node:buffer"
 
 // ── Categorização & helpers ──────────────────────────────────────
 
@@ -101,7 +95,7 @@ function fmtMin(segundos) {
 
 // ── Composer SVG ─────────────────────────────────────────────────
 // Tema Somnium "light": fundo cream, accents gold, texto preto. Em linha
-// com o resto do dossier de investidor (DocBuilder em pdfImovelDocs.ts).
+// com o resto do dossier de investidor (DocBuilder em pdfImovelDocs.js).
 
 const W = 1200
 const HEADER_H = 156   // header (96) + gold strip (4) + address bar (56)
@@ -109,7 +103,7 @@ const MAP_H = 640
 const TABLE_BLOCK_H = 460  // tabela + cards (cards alargados)
 const FOOTER_H = 80
 
-// Tokens de cor alinhados com pdfImovelDocs.ts (DocBuilder)
+// Tokens de cor alinhados com pdfImovelDocs.js (DocBuilder)
 const T = {
   bg: '#f7f6f2', body: '#0d0d0d', muted: '#888888',
   border: '#e0ddd5', light: '#f0efe9', gold: '#C9A84C', goldDark: '#B8923D',
@@ -152,7 +146,28 @@ export function composeEstudoSvg({
   const mapW = 1100, mapH = MAP_H
 
   // Lista de pinos para legenda (1..9, matching markers no PNG)
-  const pinsLegenda = ok.slice(0, 9)
+  // Estudos novos: todos os aprovados numerados no mapa, com a legenda por baixo.
+  const pinsLegenda = tresMeios ? ok : ok.slice(0, 9)
+  const COLS_LEG = 3, LEG_ROW = 22
+  const legendaH = tresMeios ? Math.ceil(ok.length / COLS_LEG) * LEG_ROW + 30 : 0
+  const yAposMapa = HEADER_H + 33 + MAP_H + 20 + legendaH
+  const legendaAbaixoSvg = !tresMeios ? '' : `
+    <g transform="translate(50, ${HEADER_H + 33 + MAP_H + 16})">
+      <rect width="1100" height="${legendaH - 10}" rx="6" fill="${T.white}" stroke="${T.border}" stroke-width="1"/>
+      <g transform="translate(14, 0)">
+        ${ok.map((r, i) => {
+          const col = Math.floor(i / Math.ceil(ok.length / COLS_LEG)), lin = i % Math.ceil(ok.length / COLS_LEG)
+          const x = col * 360, y = 22 + lin * LEG_ROW
+          const isDest = destaque && r.categoria && r.categoria.toLowerCase().includes(destaque.toLowerCase())
+          return `<g transform="translate(${x}, ${y})">
+            <circle cx="9" cy="-4" r="9" fill="${isDest ? T.gold : '#1a1a1a'}"/>
+            <text x="9" y="-0.5" text-anchor="middle" font-size="${i + 1 > 9 ? 8.5 : 10}" fill="${isDest ? T.body : T.white}" font-weight="800">${i + 1}</text>
+            <text x="25" y="0" font-size="11" fill="${T.body}" font-weight="600">${escapeXml(ellide(r.categoria || '', 30))}</text>
+            ${r.fora_do_mapa ? `<text x="330" y="0" font-size="9" fill="${T.muted}" font-style="italic" text-anchor="end">fora do mapa</text>` : ''}
+          </g>`
+        }).join('')}
+      </g>
+    </g>`
 
   const mapaSvg = mapaSvgPronto ? mapaSvgPronto : mapaPngBase64
     ? `
@@ -202,7 +217,7 @@ export function composeEstudoSvg({
   const subY = maxDescLinhas > 1 ? 119 : 103
   const highlightsH = highlights.length > 0 ? cardH + 20 : 0
   const highlightsSvg = highlights.length === 0 ? '' : `
-    <g transform="translate(50, ${HEADER_H + 33 + MAP_H + 20})">
+    <g transform="translate(50, ${yAposMapa})">
       ${hData.map(({ h, titulo, subtitulo, descLinhas }, i) => {
         const accent = h.accent === 'red' ? T.red : T.gold
         const x = i * 560
@@ -239,7 +254,7 @@ export function composeEstudoSvg({
     </g>`
 
   // ----- Tabela principais — cabecalho dark, body light alternado -----
-  const tableY = HEADER_H + 33 + MAP_H + 20 + highlightsH + (highlightsH > 0 ? 30 : 0)
+  const tableY = yAposMapa + highlightsH + (highlightsH > 0 ? 30 : 0)
   const tabelaSvg = `
     <g transform="translate(50, ${tableY})">
       <text x="0" y="0" font-size="18" fill="${T.body}" font-weight="700">${tresMeios ? 'Distâncias e tempos — a pé, bicicleta e carro' : 'Distâncias e tempos — carro e a pé'}</text>
@@ -385,11 +400,11 @@ export function composeEstudoSvg({
   <!-- Mapa satélite -->
   <g transform="translate(50, ${HEADER_H + 33})">
     ${mapaSvg}
-    <!-- Bloco de legenda numerada: fundo branco semi-opaco + sombra -->
+    ${tresMeios ? '' : `<!-- Bloco de legenda numerada: fundo branco semi-opaco + sombra -->
     <g transform="translate(14, 14)">
       <rect width="240" height="${pinsLegenda.length * 18 + 16}" rx="6" fill="${T.white}" opacity="0.94" stroke="${T.border}" stroke-width="0.5"/>
       ${legendaPins}
-    </g>
+    </g>`}
     <!-- Marcador do imóvel: pill branca com pin gold -->
     <g transform="translate(14, ${mapH - 38})">
       <rect width="180" height="26" rx="13" fill="${T.white}" opacity="0.94" stroke="${T.border}" stroke-width="0.5"/>
@@ -399,6 +414,7 @@ export function composeEstudoSvg({
     </g>
   </g>
 
+  ${legendaAbaixoSvg}
   ${highlightsSvg}
   ${tabelaSvg}
   ${cardsSvg}
@@ -413,41 +429,4 @@ export function composeEstudoSvg({
     <text x="${W - 50}" y="50" font-size="9" fill="${T.muted}" font-style="italic" text-anchor="end">${escapeXml(imovelNome || '')}</text>
   </g>
 </svg>`
-}
-
-// ── Pipeline completo ────────────────────────────────────────────
-
-// Estudo de localização (imagem do dossier) a partir dos pontos de interesse
-// aprovados na Análise IA da localização: dados e mapa gratuitos (OpenStreetMap
-// + ortofotos DGT, ver estudoMapaOSM.js). Desde 11/2026 não usa o Google.
-export async function runEstudoLocalizacao({ pool, supabaseStorage, imovelId, resultadosProntos, mapaSvgPronto = null, origem = null, highlights, destaque }) {
-  if (!resultadosProntos?.length) throw new Error('Sem pontos de interesse aprovados para o estudo')
-  return gerarEstudoPronto({ pool, supabaseStorage, imovelId, resultados: resultadosProntos, mapaSvg: mapaSvgPronto, origem, highlights, destaque })
-}
-
-async function gerarEstudoPronto({ pool, supabaseStorage, imovelId, resultados, mapaSvg, origem, highlights: hlNovos, destaque: destaqueNovo }) {
-  if (!supabaseStorage) throw new Error('Supabase Storage não configurado (SUPABASE_SERVICE_KEY ausente)')
-  const { rows: [imovel] } = await pool.query('SELECT id, nome, morada, freguesia, regiao, pois_distancias FROM imoveis WHERE id = $1', [imovelId])
-  if (!imovel) throw new Error('Imóvel não encontrado')
-  const highlights = Array.isArray(hlNovos) ? hlNovos : (imovel.pois_distancias?.highlights || [])
-  const destaque = destaqueNovo !== undefined ? (destaqueNovo || null) : (imovel.pois_distancias?.destaque || null)
-  const regiao = imovel.regiao || 'Coimbra'
-  const prefixoRegional = regiao === 'AMP' ? 'Porto/Gaia' : 'Coimbra'
-  const morada = origem || imovel.morada || ''
-  const svg = composeEstudoSvg({
-    imovelNome: imovel.nome, morada,
-    freguesia: imovel.freguesia ? `${prefixoRegional} · ${imovel.freguesia}` : null,
-    regiao, resultados, highlights, destaque, modo: 'driving', mapaSvgPronto: mapaSvg,
-  })
-  const pngBuffer = await rasterizarSvgParaPng(svg)
-  const storagePath = `imoveis/${imovelId}/localizacao_estudo_auto_${Date.now()}.png`
-  const { error: upErr } = await supabaseStorage.storage.from('Imoveis').upload(storagePath, pngBuffer, { contentType: 'image/png', upsert: true })
-  if (upErr) throw new Error(`Supabase Storage: ${upErr.message}`)
-  const publicUrl = supabaseStorage.storage.from('Imoveis').getPublicUrl(storagePath).data.publicUrl
-  const agora = new Date().toISOString()
-  const payload = { origem: morada, mode: 'driving', fonte: 'OpenStreetMap', atualizado_em: agora, imagem_gerada_em: agora, resultados, highlights, destaque, freguesia: imovel.freguesia || null }
-  await pool.query(
-    `UPDATE imoveis SET pois_distancias = $1::jsonb, pois_atualizado_em = $4, localizacao_imagem = $2, updated_at = NOW()::text WHERE id = $3`,
-    [JSON.stringify(payload), publicUrl, imovelId, agora])
-  return { ok: true, imovel_id: imovelId, imovel_nome: imovel.nome, localizacao_imagem: publicUrl, resultados }
 }

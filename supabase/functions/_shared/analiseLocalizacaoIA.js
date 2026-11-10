@@ -26,78 +26,84 @@ function jsonDaResposta(texto) {
 export const TIPO_FILA_LOCALIZACAO = 'analise_localizacao'
 
 export const GRUPOS = {
+  transportes: 'Acessos e transportes',
   saude: 'Saúde',
   educacao: 'Educação',
+  lazer: 'Lazer e desporto',
   comercio: 'Comércio',
-  restauracao: 'Restauração',
-  transportes: 'Transportes',
-  desporto: 'Desporto',
-  lazer: 'Lazer e cultura',
-  servicos: 'Serviços',
 }
 
-// raio em metros; max = quantos se guardam por categoria (os mais próximos).
-// osm = filtros Overpass; ok(tags) decide a categoria (a primeira que aceitar
-// fica com o local); semNome = nome a usar quando o OSM não tem nome (senão é ignorado).
+// Lógica do estudo da Lages: poucas âncoras por secção, as que pesam para quem
+// compra ou investe (estações, autoestrada, aeroportos, hospitais, universidade,
+// parques, rio, centros comerciais, centro da cidade), não todo o comércio à volta.
+// raio em metros; max = quantos se guardam (prefere() passa à frente, depois os mais próximos).
+// osm = filtros Overpass; ok(tags) decide a categoria (a primeira que aceitar fica com o local);
+// nomeDe(tags) dá o nome quando o OSM não tem um bom.
 const re = (s) => new RegExp(s, 'i')
 const temRede = (t, r) => re(r).test(`${t.network || ''} ${t.operator || ''} ${t.name || ''}`)
 const privado = (t) => ['private', 'customers', 'no'].includes(t.access)
+const SAUDE_PRIMARIA = 'centro de sa[uú]de|\\busf\\b|\\bucsp\\b|unidade de sa[uú]de|extens[aã]o de sa[uú]de'
 
 export const CATEGORIAS = [
-  { id: 'hospitais', grupo: 'saude', label: 'Hospitais', raio: 6000, max: 3,
-    osm: ['[amenity=hospital]', '[healthcare=hospital]'], ok: (t) => t.amenity === 'hospital' || t.healthcare === 'hospital' },
-  { id: 'clinicas', grupo: 'saude', label: 'Centros de saúde e clínicas', raio: 2500, max: 4,
-    osm: ['[amenity~"^(clinic|doctors)$"]', '[healthcare~"^(centre|clinic|doctor)$"]'],
-    ok: (t) => ['clinic', 'doctors'].includes(t.amenity) || ['centre', 'clinic', 'doctor'].includes(t.healthcare) },
-  { id: 'farmacias', grupo: 'saude', label: 'Farmácias', raio: 2000, max: 4, osm: ['[amenity=pharmacy]'], ok: (t) => t.amenity === 'pharmacy' },
-  { id: 'dentistas', grupo: 'saude', label: 'Dentistas', raio: 1500, max: 2, osm: ['[amenity=dentist]'], ok: (t) => t.amenity === 'dentist' },
-  { id: 'creches', grupo: 'educacao', label: 'Creches e pré-escolar', raio: 2000, max: 3,
-    osm: ['[amenity~"^(kindergarten|childcare)$"]'], ok: (t) => ['kindergarten', 'childcare'].includes(t.amenity) },
-  { id: 'escolas_secundarias', grupo: 'educacao', label: 'Escolas secundárias', raio: 3500, max: 3,
-    osm: ['[amenity=school]'], ok: (t) => t.amenity === 'school' && re('secund|liceu').test(t.name || '') },
-  { id: 'escolas_basicas', grupo: 'educacao', label: 'Escolas básicas', raio: 2500, max: 4,
-    osm: ['[amenity=school]'], ok: (t) => t.amenity === 'school' },
-  { id: 'universidades', grupo: 'educacao', label: 'Universidades e politécnicos', raio: 5000, max: 4,
-    osm: ['[amenity~"^(university|college)$"]'], ok: (t) => ['university', 'college'].includes(t.amenity) },
-  { id: 'supermercados', grupo: 'comercio', label: 'Supermercados e mercearias', raio: 2500, max: 6,
-    osm: ['[shop~"^(supermarket|convenience|greengrocer)$"]'], ok: (t) => ['supermarket', 'convenience', 'greengrocer'].includes(t.shop) },
-  { id: 'centros_comerciais', grupo: 'comercio', label: 'Centros comerciais', raio: 6000, max: 3,
-    osm: ['[shop=mall]'], ok: (t) => t.shop === 'mall' },
-  { id: 'padarias', grupo: 'comercio', label: 'Padarias e pastelarias', raio: 1000, max: 3,
-    osm: ['[shop~"^(bakery|pastry)$"]'], ok: (t) => ['bakery', 'pastry'].includes(t.shop) },
-  { id: 'restaurantes', grupo: 'restauracao', label: 'Restaurantes', raio: 1200, max: 8,
-    osm: ['[amenity~"^(restaurant|fast_food)$"]'], ok: (t) => ['restaurant', 'fast_food'].includes(t.amenity) },
-  { id: 'cafes', grupo: 'restauracao', label: 'Cafés e bares', raio: 800, max: 5,
-    osm: ['[amenity~"^(cafe|bar|pub)$"]'], ok: (t) => ['cafe', 'bar', 'pub'].includes(t.amenity) },
-  { id: 'metro', grupo: 'transportes', label: 'Metro e Metrobus', raio: 3000, max: 3,
-    osm: ['[station~"^(subway|light_rail)$"]', '[public_transport][network~"metro",i]', '[public_transport][operator~"metro",i]', '[highway=bus_stop][name~"metrobus",i]'],
+  // Acessos e transportes
+  { id: 'autocarros', grupo: 'transportes', label: 'Paragem de autocarro', raio: 800, max: 1, semNome: 'Paragem de autocarro',
+    osm: ['[highway=bus_stop]', '[amenity=bus_station]'], ok: (t) => (t.highway === 'bus_stop' || t.amenity === 'bus_station') && !temRede(t, 'metrobus|metro mondego') },
+  { id: 'metro', grupo: 'transportes', label: 'Metro e Metrobus', raio: 2500, max: 1,
+    osm: ['[station~"^(subway|light_rail)$"]', '[public_transport][network~"metro",i]', '[highway=bus_stop][name~"metrobus",i]'],
     ok: (t) => ['subway', 'light_rail'].includes(t.station) || (!!(t.public_transport || t.highway === 'bus_stop') && temRede(t, 'metrobus|metro mondego|metropolitano|metro do porto')) },
-  { id: 'autocarros', grupo: 'transportes', label: 'Paragens de autocarro', raio: 800, max: 5, semNome: 'Paragem de autocarro',
-    osm: ['[highway=bus_stop]', '[amenity=bus_station]'], ok: (t) => t.highway === 'bus_stop' || t.amenity === 'bus_station' },
-  { id: 'comboio', grupo: 'transportes', label: 'Comboio', raio: 6000, max: 2,
-    osm: ['[railway~"^(station|halt)$"]'], ok: (t) => ['station', 'halt'].includes(t.railway) && !['subway', 'light_rail'].includes(t.station) },
-  { id: 'taxis', grupo: 'transportes', label: 'Praças de táxi', raio: 2000, max: 1, semNome: 'Praça de táxis',
-    osm: ['[amenity=taxi]'], ok: (t) => t.amenity === 'taxi' },
-  { id: 'ginasios', grupo: 'desporto', label: 'Ginásios', raio: 2500, max: 4,
+  { id: 'comboio', grupo: 'transportes', label: 'Estações de comboio', raio: 12000, max: 2,
+    osm: ['[railway=station]'], ok: (t) => t.railway === 'station' && !['subway', 'light_rail'].includes(t.station) && !!t.name,
+    nomeDe: (t) => (re('^esta[cç][aã]o').test(t.name) ? t.name : `Estação ${t.name}`) },
+  { id: 'autoestradas', grupo: 'transportes', label: 'Acessos às autoestradas', raio: 30000, max: 4, fixo: true },
+  { id: 'aeroportos', grupo: 'transportes', label: 'Aeroportos', raio: 400000, max: 2, fixo: true },
+  // Saúde
+  { id: 'centros_saude', grupo: 'saude', label: 'Centro de saúde', raio: 4000, max: 1,
+    osm: ['[amenity~"^(clinic|doctors)$"][name]', '[healthcare~"^(centre|clinic)$"][name]'], ok: (t) => re(SAUDE_PRIMARIA).test(t.name || '') },
+  { id: 'hospitais', grupo: 'saude', label: 'Hospitais', raio: 10000, max: 2,
+    osm: ['[amenity=hospital][name]'], ok: (t) => t.amenity === 'hospital' && !re('veterin').test(t.name || ''),
+    prefere: (t) => re('^(hospital|centro hospitalar|unidade local de sa)').test(t.name || '') && !re('privad|cl[ií]nica').test(t.name || '') },
+  { id: 'farmacias', grupo: 'saude', label: 'Farmácia', raio: 2000, max: 1, osm: ['[amenity=pharmacy]'], ok: (t) => t.amenity === 'pharmacy' },
+  // Educação
+  { id: 'universidades', grupo: 'educacao', label: 'Universidade e politécnico', raio: 8000, max: 2,
+    osm: ['[amenity=university][name]'], ok: (t) => t.amenity === 'university',
+    prefere: (t) => re('^(universidade|instituto polit|p[oó]lo|faculdade|escola superior)').test(t.name || '') },
+  { id: 'escolas_secundarias', grupo: 'educacao', label: 'Escola secundária', raio: 5000, max: 1,
+    osm: ['[amenity=school][name]'], ok: (t) => t.amenity === 'school' && re('secund|liceu').test(t.name || '') },
+  { id: 'escolas_basicas', grupo: 'educacao', label: 'Escola básica', raio: 3000, max: 1,
+    osm: ['[amenity=school][name]'], ok: (t) => t.amenity === 'school', prefere: (t) => re('b[aá]sica|eb\\s?1|jardim de inf').test(t.name || '') },
+  // Lazer e desporto
+  { id: 'parques', grupo: 'lazer', label: 'Parques e jardins', raio: 4000, max: 2,
+    osm: ['[leisure=park][name]'], ok: (t) => t.leisure === 'park' && !privado(t),
+    prefere: (t) => re('parque|jardim|mata|quinta').test(t.name || '') && !re('infantil').test(t.name || '') },
+  { id: 'rio', grupo: 'lazer', label: 'Rio, praia fluvial e zonas balneares', raio: 15000, max: 1,
+    osm: ['[leisure~"^(beach_resort|swimming_area)$"]', '[natural=beach][name]'], ok: (t) => ['beach_resort', 'swimming_area'].includes(t.leisure) || (t.natural === 'beach' && !!t.name),
+    semNome: 'Praia fluvial' },
+  { id: 'matas', grupo: 'lazer', label: 'Matas e espaços naturais', raio: 8000, max: 1,
+    osm: ['[leisure=nature_reserve][name]', '[landuse=forest][name~"mata|parque",i]', '[natural=wood][name~"mata",i]'], ok: (t) => !!t.name && (t.leisure === 'nature_reserve' || t.landuse === 'forest' || t.natural === 'wood') },
+  { id: 'cultura', grupo: 'lazer', label: 'Monumentos, museus e teatros', raio: 4000, max: 1,
+    osm: ['[tourism=museum][name]', '[amenity~"^(theatre|cinema)$"][name]', '[historic~"^(monument|castle|monastery)$"][name]'],
+    ok: (t) => !!t.name && (t.tourism === 'museum' || ['theatre', 'cinema'].includes(t.amenity) || ['monument', 'castle', 'monastery'].includes(t.historic)) },
+  { id: 'desporto', grupo: 'lazer', label: 'Estádios e pavilhões', raio: 6000, max: 1,
+    osm: ['[leisure~"^(stadium|sports_centre)$"][name]'], ok: (t) => ['stadium', 'sports_centre'].includes(t.leisure) && !privado(t),
+    prefere: (t) => t.leisure === 'stadium' || re('est[aá]dio|pavilh|complexo').test(t.name || '') },
+  { id: 'ginasios', grupo: 'lazer', label: 'Ginásio', raio: 2500, max: 1,
     osm: ['[leisure=fitness_centre]', '[amenity=gym]'], ok: (t) => t.leisure === 'fitness_centre' || t.amenity === 'gym' },
-  { id: 'desporto', grupo: 'desporto', label: 'Pavilhões, piscinas e estádios', raio: 4000, max: 3,
-    osm: ['[leisure~"^(sports_centre|stadium|sports_hall|swimming_pool)$"][name]'],
-    ok: (t) => ['sports_centre', 'stadium', 'sports_hall', 'swimming_pool'].includes(t.leisure) && !privado(t) },
-  { id: 'parques', grupo: 'lazer', label: 'Parques, jardins e parques infantis', raio: 2000, max: 4, semNome: 'Parque infantil',
-    osm: ['[leisure~"^(park|playground)$"]', '[leisure=garden][name]'],
-    ok: (t) => ['park', 'playground', 'garden'].includes(t.leisure) && !privado(t) && (t.leisure !== 'park' || !!t.name) },
-  { id: 'cultura', grupo: 'lazer', label: 'Museus, cinemas, teatros e bibliotecas', raio: 4000, max: 4,
-    osm: ['[tourism=museum]', '[amenity~"^(library|cinema|theatre|arts_centre)$"]'],
-    ok: (t) => t.tourism === 'museum' || ['library', 'cinema', 'theatre', 'arts_centre'].includes(t.amenity) },
-  { id: 'bancos', grupo: 'servicos', label: 'Bancos e multibanco', raio: 1500, max: 3, semNome: 'Multibanco',
-    osm: ['[amenity~"^(bank|atm)$"]'], ok: (t) => ['bank', 'atm'].includes(t.amenity) },
-  { id: 'correios', grupo: 'servicos', label: 'Correios', raio: 2500, max: 1, osm: ['[amenity=post_office]'], ok: (t) => t.amenity === 'post_office' },
-  { id: 'seguranca', grupo: 'servicos', label: 'Polícia e bombeiros', raio: 3000, max: 2,
-    osm: ['[amenity~"^(police|fire_station)$"]'], ok: (t) => ['police', 'fire_station'].includes(t.amenity) },
-  { id: 'camara', grupo: 'servicos', label: 'Câmara e juntas de freguesia', raio: 5000, max: 2, osm: ['[amenity=townhall]'], ok: (t) => t.amenity === 'townhall' },
-  { id: 'combustivel', grupo: 'servicos', label: 'Postos de combustível', raio: 3000, max: 2, osm: ['[amenity=fuel]'], ok: (t) => t.amenity === 'fuel' },
-  { id: 'estacionamento', grupo: 'servicos', label: 'Parques de estacionamento públicos', raio: 800, max: 3, semNome: 'Parque de estacionamento',
-    osm: ['[amenity=parking]'], ok: (t) => t.amenity === 'parking' && !privado(t) },
+  // Comércio
+  { id: 'supermercados', grupo: 'comercio', label: 'Supermercados', raio: 3000, max: 2,
+    osm: ['[shop=supermarket]'], ok: (t) => t.shop === 'supermarket',
+    prefere: (t) => re('continente|pingo doce|lidl|aldi|intermarch|mercadona|auchan|minipre|el corte').test(`${t.name || ''} ${t.brand || ''}`) },
+  { id: 'centros_comerciais', grupo: 'comercio', label: 'Centros comerciais', raio: 10000, max: 2,
+    osm: ['[shop=mall][name]'], ok: (t) => t.shop === 'mall' },
+  { id: 'centro_cidade', grupo: 'comercio', label: 'Centro da cidade', raio: 25000, max: 1,
+    osm: ['node[place~"^(city|town)$"]'], ok: (t) => ['city', 'town'].includes(t.place) && !!t.name,
+    nomeDe: (t) => `Centro de ${t.name}`, prefere: (t) => t.place === 'city' },
+]
+
+// Aeroportos internacionais (coordenadas fixas; ficam os 2 mais próximos).
+const AEROPORTOS = [
+  { id: 'aeroporto:LIS', nome: 'Aeroporto de Lisboa', lat: 38.7742, lng: -9.1342 },
+  { id: 'aeroporto:OPO', nome: 'Aeroporto do Porto (Francisco Sá Carneiro)', lat: 41.2481, lng: -8.6814 },
+  { id: 'aeroporto:FAO', nome: 'Aeroporto de Faro', lat: 37.0144, lng: -7.9659 },
 ]
 
 // ── Serviços gratuitos do OpenStreetMap (sem chave nem faturação) ──
@@ -123,7 +129,9 @@ export const MEIOS = { pe: 'a pé', bicicleta: 'de bicicleta', carro: 'de carro'
 const ESTIMATIVA = { pe: { desvio: 1.3, kmh: 4.8 }, bicicleta: { desvio: 1.3, kmh: 14 }, carro: { desvio: 1.4, kmh: 28 } }
 function estimar(perfil, linhaRetaM) {
   const e = ESTIMATIVA[perfil], m = Math.round(linhaRetaM * e.desvio)
-  return { m, s: Math.round((m / 1000 / e.kmh) * 3600), estimado: true }
+  // De carro, acima de 20 km o percurso é sobretudo em autoestrada/via rápida.
+  const kmh = perfil === 'carro' && linhaRetaM > 20000 ? 85 : e.kmh
+  return { m, s: Math.round((m / 1000 / kmh) * 3600), estimado: true }
 }
 
 // ── Utilitários ──────────────────────────────────────────────────
@@ -188,8 +196,12 @@ function bbox(c, raio) {
 // Um só pedido, enviado a dois espelhos em paralelo; fica a primeira resposta válida.
 async function overpass(centro, aoTentar) {
   const partes = []
-  for (const cat of CATEGORIAS) for (const f of cat.osm) partes.push(`nwr${f}(${bbox(centro, cat.raio)});`)
-  const corpo = 'data=' + encodeURIComponent(`[out:json][timeout:60];(${partes.join('')});out center tags;`)
+  for (const cat of CATEGORIAS) for (const f of cat.osm || []) partes.push(`${f.startsWith('[') ? 'nwr' + f : f}(${bbox(centro, cat.raio)});`)
+  return consultaOverpass(`[out:json][timeout:60];(${partes.join('')});out center tags;`, aoTentar)
+}
+
+async function consultaOverpass(query, aoTentar) {
+  const corpo = 'data=' + encodeURIComponent(query)
   const erros = []
   const pedir = async (url, ctl) => {
     const t = setTimeout(() => ctl.abort(), 70000)
@@ -215,6 +227,31 @@ async function overpass(centro, aoTentar) {
     await esperar(3000 * (ronda + 1))
   }
   throw new Error(`Os servidores do OpenStreetMap estão ocupados. Tenta de novo daqui a uns minutos. (${erros.slice(-2).join('; ')})`)
+}
+
+// Acesso mais próximo de cada autoestrada (A1, A13, A14…): para cada nó de saída
+// (motorway_junction) num raio de 20 km, as vias a que pertence. No OSM as
+// referências vêm como «A 1», «A 13;IC 3» ou «A 13-1»; normalizam-se para A1, A13…
+async function acessosAutoestrada(centro, aoTentar) {
+  const els = await consultaOverpass(`[out:json][timeout:50];node[highway=motorway_junction](${bbox(centro, 20000)})->.j;foreach.j->.n(.n out;way(bn.n)[highway=motorway];out tags;);`, aoTentar)
+  const melhor = new Map() // autoestrada -> nó mais próximo
+  let no = null
+  for (const e of els) {
+    if (e.type === 'node') { no = { n: e, d: linhaReta(centro, { lat: e.lat, lng: e.lon }) }; continue }
+    if (!no) continue
+    const refs = String(e.tags?.ref || '').split(/\s*;\s*/).map((r) => r.replace(/\s+/g, '')).filter((r) => /^A\d+$/.test(r)) // sem ramais (A13-1…)
+    for (const r of refs) if (!melhor.has(r) || no.d < melhor.get(r).d) melhor.set(r, no)
+  }
+  return [...melhor.entries()].sort((a, b) => a[1].d - b[1].d).map(([ref, { n, d }]) => {
+    const t = n.tags || {}
+    const no = t.name ? `nó ${t.name}` : t.ref ? `saída ${t.ref}` : 'nó mais próximo'
+    const destino = t.destination || t.exit_to
+    return {
+      id: `osm:node/${n.id}:${ref}`, nome: `Acesso à ${ref} (${no}${t.name && t.ref ? `, saída ${t.ref}` : ''})`,
+      endereco: destino ? `Direção ${String(destino).replace(/;/g, ' / ')}` : '', lat: n.lat, lng: n.lon,
+      tipo: 'motorway_junction', linhas: null, rede: ref, linha_reta_m: d, preferido: false,
+    }
+  })
 }
 
 function moradaDe(t) {
@@ -261,6 +298,7 @@ export async function pesquisarPOIs({ origemTexto, centro: centroDado, aoProgres
   progresso(1, 'A procurar saúde, educação, comércio, restauração, transportes, desporto, lazer e serviços…')
   const elementos = await overpass(centro, (n) => progresso(1, `Servidores do OpenStreetMap ocupados; tentativa ${n}…`))
 
+  const avisosPesquisa = []
   // Cada local vai para a primeira categoria que o aceita.
   const candidatos = new Map(CATEGORIAS.map((c) => [c.id, []]))
   const vistos = new Set()
@@ -269,9 +307,9 @@ export async function pesquisarPOIs({ origemTexto, centro: centroDado, aoProgres
     const lat = el.lat ?? el.center?.lat, lng = el.lon ?? el.center?.lon
     const id = `osm:${el.type}/${el.id}`
     if (lat == null || vistos.has(id) || t.disused || t['disused:amenity']) continue
-    const cat = CATEGORIAS.find((c) => c.ok(t))
+    const cat = CATEGORIAS.find((c) => c.ok?.(t))
     if (!cat) continue
-    const nome = t.name || t.brand || cat.semNome
+    const nome = cat.nomeDe ? cat.nomeDe(t) : (t.name || t.brand || cat.semNome)
     if (!nome) continue
     const dist = linhaReta(centro, { lat, lng })
     if (dist > cat.raio) continue
@@ -279,26 +317,33 @@ export async function pesquisarPOIs({ origemTexto, centro: centroDado, aoProgres
     candidatos.get(cat.id).push({
       id, nome, endereco: moradaDe(t), lat, lng, tipo: t.amenity || t.shop || t.leisure || t.highway || t.railway || t.tourism || t.healthcare || '',
       linhas: t.route_ref ? String(t.route_ref).replace(/\s*[;,]\s*/g, ', ') : null,
-      rede: t.network || t.operator || null, linha_reta_m: dist,
+      rede: t.network || t.operator || null, linha_reta_m: dist, preferido: !!cat.prefere?.(t),
     })
   }
+  // Autoestradas: o acesso mais próximo de cada uma (não impede a pesquisa se falhar).
+  try {
+    candidatos.get('autoestradas').push(...await acessosAutoestrada(centro, (n) => progresso(1, `A procurar os acessos às autoestradas… (tentativa ${n})`)))
+  } catch { avisosPesquisa.push('Não foi possível obter os acessos às autoestradas (servidores do OpenStreetMap ocupados).') }
+  // Aeroportos: lista fixa, os mais próximos.
+  for (const a of AEROPORTOS) candidatos.get('aeroportos').push({ ...a, endereco: '', tipo: 'aerodrome', linhas: null, rede: null, linha_reta_m: linhaReta(centro, a), preferido: false })
 
   // Os mais próximos de cada categoria, sem repetir o mesmo nome (ex.: paragem nos dois sentidos).
   const pois = []
   for (const cat of CATEGORIAS) {
     const nomes = new Set()
-    const lista = candidatos.get(cat.id).sort((a, b) => a.linha_reta_m - b.linha_reta_m)
+    const lista = candidatos.get(cat.id).sort((a, b) => (b.preferido - a.preferido) || (a.linha_reta_m - b.linha_reta_m))
     for (const p of lista) {
       const chave = p.nome.toLowerCase()
       if (p.nome !== cat.semNome && nomes.has(chave)) continue
       nomes.add(chave)
-      pois.push({ ...p, grupo: cat.grupo, categoria: cat.id, categoria_label: cat.label, rating: null, avaliacoes: null, carro: null, pe: null, estado: 'proposto' })
+      const { preferido, ...semPref } = p
+      pois.push({ ...semPref, grupo: cat.grupo, categoria: cat.id, categoria_label: cat.label, rating: null, avaliacoes: null, carro: null, pe: null, estado: 'proposto' })
       if (pois.filter((x) => x.categoria === cat.id).length >= cat.max) break
     }
   }
 
   // Tempos sempre preenchidos: rota real (OSRM) ou, se o serviço falhar, estimativa marcada.
-  const avisos = []
+  const avisos = [...avisosPesquisa]
   progresso(2, 'A calcular os tempos a pé, de bicicleta e de carro…')
   const perfis = Object.keys(MEIOS)
   const mapas = await Promise.all(perfis.map((perfil) => tempos(centro, pois, perfil).catch(() => new Map())))
@@ -432,6 +477,26 @@ export async function atualizarDecisoes(pool, imovelId, { pois = {}, itens = {},
     }
   }
   return gravar(pool, imovelId, dados)
+}
+
+// Regista a imagem do estudo gerada no browser (já no Storage) e os dados que a originaram.
+export async function registarEstudo(pool, imovelId, { url, meta = {} }) {
+  const resultados = (Array.isArray(meta.resultados) ? meta.resultados : []).slice(0, 60).map((r) => ({
+    categoria: txt(r.categoria, 150), tipo_local: txt(r.tipo_local, 60), seccao: txt(r.seccao, 30), endereco: txt(r.endereco),
+    lat: num(r.lat), lng: num(r.lng), status: 'OK', distancia_metros: num(r.distancia_metros), duracao_segundos: num(r.duracao_segundos),
+    pe: r.pe ? { status: 'OK', distancia_metros: num(r.pe.distancia_metros), duracao_segundos: num(r.pe.duracao_segundos) } : null,
+    bicicleta: r.bicicleta ? { distancia_metros: num(r.bicicleta.distancia_metros), duracao_segundos: num(r.bicicleta.duracao_segundos) } : null,
+  }))
+  const highlights = (Array.isArray(meta.highlights) ? meta.highlights : []).slice(0, 2).map((h) => ({
+    titulo: txt(h.titulo, 80), descricao: txt(h.descricao, 200), subtitulo: txt(h.subtitulo, 120), accent: h.accent === 'red' ? 'red' : 'gold',
+    ...(Array.isArray(h.badge) ? { badge: h.badge.slice(0, 8).map((b) => txt(b, 8)) } : {}),
+  }))
+  const agora = new Date().toISOString()
+  const payload = { fonte: 'OpenStreetMap', origem: txt(meta.origem), mode: 'driving', atualizado_em: agora, imagem_gerada_em: agora, resultados, highlights, destaque: txt(meta.destaque, 150) || null }
+  await pool.query(
+    'UPDATE imoveis SET localizacao_imagem = $2, pois_distancias = $3::jsonb, pois_atualizado_em = $4, updated_at = NOW()::text WHERE id = $1',
+    [imovelId, url, JSON.stringify(payload), agora])
+  return { ok: true, localizacao_imagem: url }
 }
 
 // ── Prompt e aplicador da fila IA ────────────────────────────────
