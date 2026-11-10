@@ -442,8 +442,8 @@ export async function guardarPesquisa(pool, imovelId, r) {
   const anterior = im.analise_localizacao_ia || {}
   const decisoes = new Map((anterior.pois || []).filter((p) => p.estado !== 'proposto').map((p) => [p.id, p.estado]))
   for (const p of pois) if (decisoes.has(p.id)) p.estado = decisoes.get(p.id)
-  // Pontos acrescentados à mão sobrevivem a uma nova pesquisa.
-  for (const p of anterior.pois || []) if (p.manual && !pois.some((x) => x.id === p.id)) pois.push(p)
+  // Os aprovados (e os acrescentados à mão) mantêm-se numa nova pesquisa, mesmo que não voltem a aparecer.
+  for (const p of anterior.pois || []) if ((p.manual || p.estado === 'validado') && !pois.some((x) => x.id === p.id)) pois.push(p)
   return gravar(pool, imovelId, {
     ...anterior, versao: 1, fonte_dados: 'OpenStreetMap', pesquisado_em: new Date().toISOString(), pois,
     origem: { texto: txt(r.origem.texto), resolvida: txt(r.origem.resolvida), lat: num(r.origem.lat), lng: num(r.origem.lng), fonte: txt(r.origem.fonte, 20) },
@@ -456,27 +456,48 @@ export async function guardarPesquisa(pool, imovelId, r) {
 }
 
 // Validar/excluir pontos de interesse e itens da análise; editar o texto dos itens.
+// Cada alteração é um único UPDATE que mexe só nos pontos indicados: cliques
+// seguidos (aprovar/excluir) já não se sobrepõem. Antes, cada pedido lia e
+// regravava o JSON inteiro e o segundo apagava a decisão do primeiro.
 export async function atualizarDecisoes(pool, imovelId, { pois = {}, itens = {}, adicionar = null }) {
-  const dados = await lerAnaliseLocalizacao(pool, imovelId)
-  if (!dados) throw new Error('Ainda não há análise de localização para este imóvel')
+  const atual = await lerAnaliseLocalizacao(pool, imovelId)
+  if (!atual) throw new Error('Ainda não há análise de localização para este imóvel')
+  const ok = new Set(['proposto', 'validado', 'excluido'])
   if (adicionar) {
     const p = limparPoi({ ...adicionar, manual: true })
     if (!p) throw new Error('Ponto de interesse inválido')
-    dados.pois = [...(dados.pois || []).filter((x) => x.id !== p.id), p]
+    await pool.query(
+      `UPDATE imoveis SET analise_localizacao_ia = jsonb_set(analise_localizacao_ia, '{pois}',
+         COALESCE((SELECT jsonb_agg(x) FROM jsonb_array_elements(analise_localizacao_ia->'pois') x WHERE x->>'id' <> $3), '[]'::jsonb) || jsonb_build_array($2::jsonb))
+       WHERE id = $1`, [imovelId, JSON.stringify(p), p.id])
   }
-  const ok = new Set(['proposto', 'validado', 'excluido'])
-  for (const p of dados.pois || []) if (ok.has(pois[p.id])) p.estado = pois[p.id]
-  if (dados.analise) {
+  const estados = Object.fromEntries(Object.entries(pois || {}).filter(([id, e]) => typeof id === 'string' && ok.has(e)))
+  if (Object.keys(estados).length) {
+    await pool.query(
+      `UPDATE imoveis SET analise_localizacao_ia = jsonb_set(analise_localizacao_ia, '{pois}',
+         COALESCE((SELECT jsonb_agg(CASE WHEN jsonb_exists($2::jsonb, x->>'id') THEN jsonb_set(x, '{estado}', $2::jsonb -> (x->>'id')) ELSE x END ORDER BY o)
+                   FROM jsonb_array_elements(analise_localizacao_ia->'pois') WITH ORDINALITY AS t(x, o)), '[]'::jsonb))
+       WHERE id = $1`, [imovelId, JSON.stringify(estados)])
+  }
+  // Itens da análise: só estado e textos.
+  const limpos = {}
+  for (const [id, m] of Object.entries(itens || {})) {
+    if (!m || typeof m !== 'object') continue
+    const v = {}
+    if (ok.has(m.estado)) v.estado = m.estado
+    for (const c of ['texto', 'uso_venda', 'resposta']) if (typeof m[c] === 'string') v[c] = m[c].slice(0, 1000)
+    if (Object.keys(v).length) limpos[id] = v
+  }
+  if (Object.keys(limpos).length && atual.analise) {
     for (const lista of ['pontos_fortes', 'pontos_fracos']) {
-      for (const it of dados.analise[lista] || []) {
-        const m = itens[it.id]
-        if (!m) continue
-        if (ok.has(m.estado)) it.estado = m.estado
-        for (const c of ['texto', 'uso_venda', 'resposta']) if (typeof m[c] === 'string') it[c] = m[c]
-      }
+      await pool.query(
+        `UPDATE imoveis SET analise_localizacao_ia = jsonb_set(analise_localizacao_ia, ARRAY['analise', $3::text],
+           COALESCE((SELECT jsonb_agg(CASE WHEN jsonb_exists($2::jsonb, x->>'id') THEN x || ($2::jsonb -> (x->>'id')) ELSE x END ORDER BY o)
+                     FROM jsonb_array_elements(analise_localizacao_ia->'analise'->$3::text) WITH ORDINALITY AS t(x, o)), '[]'::jsonb))
+         WHERE id = $1 AND jsonb_typeof(analise_localizacao_ia->'analise'->$3::text) = 'array'`, [imovelId, JSON.stringify(limpos), lista])
     }
   }
-  return gravar(pool, imovelId, dados)
+  return lerAnaliseLocalizacao(pool, imovelId)
 }
 
 // Regista a imagem do estudo gerada no browser (já no Storage) e os dados que a originaram.
@@ -557,15 +578,15 @@ Devolve APENAS este JSON, sem texto à volta:
 }
 
 export async function marcarAnalisePedida(pool, imovelId) {
-  const dados = await lerAnaliseLocalizacao(pool, imovelId)
-  dados.analise_pedida_em = new Date().toISOString()
-  return gravar(pool, imovelId, dados)
+  await pool.query(`UPDATE imoveis SET analise_localizacao_ia = jsonb_set(analise_localizacao_ia, '{analise_pedida_em}', to_jsonb($2::text)) WHERE id = $1`, [imovelId, new Date().toISOString()])
+  return lerAnaliseLocalizacao(pool, imovelId)
 }
 
 export async function aplicarAnaliseLocalizacao(pool, pedido, texto) {
   const j = jsonDaResposta(texto)
-  const dados = (await lerAnaliseLocalizacao(pool, pedido.ref_id)) || {}
+  await ensureColunaAnaliseLocalizacao(pool)
   const limpar = (s) => String(s || '').trim()
+  const dados = {}
   dados.analise = {
     gerado_em: new Date().toISOString(),
     modelo: pedido.modelo || null,
@@ -573,7 +594,9 @@ export async function aplicarAnaliseLocalizacao(pool, pedido, texto) {
     pontos_fortes: (j.pontos_fortes || []).filter((p) => limpar(p.texto)).map((p) => ({ id: novoId(), texto: limpar(p.texto), uso_venda: limpar(p.uso_venda), estado: 'proposto' })),
     pontos_fracos: (j.pontos_fracos || []).filter((p) => limpar(p.texto)).map((p) => ({ id: novoId(), texto: limpar(p.texto), resposta: limpar(p.resposta), estado: 'proposto' })),
   }
-  await gravar(pool, pedido.ref_id, dados)
+  // Só substitui a chave «analise», sem tocar nas decisões sobre os pontos de interesse.
+  await pool.query(`UPDATE imoveis SET analise_localizacao_ia = jsonb_set(COALESCE(analise_localizacao_ia, '{}'::jsonb), '{analise}', $2::jsonb) WHERE id = $1`,
+    [pedido.ref_id, JSON.stringify(dados.analise)])
   return { pontos_fortes: dados.analise.pontos_fortes.length, pontos_fracos: dados.analise.pontos_fracos.length }
 }
 
@@ -594,7 +617,6 @@ export async function aplicarAFicha(pool, imovelId) {
   const fracos = juntar(im?.pontos_fracos, val('pontos_fracos'))
   if (fortes.n + fracos.n === 0) throw new Error('Não há pontos aprovados novos para acrescentar à ficha')
   await pool.query('UPDATE imoveis SET pontos_fortes = $2, pontos_fracos = $3 WHERE id = $1', [imovelId, fortes.texto, fracos.texto])
-  dados.aplicado_em = new Date().toISOString()
-  await gravar(pool, imovelId, dados)
+  await pool.query(`UPDATE imoveis SET analise_localizacao_ia = jsonb_set(analise_localizacao_ia, '{aplicado_em}', to_jsonb($2::text)) WHERE id = $1`, [imovelId, new Date().toISOString()])
   return { acrescentados_fortes: fortes.n, acrescentados_fracos: fracos.n }
 }

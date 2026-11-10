@@ -130,25 +130,29 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onEstudo
     setProgresso(null)
   }
 
+  // Cliques seguidos: o ecrã muda logo (otimista) e só a resposta do último pedido é aplicada,
+  // para uma resposta mais antiga não repor um estado anterior.
+  const pedidoAtual = useRef(0)
   async function guardar(patch, otimista) {
     if (otimista) setDados(otimista)
+    const n = ++pedidoAtual.current
     try {
       const r = await apiFetch(base, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error)
-      setDados(j.dados)
+      if (n === pedidoAtual.current) setDados(j.dados)
     } catch (e) { toast('Erro: ' + e.message, 'error'); carregar() }
   }
 
   function decidirPois(ids, estado) {
     const set = new Set(ids)
-    const novo = { ...dados, pois: dados.pois.map(p => set.has(p.id) ? { ...p, estado } : p) }
-    guardar({ pois: Object.fromEntries(ids.map(id => [id, estado])) }, novo)
+    setDados(d => ({ ...d, pois: d.pois.map(p => set.has(p.id) ? { ...p, estado } : p) }))
+    guardar({ pois: Object.fromEntries(ids.map(id => [id, estado])) })
   }
 
   function mudarItem(lista, id, patch) {
-    const novo = { ...dados, analise: { ...dados.analise, [lista]: dados.analise[lista].map(it => it.id === id ? { ...it, ...patch } : it) } }
-    guardar({ itens: { [id]: patch } }, novo)
+    setDados(d => ({ ...d, analise: { ...d.analise, [lista]: d.analise[lista].map(it => it.id === id ? { ...it, ...patch } : it) } }))
+    guardar({ itens: { [id]: patch } })
   }
 
   async function pedirAnalise() {
