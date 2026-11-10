@@ -322,6 +322,34 @@ export async function pesquisarPOIs({ origemTexto, centro: centroDado, aoProgres
   }
 }
 
+// ── Ponto acrescentado à mão (o que o OpenStreetMap não encontrou) ──
+
+// Procura lugares pelo nome perto do imóvel (Nominatim, com preferência pela zona).
+export async function procurarLugar(texto, centro) {
+  const url = new URL('https://nominatim.openstreetmap.org/search')
+  url.searchParams.set('q', texto)
+  url.searchParams.set('format', 'json')
+  url.searchParams.set('limit', '6')
+  url.searchParams.set('countrycodes', 'pt')
+  url.searchParams.set('accept-language', 'pt')
+  url.searchParams.set('viewbox', [centro.lng - 0.15, centro.lat + 0.1, centro.lng + 0.15, centro.lat - 0.1].join(','))
+  const resp = await fetchComPrazo(url.toString(), { headers: UA }, 15000)
+  const j = resp.ok ? await resp.json() : []
+  return j.map((r) => ({ nome: (r.name || r.display_name.split(',')[0]).trim(), endereco: r.display_name, lat: Number(r.lat), lng: Number(r.lon) }))
+    .map((r) => ({ ...r, linha_reta_m: linhaReta(centro, r) }))
+    .sort((a, b) => a.linha_reta_m - b.linha_reta_m)
+}
+
+// Completa o lugar escolhido com os tempos a pé, de bicicleta e de carro.
+export async function pontoManual({ centro, lugar, categoria }) {
+  const p = { id: `manual:${novoId()}`, nome: lugar.nome, endereco: lugar.endereco, lat: lugar.lat, lng: lugar.lng, categoria, linha_reta_m: linhaReta(centro, lugar), manual: true }
+  for (const perfil of Object.keys(MEIOS)) {
+    const t = await tempos(centro, [p], perfil).catch(() => new Map())
+    p[perfil] = t.get(p.id) || estimar(perfil, p.linha_reta_m)
+  }
+  return p
+}
+
 // ── Persistência (coluna imoveis.analise_localizacao_ia) ─────────
 
 let _coluna = false
@@ -347,21 +375,30 @@ const txt = (v, n = 300) => (v == null ? null : String(v).slice(0, n))
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null)
 const tempo = (t) => (t && num(t.s) != null ? { m: num(t.m), s: num(t.s), ...(t.estimado ? { estimado: true } : {}) } : null)
 
+const CATS = new Map(CATEGORIAS.map((c) => [c.id, c]))
+function limparPoi(p) {
+  if (!p?.id || !CATS.has(p.categoria) || num(p.lat) == null) return null
+  const cat = CATS.get(p.categoria)
+  return {
+    id: txt(p.id, 80), nome: txt(p.nome, 150), endereco: txt(p.endereco), lat: num(p.lat), lng: num(p.lng),
+    grupo: cat.grupo, categoria: p.categoria, categoria_label: cat.label,
+    tipo: txt(p.tipo, 40), linhas: txt(p.linhas, 120), rede: txt(p.rede, 80), rating: null, avaliacoes: null,
+    linha_reta_m: num(p.linha_reta_m), pe: tempo(p.pe), bicicleta: tempo(p.bicicleta), carro: tempo(p.carro),
+    estado: p.manual ? 'validado' : 'proposto', ...(p.manual ? { manual: true } : {}),
+  }
+}
+
 export async function guardarPesquisa(pool, imovelId, r) {
   await ensureColunaAnaliseLocalizacao(pool)
   const { rows: [im] } = await pool.query('SELECT analise_localizacao_ia FROM imoveis WHERE id = $1', [imovelId])
   if (!im) throw new Error('Imóvel não encontrado')
   if (!r || !Array.isArray(r.pois) || num(r.origem?.lat) == null) throw new Error('Resultado da pesquisa inválido')
-  const cats = new Map(CATEGORIAS.map((c) => [c.id, c]))
-  const pois = r.pois.slice(0, 300).filter((p) => cats.has(p.categoria) && p.id).map((p) => ({
-    id: txt(p.id, 80), nome: txt(p.nome, 150), endereco: txt(p.endereco), lat: num(p.lat), lng: num(p.lng),
-    grupo: cats.get(p.categoria).grupo, categoria: p.categoria, categoria_label: cats.get(p.categoria).label,
-    tipo: txt(p.tipo, 40), linhas: txt(p.linhas, 120), rede: txt(p.rede, 80), rating: null, avaliacoes: null,
-    linha_reta_m: num(p.linha_reta_m), pe: tempo(p.pe), bicicleta: tempo(p.bicicleta), carro: tempo(p.carro), estado: 'proposto',
-  }))
+  const pois = r.pois.slice(0, 300).map(limparPoi).filter(Boolean)
   const anterior = im.analise_localizacao_ia || {}
   const decisoes = new Map((anterior.pois || []).filter((p) => p.estado !== 'proposto').map((p) => [p.id, p.estado]))
   for (const p of pois) if (decisoes.has(p.id)) p.estado = decisoes.get(p.id)
+  // Pontos acrescentados à mão sobrevivem a uma nova pesquisa.
+  for (const p of anterior.pois || []) if (p.manual && !pois.some((x) => x.id === p.id)) pois.push(p)
   return gravar(pool, imovelId, {
     ...anterior, versao: 1, fonte_dados: 'OpenStreetMap', pesquisado_em: new Date().toISOString(), pois,
     origem: { texto: txt(r.origem.texto), resolvida: txt(r.origem.resolvida), lat: num(r.origem.lat), lng: num(r.origem.lng), fonte: txt(r.origem.fonte, 20) },
@@ -374,9 +411,14 @@ export async function guardarPesquisa(pool, imovelId, r) {
 }
 
 // Validar/excluir pontos de interesse e itens da análise; editar o texto dos itens.
-export async function atualizarDecisoes(pool, imovelId, { pois = {}, itens = {} }) {
+export async function atualizarDecisoes(pool, imovelId, { pois = {}, itens = {}, adicionar = null }) {
   const dados = await lerAnaliseLocalizacao(pool, imovelId)
   if (!dados) throw new Error('Ainda não há análise de localização para este imóvel')
+  if (adicionar) {
+    const p = limparPoi({ ...adicionar, manual: true })
+    if (!p) throw new Error('Ponto de interesse inválido')
+    dados.pois = [...(dados.pois || []).filter((x) => x.id !== p.id), p]
+  }
   const ok = new Set(['proposto', 'validado', 'excluido'])
   for (const p of dados.pois || []) if (ok.has(pois[p.id])) p.estado = pois[p.id]
   if (dados.analise) {

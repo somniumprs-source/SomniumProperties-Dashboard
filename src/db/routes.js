@@ -29,7 +29,6 @@ import { getVisitasEnriquecidas, syncDataVisitaDerivada } from './queries.js'
 import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
 import { createImovelFolder, moveImovelFolder, uploadDocToFolder, uploadUserFileToFolder, uploadComprovativoToFolder, isConfigured as driveConfigured, downloadDriveFile, createInvestidorFolder, uploadDocumentoInvestidor, uploadDocumentoEmpresa, moverParaElementosApagados, ensureInvestidorFolderShared } from './driveSync.js'
-import { docEmbedeLocalizacao } from './pdfImovelDocs.js'
 import { listDocumentos, persistDocumento, streamPdfToResAndPersist, urlAssinadaDocumento, apagarDocumentosDoImovel, apagarFotosDoImovel } from './documentLifecycle.js'
 import { ensureOportunidadesScraperTable } from './oportunidadesScraper.js'
 import { analyzeReuniao, pedirAnaliseReuniao, aplicarAnaliseReuniao } from './meetingAnalysis.js'
@@ -663,39 +662,6 @@ router.get('/lookups', async (_req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-// Regenera a imagem do estudo de localização se estiver desactualizada
-// (gerada antes da última recolha de distâncias, ou legacy sem marca de
-// geração). Preserva highlights/destaque/modo guardados. Nunca lança: em
-// erro devolve o imóvel original (o relatório usa a imagem em cache).
-// Só corre em produção (precisa de GOOGLE_MAPS_API_KEY + Supabase Storage).
-async function refreshEstudoLocalizacaoSeNecessario(imovel) {
-  try {
-    if (!imovel?.localizacao_imagem) return imovel
-    if (!process.env.GOOGLE_MAPS_API_KEY || !supabaseStorage) return imovel
-    const p = imovel.pois_distancias || {}
-    const genMs = p.imagem_gerada_em ? new Date(p.imagem_gerada_em).getTime() : 0
-    const poisMs = imovel.pois_atualizado_em ? new Date(imovel.pois_atualizado_em).getTime() : 0
-    // Desactualizada: sem marca (legacy) ou dados de POIs mudaram >1s depois da imagem.
-    const stale = !genMs || (poisMs - genMs > 1000)
-    if (!stale) return imovel
-    await runEstudoLocalizacao({
-      pool,
-      supabaseStorage,
-      imovelId: imovel.id,
-      destinos: undefined,                                  // usa os guardados em pois_distancias
-      mode: p.mode || 'driving',
-      highlights: Array.isArray(p.highlights) ? p.highlights : [],
-      destaque: p.destaque || null,
-      origem: p.origem || imovel.morada || null,
-    })
-    const fresco = await Imoveis.getById(imovel.id)
-    return fresco || imovel
-  } catch (e) {
-    console.error(`[estudo-refresh imovel=${imovel?.id}] falhou, usa imagem em cache:`, e.message)
-    return imovel
-  }
-}
-
 // ── Documento PDF por fase do imóvel ─────────────────────────
 //
 // Estratégia: se já existe pdf_path persistido, redireccionar para a URL
@@ -720,9 +686,7 @@ router.get('/imoveis/:id/documento/:tipo', async (req, res) => {
       analise = a
     } catch {}
 
-    // Regenerar a imagem do estudo se desactualizada (só docs que a embutem).
-    let im = imovel
-    if (docEmbedeLocalizacao(req.params.tipo)) im = await refreshEstudoLocalizacaoSeNecessario(imovel)
+    const im = imovel
 
     // Servir PDF em cache APENAS se ainda reflecte os dados actuais. Regenera
     // quando o imóvel ou a análise mudaram depois da última geração.
@@ -827,9 +791,6 @@ router.get('/imoveis/:id/relatorio-investidor', async (req, res) => {
     const { rows: [analise] } = await pool.query(
       'SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1', [imovel.id]
     ).catch(() => ({ rows: [] }))
-
-    // Garante que o estudo de localização embutido reflecte os dados actuais.
-    imovel = await refreshEstudoLocalizacaoSeNecessario(imovel)
 
     const seccoes = (req.query.seccoes || 'investimento,comparaveis,caep,stress_tests').split(',').filter(Boolean)
     const { generateCompiledReport } = await import('./pdfImovelDocs.js')
@@ -5010,105 +4971,7 @@ router.get('/backup/:id/download', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-// ── Estudo de localização: Distance Matrix API ────────────────
-// POIs sugeridos por defeito (categoria + label visível). O frontend pode
-// adicionar/remover livremente — esta lista é só o ponto de partida.
-const POIS_SUGERIDOS = [
-  { categoria: 'Mercearia/Supermercado', icone: '🛒' },
-  { categoria: 'Hospital', icone: '🏥' },
-  { categoria: 'Farmácia', icone: '💊' },
-  { categoria: 'Escola Básica', icone: '🏫' },
-  { categoria: 'Estação de Comboios', icone: '🚆' },
-  { categoria: 'Centro Comercial', icone: '🛍️' },
-  { categoria: 'Restaurante', icone: '🍽️' },
-  { categoria: 'Ginásio', icone: '🏋️' },
-  { categoria: 'Acesso A1/A8', icone: '🛣️' },
-  { categoria: 'Aeroporto', icone: '✈️' },
-]
 
-router.get('/imoveis/pois/sugeridos', (req, res) => res.json(POIS_SUGERIDOS))
-
-router.post('/imoveis/:id/distancias', async (req, res) => {
-  try {
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY
-    if (!apiKey) return res.status(500).json({ error: 'GOOGLE_MAPS_API_KEY não configurada' })
-
-    const { rows: [imovel] } = await pool.query('SELECT id, nome, morada, zona FROM imoveis WHERE id = $1', [req.params.id])
-    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
-
-    const origem = (req.body?.origem || imovel.morada || imovel.zona || '').trim()
-    if (!origem) return res.status(400).json({ error: 'Indica morada/origem do imóvel (ou preenche o campo morada).' })
-
-    const destinos = Array.isArray(req.body?.destinos) ? req.body.destinos.filter(d => d?.endereco?.trim()) : []
-    if (destinos.length === 0) return res.status(400).json({ error: 'Lista de destinos vazia.' })
-    if (destinos.length > 25) return res.status(400).json({ error: 'Máximo 25 destinos por chamada (limite Distance Matrix).' })
-
-    const mode = req.body?.mode === 'walking' ? 'walking' : req.body?.mode === 'bicycling' ? 'bicycling' : req.body?.mode === 'transit' ? 'transit' : 'driving'
-    const region = 'pt'
-
-    // Calcula sempre os dois modos: trajecto/distância a pé difere do de carro.
-    async function matrixFor(modeX) {
-      const url = new URL('https://maps.googleapis.com/maps/api/distancematrix/json')
-      url.searchParams.set('origins', origem)
-      url.searchParams.set('destinations', destinos.map(d => d.endereco).join('|'))
-      url.searchParams.set('mode', modeX)
-      url.searchParams.set('region', region)
-      url.searchParams.set('language', 'pt')
-      url.searchParams.set('key', apiKey)
-      const resp = await fetch(url.toString())
-      const j = await resp.json()
-      if (j.status !== 'OK') {
-        const err = new Error(`Distance Matrix (${modeX}): ${j.status}${j.error_message ? ' — ' + j.error_message : ''}`)
-        err.detalhe = j.error_message || null
-        throw err
-      }
-      return j
-    }
-
-    const [jCar, jWalk] = await Promise.all([matrixFor('driving'), matrixFor('walking')])
-    const carEls = jCar.rows?.[0]?.elements || []
-    const walkEls = jWalk.rows?.[0]?.elements || []
-    const pick = (el) => ({
-      distancia_metros: el?.status === 'OK' ? el.distance?.value ?? null : null,
-      distancia_texto: el?.status === 'OK' ? el.distance?.text ?? null : null,
-      duracao_segundos: el?.status === 'OK' ? el.duration?.value ?? null : null,
-      duracao_texto: el?.status === 'OK' ? el.duration?.text ?? null : null,
-      status: el?.status || 'UNKNOWN',
-    })
-
-    const resultados = destinos.map((d, i) => {
-      const carro = pick(carEls[i])
-      const pe = pick(walkEls[i])
-      return {
-        categoria: d.categoria || null,
-        icone: d.icone || null,
-        endereco: d.endereco,
-        carro,
-        pe,
-        // compatibilidade com consumidores antigos (= carro)
-        ...carro,
-      }
-    })
-
-    const payload = {
-      origem,
-      mode,
-      origem_resolvida: jCar.origin_addresses?.[0] || jWalk.origin_addresses?.[0] || null,
-      atualizado_em: new Date().toISOString(),
-      resultados,
-    }
-
-    await pool.query(
-      `UPDATE imoveis SET pois_distancias = $1::jsonb, pois_atualizado_em = NOW(), morada = COALESCE(NULLIF($2,''), morada), updated_at = NOW()::text WHERE id = $3`,
-      [JSON.stringify(payload), origem, imovel.id]
-    )
-
-    res.json(payload)
-  } catch (e) {
-    console.error('[distancias]', e)
-    res.status(500).json({ error: e.message })
-  }
-})
 
 // ── Estudo de localização auto: Distance Matrix + composição SVG + upload Supabase + UPDATE localizacao_imagem
 // ── Análise IA da localização (pontos de interesse + pontos fortes/fracos) ──
@@ -5137,7 +5000,7 @@ router.post('/imoveis/:id/analise-localizacao-ia/analisar', async (req, res) => 
 router.post('/imoveis/:id/analise-localizacao-ia/estudo', async (req, res) => {
   try {
     const dados = await lerAnaliseLocalizacao(pool, req.params.id)
-    res.json(await gerarEstudoComAprovados({ pool, supabaseStorage, imovelId: req.params.id, dados, runEstudoLocalizacao }))
+    res.json(await gerarEstudoComAprovados({ pool, supabaseStorage, imovelId: req.params.id, dados, runEstudoLocalizacao, highlights: Array.isArray(req.body?.highlights) ? req.body.highlights : undefined, destaque: req.body?.destaque }))
   } catch (e) { console.error('[analise-localizacao-ia/estudo]', e); res.status(400).json({ error: e.message }) }
 })
 router.post('/imoveis/:id/analise-localizacao-ia/aplicar', async (req, res) => {
@@ -5145,37 +5008,7 @@ router.post('/imoveis/:id/analise-localizacao-ia/aplicar', async (req, res) => {
   catch (e) { res.status(400).json({ error: e.message }) }
 })
 
-router.post('/imoveis/:id/estudo-localizacao', async (req, res) => {
-  try {
-    if (!supabaseStorage) return res.status(500).json({ error: 'Supabase Storage não configurado' })
-    const r = await runEstudoLocalizacao({
-      pool,
-      supabaseStorage,
-      imovelId: req.params.id,
-      destinos: req.body?.destinos,
-      mode: req.body?.mode || 'driving',
-      highlights: Array.isArray(req.body?.highlights) ? req.body.highlights : [],
-      destaque: req.body?.destaque || null,
-      origem: req.body?.origem || null,
-    })
-    res.json(r)
-  } catch (e) {
-    console.error('[estudo-localizacao]', e)
-    res.status(500).json({ error: e.message })
-  }
-})
 
-router.get('/imoveis/:id/distancias', async (req, res) => {
-  try {
-    const { rows: [imovel] } = await pool.query('SELECT pois_distancias, pois_atualizado_em, morada FROM imoveis WHERE id = $1', [req.params.id])
-    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
-    res.json({
-      morada: imovel.morada || null,
-      atualizado_em: imovel.pois_atualizado_em,
-      payload: imovel.pois_distancias || null,
-    })
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
 
 // ── Relatorios Semanais Administracao ──────────────────────────────
 router.get('/relatorios-semanais', async (_req, res) => {

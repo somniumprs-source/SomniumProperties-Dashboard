@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Sparkles, Search, Check, X, MapPin, Footprints, Car, Bike, Bus, Star, Loader2, ChevronDown, ChevronRight, ThumbsUp, TrendingDown } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
-import { pesquisarPOIs } from '../../../supabase/functions/_shared/analiseLocalizacaoIA.js'
+import { pesquisarPOIs, procurarLugar, pontoManual, CATEGORIAS } from '../../../supabase/functions/_shared/analiseLocalizacaoIA.js'
+
+const MapaLocalizacao = lazy(() => import('./MapaLocalizacao.jsx'))
 
 const GRUPOS = {
   saude: 'Saúde', educacao: 'Educação', comercio: 'Comércio', restauracao: 'Restauração',
@@ -68,6 +70,18 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onEstudo
   const [pedindo, setPedindo] = useState(false)
   const [aplicando, setAplicando] = useState(false)
   const [gerandoEstudo, setGerandoEstudo] = useState(false)
+  // Ponto acrescentado à mão
+  const [manualTexto, setManualTexto] = useState('')
+  const [manualCat, setManualCat] = useState('supermercados')
+  const [manualOpcoes, setManualOpcoes] = useState(null)
+  const [manualAProcurar, setManualAProcurar] = useState(false)
+  // Opções da imagem do estudo (guardadas em pois_distancias ao gerar)
+  const pd = imovel.pois_distancias || {}
+  const [destaque, setDestaque] = useState(pd.destaque || '')
+  const [hl, setHl] = useState(() => [0, 1].map(i => ({
+    titulo: pd.highlights?.[i]?.titulo || '', descricao: pd.highlights?.[i]?.descricao || '',
+    subtitulo: pd.highlights?.[i]?.subtitulo || '', badge: i === 0 ? (pd.highlights?.[0]?.badge || '') : '',
+  })))
   const [filtro, setFiltro] = useState('todos')
   const [abertos, setAbertos] = useState({})
   const [aberto, setAberto] = useState(true)
@@ -167,7 +181,14 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onEstudo
   async function gerarEstudo() {
     setGerandoEstudo(true)
     try {
-      const r = await apiFetch(`${base}/estudo`, { method: 'POST' })
+      const highlights = hl.filter(h => h.titulo.trim()).map((h, i) => ({
+        titulo: h.titulo, descricao: h.descricao, subtitulo: h.subtitulo, accent: i === 0 && hl[0].titulo.trim() ? 'gold' : 'red',
+        ...(h.badge ? { badge: Array.isArray(h.badge) ? h.badge : String(h.badge).split(/[;,]\s*/).filter(Boolean) } : {}),
+      }))
+      const r = await apiFetch(`${base}/estudo`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ highlights, destaque: destaque || null }),
+      })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error)
       onEstudoGerado?.(j.localizacao_imagem)
@@ -175,6 +196,28 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onEstudo
       toast(`Estudo de localização gerado com ${validados.length} pontos aprovados`, 'success')
     } catch (e) { toast('Erro: ' + e.message, 'error') }
     setGerandoEstudo(false)
+  }
+
+  async function procurarManual() {
+    if (!manualTexto.trim() || !dados?.origem) return
+    setManualAProcurar(true)
+    try {
+      const r = await procurarLugar(manualTexto.trim(), dados.origem)
+      setManualOpcoes(r)
+      if (!r.length) toast('Nenhum lugar encontrado com esse nome. Experimenta acrescentar a rua ou a localidade.', 'error')
+    } catch (e) { toast('Erro: ' + e.message, 'error') }
+    setManualAProcurar(false)
+  }
+
+  async function acrescentarManual(lugar) {
+    setManualAProcurar(true)
+    try {
+      const poi = await pontoManual({ centro: dados.origem, lugar, categoria: manualCat })
+      await guardar({ adicionar: poi })
+      setManualOpcoes(null); setManualTexto('')
+      toast(`${lugar.nome} acrescentado e aprovado`, 'success')
+    } catch (e) { toast('Erro: ' + e.message, 'error') }
+    setManualAProcurar(false)
   }
 
   const pois = dados?.pois || []
@@ -248,6 +291,41 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onEstudo
           {/* 2. Pontos de interesse */}
           {pois.length > 0 && (
             <div className="space-y-3">
+              <Suspense fallback={<div className="h-[420px] rounded-lg border border-line bg-surface flex items-center justify-center text-xs text-ink-muted">A carregar o mapa…</div>}>
+                <MapaLocalizacao origem={dados.origem} pois={pois} onDecidir={decidirPois} />
+              </Suspense>
+
+              <div className="rounded-lg border border-line p-3 space-y-2">
+                <div className="text-xs font-semibold text-ink">Acrescentar um ponto que não apareceu</div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input value={manualTexto} onChange={e => setManualTexto(e.target.value)} onKeyDown={e => e.key === 'Enter' && procurarManual()}
+                    placeholder="Nome do lugar (ex.: Continente Coimbra)"
+                    className="flex-1 px-3 py-1.5 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                  <select value={manualCat} onChange={e => setManualCat(e.target.value)}
+                    className="px-2 py-1.5 rounded-lg border border-line text-sm">
+                    {CATEGORIAS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                  </select>
+                  <button type="button" onClick={procurarManual} disabled={manualAProcurar || !manualTexto.trim()}
+                    className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg border border-line text-sm text-ink hover:bg-surface disabled:opacity-50">
+                    {manualAProcurar ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />} Procurar
+                  </button>
+                </div>
+                {manualOpcoes?.length > 0 && (
+                  <ul className="divide-y divide-line rounded-lg border border-line">
+                    {manualOpcoes.map((l, i) => (
+                      <li key={i} className="flex items-center gap-2 px-3 py-1.5 text-xs">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-ink truncate">{l.nome}</div>
+                          <div className="text-ink-muted truncate">{fmtDist(l.linha_reta_m)} do imóvel · {l.endereco}</div>
+                        </div>
+                        <button type="button" onClick={() => acrescentarManual(l)} disabled={manualAProcurar}
+                          className="px-2 py-1 rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">Acrescentar</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
               <div className="flex flex-wrap items-center gap-1.5">
                 {FILTROS.map(f => (
                   <button key={f.v} type="button" onClick={() => setFiltro(f.v)}
@@ -300,6 +378,33 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onEstudo
                   </div>
                 )
               })}
+
+              <details className="rounded-lg border border-line">
+                <summary className="px-3 py-2 text-xs font-semibold text-ink cursor-pointer select-none">Opções da imagem do estudo (destaque e destaques)</summary>
+                <div className="p-3 pt-0 space-y-3">
+                  <div>
+                    <label className="text-[11px] font-semibold text-ink block mb-1">Ponto em destaque (dourado)</label>
+                    <select value={destaque} onChange={e => setDestaque(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-lg border border-line text-sm">
+                      <option value="">Sem destaque</option>
+                      {validados.map(p => <option key={p.id} value={p.nome}>{p.nome} ({p.categoria_label})</option>)}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {hl.map((h, i) => (
+                      <div key={i} className={`rounded-lg p-2.5 space-y-1.5 border ${i === 0 ? 'border-warning/30 bg-warning/10' : 'border-danger/30 bg-danger/10'}`}>
+                        <p className={`text-[10px] font-bold uppercase tracking-wide ${i === 0 ? 'text-warning' : 'text-danger'}`}>Destaque {i + 1} ({i === 0 ? 'dourado' : 'vermelho'})</p>
+                        {[['titulo', 'Título (ex.: SMTUC à porta)'], ['descricao', 'Descrição'], ['subtitulo', 'Subtítulo'], ...(i === 0 ? [['badge', 'Etiquetas curtas, separadas por vírgulas (ex.: 7, 9, 26)']] : [])].map(([k, ph]) => (
+                          <input key={k} value={Array.isArray(h[k]) ? h[k].join(', ') : h[k]} placeholder={ph}
+                            onChange={e => setHl(prev => prev.map((x, j) => j === i ? { ...x, [k]: e.target.value } : x))}
+                            className="w-full px-2.5 py-1 rounded border border-line text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-ink-muted">Aplicam-se quando geras o estudo de localização.</p>
+                </div>
+              </details>
 
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={pedirAnalise} disabled={pedindo || emFila || validados.length === 0}

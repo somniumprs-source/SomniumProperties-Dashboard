@@ -98,106 +98,6 @@ function fmtMin(segundos) {
   return `${min} min`
 }
 
-function parseFreguesia(origemResolvida) {
-  // "Estr. X, 3040-267 Santa Clara, Portugal" → { codigoPostal: "3040-267", freguesia: "Santa Clara" }
-  const m = String(origemResolvida || '').match(/(\d{4}-\d{3})\s+([^,]+)/)
-  return {
-    codigoPostal: m?.[1] || null,
-    freguesia: m?.[2]?.trim() || null,
-  }
-}
-
-// ── Distance Matrix ──────────────────────────────────────────────
-
-export async function callDistanceMatrix({ origem, destinos, mode = 'driving', apiKey }) {
-  if (!apiKey) throw new Error('GOOGLE_MAPS_API_KEY não configurada')
-  if (!origem?.trim()) throw new Error('Indica origem')
-  const lista = (destinos || []).filter(d => d?.endereco?.trim())
-  if (lista.length === 0) throw new Error('Lista de destinos vazia')
-  if (lista.length > 25) throw new Error('Máximo 25 destinos por chamada')
-
-  const url = new URL('https://maps.googleapis.com/maps/api/distancematrix/json')
-  url.searchParams.set('origins', origem)
-  url.searchParams.set('destinations', lista.map(d => d.endereco).join('|'))
-  url.searchParams.set('mode', mode)
-  url.searchParams.set('region', 'pt')
-  url.searchParams.set('language', 'pt')
-  url.searchParams.set('key', apiKey)
-
-  const r = await fetch(url.toString())
-  const j = await r.json()
-  if (j.status !== 'OK') throw new Error(`Distance Matrix: ${j.status}${j.error_message ? ' — ' + j.error_message : ''}`)
-
-  const linha = j.rows?.[0]?.elements || []
-  const resultados = lista.map((d, i) => {
-    const el = linha[i] || {}
-    return {
-      categoria: d.categoria || null,
-      icone: d.icone || '📍',
-      endereco: d.endereco,
-      seccao: d.seccao || null,
-      distancia_metros: el.status === 'OK' ? el.distance?.value ?? null : null,
-      distancia_texto: el.status === 'OK' ? el.distance?.text ?? null : null,
-      duracao_segundos: el.status === 'OK' ? el.duration?.value ?? null : null,
-      duracao_texto: el.status === 'OK' ? el.duration?.text ?? null : null,
-      status: el.status || 'UNKNOWN',
-    }
-  })
-  return { origem_resolvida: j.origin_addresses?.[0] || origem, resultados }
-}
-
-// ── Static Satellite Map ─────────────────────────────────────────
-
-export async function fetchRoutePolyline({ origem, destino, apiKey, mode = 'driving' }) {
-  if (!apiKey || !origem || !destino) return null
-  const url = new URL('https://maps.googleapis.com/maps/api/directions/json')
-  url.searchParams.set('origin', origem)
-  url.searchParams.set('destination', destino)
-  url.searchParams.set('mode', mode)
-  url.searchParams.set('region', 'pt')
-  url.searchParams.set('language', 'pt')
-  url.searchParams.set('key', apiKey)
-  try {
-    const r = await fetch(url.toString())
-    const j = await r.json()
-    if (j.status !== 'OK') return null
-    return j.routes?.[0]?.overview_polyline?.points || null
-  } catch { return null }
-}
-
-export async function fetchStaticSatelliteMap({ origem, destinos, paths = [], apiKey, w = 640, h = 360, scale = 2 }) {
-  if (!apiKey) throw new Error('GOOGLE_MAPS_API_KEY não configurada')
-  const url = new URL('https://maps.googleapis.com/maps/api/staticmap')
-  url.searchParams.set('size', `${w}x${h}`)
-  url.searchParams.set('scale', String(scale))
-  url.searchParams.set('maptype', 'roadmap') // satélite/híbrido bloqueado pela Google no Static Maps na UE/EEE (HTTP 403) — usar mapa de ruas
-  url.searchParams.set('language', 'pt')
-  url.searchParams.set('region', 'pt')
-  // Rotas (paths) — desenhadas PRIMEIRO para ficarem por baixo dos markers
-  paths.forEach(p => {
-    if (p) url.searchParams.append('path', `color:0xC9A84CFF|weight:4|enc:${p}`)
-  })
-  // Imóvel — pin gold com label "I"
-  url.searchParams.append('markers', `color:0xC9A84C|size:mid|label:I|${origem}`)
-  // Destinos — pretos numerados (Static Maps suporta labels A-Z, 0-9 — usamos 1..9 para os 9 mais perto)
-  destinos.slice(0, 9).forEach((d, i) => {
-    url.searchParams.append('markers', `color:0x111111|size:mid|label:${i + 1}|${d.endereco}`)
-  })
-  url.searchParams.set('key', apiKey)
-
-  const r = await fetch(url.toString())
-  if (!r.ok) {
-    const txt = await r.text().catch(() => '')
-    throw new Error(`Static Maps: HTTP ${r.status} — ${txt.slice(0, 240) || 'sem detalhe'}. Confirma que activaste "Maps Static API" no Google Cloud e adicionaste à API restrictions da chave.`)
-  }
-  const ct = r.headers.get('content-type') || ''
-  if (!ct.startsWith('image/')) {
-    const txt = await r.text().catch(() => '')
-    throw new Error(`Static Maps devolveu não-imagem (${ct}): ${txt.slice(0, 240)}`)
-  }
-  return Buffer.from(await r.arrayBuffer()).toString('base64')
-}
-
 // ── Composer SVG ─────────────────────────────────────────────────
 // Tema Somnium "light": fundo cream, accents gold, texto preto. Em linha
 // com o resto do dossier de investidor (DocBuilder em pdfImovelDocs.ts).
@@ -260,11 +160,10 @@ export function composeEstudoSvg({
              clip-path="url(#mapClip)" href="data:image/png;base64,${mapaPngBase64}"/>
       <!-- Atribuição -->
       <rect x="${mapW - 150}" y="${mapH - 24}" width="138" height="18" rx="3" fill="#000000" opacity="0.5"/>
-      <text x="${mapW - 12}" y="${mapH - 10}" font-size="10" fill="#FFFFFF" text-anchor="end" font-weight="600">Imagem: Google Maps</text>`
+      <text x="${mapW - 12}" y="${mapH - 10}" font-size="10" fill="#FFFFFF" text-anchor="end" font-weight="600">Imagem do mapa</text>`
     : `
       <rect x="0" y="0" width="${mapW}" height="${mapH}" rx="8" fill="#FAEAEA" stroke="#C97070" stroke-width="2"/>
-      <text x="${mapW/2}" y="${mapH/2}" text-anchor="middle" font-size="18" fill="#8B2A2A" font-weight="700">⚠️ Mapa satélite não disponível</text>
-      <text x="${mapW/2}" y="${mapH/2 + 30}" text-anchor="middle" font-size="13" fill="#444">Activar "Maps Static API" no Google Cloud + adicionar à API restrictions da chave</text>`
+      <text x="${mapW/2}" y="${mapH/2}" text-anchor="middle" font-size="18" fill="#8B2A2A" font-weight="700">Mapa não disponível</text>`
 
   // Legenda dos pinos numerados 1..9 (canto superior esquerdo do mapa).
   // Bloco com fundo branco semi-opaco em vez do preto antigo, alinhado
@@ -492,129 +391,20 @@ export function composeEstudoSvg({
 
 // ── Pipeline completo ────────────────────────────────────────────
 
-// resultadosProntos + mapaSvgPronto: estudo gratuito a partir dos pontos de interesse
-// aprovados na Análise IA da localização (sem Google; não mexe na morada da ficha).
-export async function runEstudoLocalizacao({ pool, supabaseStorage, imovelId, destinos, mode = 'driving', highlights = [], destaque = null, origem: origemOverride = null, resultadosProntos = null, mapaSvgPronto = null }) {
-  if (resultadosProntos) return gerarEstudoPronto({ pool, supabaseStorage, imovelId, resultados: resultadosProntos, mapaSvg: mapaSvgPronto, origem: origemOverride })
-  const apiKey = Deno.env.get('GOOGLE_MAPS_API_KEY')
-  if (!apiKey) throw new Error('GOOGLE_MAPS_API_KEY não configurada no servidor')
-  if (!supabaseStorage) throw new Error('Supabase Storage não configurado (SUPABASE_SERVICE_KEY ausente)')
-
-  const { rows: [imovel] } = await pool.query(
-    'SELECT id, nome, morada, zona, regiao, pois_distancias FROM imoveis WHERE id = $1',
-    [imovelId]
-  )
-  if (!imovel) throw new Error('Imóvel não encontrado')
-
-  // Destinos: do request, ou recuperar do payload guardado em pois_distancias
-  let destinosUsar = Array.isArray(destinos) ? destinos.filter(d => d?.endereco?.trim()) : []
-  if (destinosUsar.length === 0 && imovel.pois_distancias?.resultados?.length > 0) {
-    destinosUsar = imovel.pois_distancias.resultados.map(r => ({
-      categoria: r.categoria, icone: r.icone, endereco: r.endereco, seccao: r.seccao
-    })).filter(d => d.endereco?.trim())
-  }
-  if (destinosUsar.length === 0) throw new Error('Sem destinos: indica destinos ou corre "Calcular distâncias" antes')
-
-  const origem = (origemOverride || imovel.morada || imovel.zona || '').trim()
-  if (!origem) throw new Error('Imóvel sem morada — preenche o campo morada')
-
-  // 1. Distance Matrix — calcula sempre carro (driving) + a pé (walking).
-  //    O trajecto/distância a pé difere do de carro; a pé só faz sentido até 5 km.
-  const carroDM = await callDistanceMatrix({ origem, destinos: destinosUsar, mode: 'driving', apiKey })
-  const origem_resolvida = carroDM.origem_resolvida
-  const resultados = carroDM.resultados
-  let resultadosPe = []
-  try {
-    resultadosPe = (await callDistanceMatrix({ origem, destinos: destinosUsar, mode: 'walking', apiKey })).resultados
-  } catch (e) {
-    console.warn('[estudo-localizacao] tempos a pé indisponíveis:', e.message)
-  }
-  resultados.forEach((r, i) => { r.pe = resultadosPe[i] || null })
-
-  // 2. Static Map satélite + rotas reais (Directions API para top 9 destinos)
-  const okOrdenados = resultados.filter(r => r.status === 'OK').sort((a, b) => (a.distancia_metros ?? Infinity) - (b.distancia_metros ?? Infinity))
-  const top9 = okOrdenados.slice(0, 9)
-  const paths = await Promise.all(top9.map(d =>
-    fetchRoutePolyline({ origem: origem_resolvida || origem, destino: d.endereco, apiKey, mode })
-  ))
-  const mapaPngBase64 = await fetchStaticSatelliteMap({
-    origem: origem_resolvida || origem,
-    destinos: okOrdenados,
-    paths,
-    apiKey,
-  })
-
-  // 3. Compose SVG — prefixo regional dinâmico (Coimbra ou AMP)
-  const { freguesia, codigoPostal } = parseFreguesia(origem_resolvida)
-  const regiao = imovel.regiao || 'Coimbra'
-  const prefixoRegional = regiao === 'AMP' ? 'Porto/Gaia' : 'Coimbra'
-  const svg = composeEstudoSvg({
-    imovelNome: imovel.nome,
-    morada: origem_resolvida,
-    freguesia: freguesia ? `${prefixoRegional} · ${freguesia}` : null,
-    regiao,
-    resultados,
-    highlights,
-    destaque,
-    modo: mode,
-    mapaPngBase64,
-  })
-
-  // 4. Rasterizar SVG → PNG (PDFKit nao aceita SVG)
-  const pngBuffer = await rasterizarSvgParaPng(svg)
-
-  // 5. Upload Supabase Storage
-  const filename = `localizacao_estudo_auto_${Date.now()}.png`
-  const storagePath = `imoveis/${imovelId}/${filename}`
-  const { error: upErr } = await supabaseStorage.storage
-    .from('Imoveis')
-    .upload(storagePath, pngBuffer, { contentType: 'image/png', upsert: true })
-  if (upErr) throw new Error(`Supabase Storage: ${upErr.message}`)
-  const { data: urlData } = supabaseStorage.storage.from('Imoveis').getPublicUrl(storagePath)
-  const publicUrl = urlData.publicUrl
-
-  // 4. UPDATE imoveis
-  const agora = new Date().toISOString()
-  const payload = {
-    origem: origem_resolvida,
-    mode,
-    atualizado_em: agora,
-    imagem_gerada_em: agora,   // quando a IMAGEM foi gerada — usado para detectar desactualização nos relatórios
-    resultados,
-    highlights,
-    destaque,
-    codigo_postal: codigoPostal,
-    freguesia,
-  }
-  await pool.query(
-    `UPDATE imoveis
-       SET pois_distancias = $1::jsonb,
-           pois_atualizado_em = $5,
-           localizacao_imagem = $2,
-           morada = COALESCE(NULLIF($3,''), morada),
-           updated_at = NOW()::text
-     WHERE id = $4`,
-    [JSON.stringify(payload), publicUrl, origem_resolvida, imovelId, agora]
-  )
-
-  return {
-    ok: true,
-    imovel_id: imovelId,
-    imovel_nome: imovel.nome,
-    origem_resolvida,
-    freguesia,
-    codigo_postal: codigoPostal,
-    localizacao_imagem: publicUrl,
-    resultados,
-  }
+// Estudo de localização (imagem do dossier) a partir dos pontos de interesse
+// aprovados na Análise IA da localização: dados e mapa gratuitos (OpenStreetMap
+// + ortofotos DGT, ver estudoMapaOSM.js). Desde 11/2026 não usa o Google.
+export async function runEstudoLocalizacao({ pool, supabaseStorage, imovelId, resultadosProntos, mapaSvgPronto = null, origem = null, highlights, destaque }) {
+  if (!resultadosProntos?.length) throw new Error('Sem pontos de interesse aprovados para o estudo')
+  return gerarEstudoPronto({ pool, supabaseStorage, imovelId, resultados: resultadosProntos, mapaSvg: mapaSvgPronto, origem, highlights, destaque })
 }
 
-async function gerarEstudoPronto({ pool, supabaseStorage, imovelId, resultados, mapaSvg, origem }) {
+async function gerarEstudoPronto({ pool, supabaseStorage, imovelId, resultados, mapaSvg, origem, highlights: hlNovos, destaque: destaqueNovo }) {
   if (!supabaseStorage) throw new Error('Supabase Storage não configurado (SUPABASE_SERVICE_KEY ausente)')
   const { rows: [imovel] } = await pool.query('SELECT id, nome, morada, freguesia, regiao, pois_distancias FROM imoveis WHERE id = $1', [imovelId])
   if (!imovel) throw new Error('Imóvel não encontrado')
-  const highlights = imovel.pois_distancias?.highlights || []
-  const destaque = imovel.pois_distancias?.destaque || null
+  const highlights = Array.isArray(hlNovos) ? hlNovos : (imovel.pois_distancias?.highlights || [])
+  const destaque = destaqueNovo !== undefined ? (destaqueNovo || null) : (imovel.pois_distancias?.destaque || null)
   const regiao = imovel.regiao || 'Coimbra'
   const prefixoRegional = regiao === 'AMP' ? 'Porto/Gaia' : 'Coimbra'
   const morada = origem || imovel.morada || ''

@@ -193,31 +193,6 @@ function PontosRiscosTab({ imovel, endpoint, id, onUpdate, toast }) {
 }
 
 function LocalizacaoTab({ imovel, onUpdate, toast }) {
-  const [origem, setOrigem] = useState(imovel.morada || imovel.zona || '')
-  const [destinos, setDestinos] = useState(() => {
-    const guardados = imovel.pois_distancias?.resultados
-    if (Array.isArray(guardados) && guardados.length > 0) {
-      return guardados.map(r => ({ categoria: r.categoria || '', icone: r.icone || '📍', endereco: r.endereco || '' }))
-    }
-    return [
-      { categoria: 'Mercearia/Supermercado', icone: '🛒', endereco: '' },
-      { categoria: 'Hospital', icone: '🏥', endereco: '' },
-      { categoria: 'Farmácia', icone: '💊', endereco: '' },
-      { categoria: 'Escola Básica', icone: '🏫', endereco: '' },
-    ]
-  })
-  const [mode, setMode] = useState(imovel.pois_distancias?.mode || 'driving')
-  const [calculando, setCalculando] = useState(false)
-  const [gerando, setGerando] = useState(false)
-  const [resultado, setResultado] = useState(imovel.pois_distancias || null)
-  const [destaque, setDestaque] = useState(imovel.pois_distancias?.destaque || '')
-  const [hl1Titulo, setHl1Titulo] = useState(imovel.pois_distancias?.highlights?.[0]?.titulo || '')
-  const [hl1Desc, setHl1Desc] = useState(imovel.pois_distancias?.highlights?.[0]?.descricao || '')
-  const [hl1Badge, setHl1Badge] = useState(imovel.pois_distancias?.highlights?.[0]?.badge || '')
-  const [hl1Sub, setHl1Sub] = useState(imovel.pois_distancias?.highlights?.[0]?.subtitulo || '')
-  const [hl2Titulo, setHl2Titulo] = useState(imovel.pois_distancias?.highlights?.[1]?.titulo || '')
-  const [hl2Desc, setHl2Desc] = useState(imovel.pois_distancias?.highlights?.[1]?.descricao || '')
-  const [hl2Sub, setHl2Sub] = useState(imovel.pois_distancias?.highlights?.[1]?.subtitulo || '')
   const [imagemUrl, setImagemUrl] = useState(imovel.localizacao_imagem || null)
   const [uploading, setUploading] = useState(false)
 
@@ -248,71 +223,12 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
     } catch (e) { toast('Erro: ' + e.message, 'error') }
   }
 
-  function setDestino(i, patch) {
-    setDestinos(prev => prev.map((d, idx) => idx === i ? { ...d, ...patch } : d))
-  }
-  function adicionar() {
-    setDestinos(prev => [...prev, { categoria: '', icone: '📍', endereco: '' }])
-  }
-  function remover(i) {
-    setDestinos(prev => prev.filter((_, idx) => idx !== i))
-  }
-
-  async function calcular() {
-    if (!origem.trim()) { toast('Indica a morada/origem do imóvel', 'error'); return }
-    const validos = destinos.filter(d => d.endereco?.trim())
-    if (validos.length === 0) { toast('Adiciona pelo menos um destino com morada', 'error'); return }
-    setCalculando(true)
-    try {
-      const r = await apiFetch(`/api/crm/imoveis/${imovel.id}/distancias`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ origem, destinos: validos, mode }),
-      })
-      const j = await r.json()
-      if (!r.ok) throw new Error(j.error || j.detalhe || 'Erro ao calcular distâncias')
-      setResultado(j)
-      await onUpdate()
-      toast(`${j.resultados.length} distâncias calculadas`, 'success')
-    } catch (e) { toast('Erro: ' + e.message, 'error') }
-    setCalculando(false)
-  }
-
-  async function gerarImagem() {
-    const validos = destinos.filter(d => d.endereco?.trim())
-    if (validos.length === 0 && !resultado?.resultados?.length) {
-      toast('Adiciona destinos ou corre "Calcular distâncias" antes', 'error'); return
-    }
-    setGerando(true)
-    try {
-      const highlights = []
-      if (hl1Titulo.trim()) highlights.push({ titulo: hl1Titulo, descricao: hl1Desc, badge: hl1Badge || null, subtitulo: hl1Sub, accent: 'gold' })
-      if (hl2Titulo.trim()) highlights.push({ titulo: hl2Titulo, descricao: hl2Desc, subtitulo: hl2Sub, accent: 'red' })
-      const r = await apiFetch(`/api/crm/imoveis/${imovel.id}/estudo-localizacao`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ origem, mode, destinos: validos.length > 0 ? validos : undefined, highlights, destaque: destaque || null }),
-      })
-      const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Erro ao gerar imagem')
-      setImagemUrl(j.localizacao_imagem ? `${j.localizacao_imagem}?t=${Date.now()}` : null)
-      await onUpdate()
-      toast('Imagem gerada — vê em cima', 'success')
-    } catch (e) { toast('Erro: ' + e.message, 'error') }
-    setGerando(false)
-  }
-
-  const MODES = [
-    { v: 'driving', l: 'Carro' },
-    { v: 'walking', l: 'A pé' },
-    { v: 'bicycling', l: 'Bicicleta' },
-    { v: 'transit', l: 'Transp. público' },
-  ]
-
   return (
     <div className="space-y-5">
       <AnaliseLocalizacaoIA imovel={imovel} toast={toast} onUpdate={onUpdate}
         onEstudoGerado={url => url && setImagemUrl(`${url}?t=${Date.now()}`)} />
 
-      {/* Imagem do estudo no topo */}
+      {/* Imagem do estudo (vai para o dossier do investidor) */}
       {imagemUrl ? (
         <div className="rounded-xl border border-line bg-surface-raised overflow-hidden">
           <div className="px-4 py-2.5 border-b border-line bg-gradient-to-r from-yellow-50 to-white flex items-center justify-between">
@@ -339,159 +255,10 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
         </div>
       ) : (
         <div className="rounded-xl border-2 border-dashed border-line p-6 bg-surface-raised text-center">
-          <p className="text-sm text-ink-muted">Sem imagem de localização ainda. Preenche os destinos e clica em <strong>"Gerar imagem do estudo"</strong> em baixo.</p>
+          <p className="text-sm text-ink-muted">Sem estudo de localização ainda. Procura os pontos de interesse, aprova os que interessam e carrega em <strong>«Gerar estudo de localização com os aprovados»</strong>.</p>
         </div>
       )}
 
-      <div>
-        <h3 className="text-sm font-bold text-ink">Estudo de Localização</h3>
-        <p className="text-xs text-ink-muted mt-0.5">
-          Distâncias e tempo do imóvel a vários pontos de interesse via Google Distance Matrix.
-        </p>
-      </div>
-
-      {/* Origem + modo */}
-      <div className="rounded-xl border border-line p-4 bg-surface-raised space-y-3">
-        <div>
-          <label className="text-xs font-semibold text-ink block mb-1">Morada do imóvel (origem)</label>
-          <input type="text" value={origem} onChange={e => setOrigem(e.target.value)}
-            placeholder={imovel?.regiao === 'AMP' ? 'Ex: Rua de Santa Catarina 200, Porto' : 'Ex: Rua das Flores 12, Coimbra'}
-            className="w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
-        </div>
-        <div>
-          <label className="text-xs font-semibold text-ink block mb-1">Modo de transporte</label>
-          <div className="flex flex-wrap gap-1.5">
-            {MODES.map(m => (
-              <button key={m.v} type="button" onClick={() => setMode(m.v)}
-                className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
-                  mode === m.v ? 'border-accent bg-accent text-accent-foreground' : 'bg-surface-raised border-line text-ink-muted hover:bg-surface'
-                }`}>
-                {m.l}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Destinos */}
-      <div className="rounded-xl border border-line p-4 bg-surface-raised">
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="text-xs font-semibold text-ink">Pontos de interesse</h4>
-          <button type="button" onClick={adicionar}
-            className="px-2.5 py-1 text-xs rounded-lg border border-line text-ink-muted hover:bg-surface">
-            + Adicionar
-          </button>
-        </div>
-        <div className="space-y-2">
-          {destinos.map((d, i) => (
-            <div key={i} className="flex gap-2 items-start">
-              <input type="text" value={d.icone || ''} onChange={e => setDestino(i, { icone: e.target.value })}
-                className="w-12 text-center px-2 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
-              <input type="text" value={d.categoria || ''} onChange={e => setDestino(i, { categoria: e.target.value })}
-                placeholder="Categoria (ex: Hospital)"
-                className="flex-1 px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
-              <input type="text" value={d.endereco || ''} onChange={e => setDestino(i, { endereco: e.target.value })}
-                placeholder={imovel?.regiao === 'AMP' ? 'Morada do ponto (ex: Hospital São João, Porto)' : 'Morada do ponto (ex: Hospital Geral, Coimbra)'}
-                className="flex-[2] px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
-              <button type="button" onClick={() => remover(i)}
-                className="px-2 py-2 text-xs rounded-lg bg-danger/10 text-danger hover:bg-danger/15">×</button>
-            </div>
-          ))}
-          {destinos.length === 0 && <p className="text-xs text-ink-muted text-center py-3">Sem pontos de interesse — clica em "Adicionar"</p>}
-        </div>
-        <div className="flex justify-end gap-2 mt-4">
-          <button type="button" onClick={calcular} disabled={calculando || gerando}
-            className="px-4 py-2 text-sm font-semibold rounded-lg border border-line bg-surface-raised text-ink hover:bg-surface disabled:opacity-50">
-            {calculando ? 'A calcular…' : 'Calcular distâncias'}
-          </button>
-          <button type="button" onClick={gerarImagem} disabled={calculando || gerando}
-            className="px-4 py-2 text-sm font-semibold rounded-lg bg-accent text-accent-foreground hover:brightness-[1.04] disabled:opacity-50">
-            {gerando ? 'A gerar imagem…' : 'Gerar imagem do estudo'}
-          </button>
-        </div>
-      </div>
-
-      {/* Opções da imagem (destaque + highlights) */}
-      <details className="rounded-xl border border-line bg-surface-raised">
-        <summary className="px-4 py-3 text-xs font-semibold text-ink cursor-pointer select-none">
-          Opções da imagem (destaque + highlights)
-        </summary>
-        <div className="p-4 pt-0 space-y-4">
-          <div>
-            <label className="text-xs font-semibold text-ink block mb-1">★ Destacar ponto (gold)</label>
-            <select value={destaque} onChange={e => setDestaque(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
-              <option value="">— sem destaque —</option>
-              {destinos.filter(d => d.categoria?.trim()).map((d, i) => (
-                <option key={i} value={d.categoria}>{d.icone} {d.categoria}</option>
-              ))}
-            </select>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="border border-warning/30 rounded-lg p-3 space-y-2 bg-warning/10">
-              <p className="text-[11px] font-bold text-warning uppercase tracking-wide">Highlight 1 (gold)</p>
-              <input type="text" value={hl1Titulo} onChange={e => setHl1Titulo(e.target.value)} placeholder="Título (ex: 🚌 SMTUC à porta)"
-                className="w-full px-3 py-1.5 rounded border border-line text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300" />
-              <input type="text" value={hl1Desc} onChange={e => setHl1Desc(e.target.value)} placeholder="Descrição"
-                className="w-full px-3 py-1.5 rounded border border-line text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300" />
-              <input type="text" value={hl1Badge} onChange={e => setHl1Badge(e.target.value)} placeholder="Badge curto (ex: 5)"
-                className="w-full px-3 py-1.5 rounded border border-line text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300" />
-              <input type="text" value={hl1Sub} onChange={e => setHl1Sub(e.target.value)} placeholder="Sub-texto"
-                className="w-full px-3 py-1.5 rounded border border-line text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300" />
-            </div>
-            <div className="border border-danger/30 rounded-lg p-3 space-y-2 bg-danger/10">
-              <p className="text-[11px] font-bold text-danger uppercase tracking-wide">Highlight 2 (red)</p>
-              <input type="text" value={hl2Titulo} onChange={e => setHl2Titulo(e.target.value)} placeholder="Título (ex: 🛡️ GNR em frente)"
-                className="w-full px-3 py-1.5 rounded border border-line text-xs focus:outline-none focus:ring-2 focus:ring-red-300" />
-              <input type="text" value={hl2Desc} onChange={e => setHl2Desc(e.target.value)} placeholder="Descrição"
-                className="w-full px-3 py-1.5 rounded border border-line text-xs focus:outline-none focus:ring-2 focus:ring-red-300" />
-              <input type="text" value={hl2Sub} onChange={e => setHl2Sub(e.target.value)} placeholder="Sub-texto"
-                className="w-full px-3 py-1.5 rounded border border-line text-xs focus:outline-none focus:ring-2 focus:ring-red-300" />
-            </div>
-          </div>
-        </div>
-      </details>
-
-      {/* Resultados */}
-      {resultado?.resultados?.length > 0 && (
-        <div className="rounded-xl border border-line overflow-hidden bg-surface-raised">
-          <div className="px-4 py-2.5 border-b border-line bg-surface flex items-center justify-between">
-            <span className="text-xs font-semibold text-ink">Resultados — carro e a pé</span>
-            <span className="text-[10px] text-ink-muted">
-              {resultado.atualizado_em ? new Date(resultado.atualizado_em).toLocaleString('pt-PT') : ''}
-            </span>
-          </div>
-          <table className="w-full text-sm">
-            <thead className="text-[11px] text-ink-muted uppercase tracking-wide">
-              <tr className="border-b border-line">
-                <th className="text-left px-4 py-2">Ponto</th>
-                <th className="text-left px-4 py-2">Endereço</th>
-                <th className="text-right px-4 py-2">Carro</th>
-                <th className="text-right px-4 py-2">A pé</th>
-              </tr>
-            </thead>
-            <tbody>
-              {resultado.resultados.map((r, i) => {
-                const carro = r.carro || (r.distancia_texto ? { distancia_texto: r.distancia_texto, duracao_texto: r.duracao_texto, status: r.status } : null)
-                const pe = r.pe || null
-                const fmt = (m) => {
-                  if (!m) return '—'
-                  if (m.status && m.status !== 'OK') return m.status
-                  return `${m.distancia_texto || '—'} · ${m.duracao_texto || '—'}`
-                }
-                return (
-                  <tr key={i} className="border-b border-line">
-                    <td className="px-4 py-2"><span className="mr-1">{r.icone || '📍'}</span>{r.categoria || '—'}</td>
-                    <td className="px-4 py-2 text-ink-muted truncate max-w-xs">{r.endereco}</td>
-                    <td className="px-4 py-2 text-right num">{fmt(carro)}</td>
-                    <td className="px-4 py-2 text-right num text-success">{fmt(pe)}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
   )
 }

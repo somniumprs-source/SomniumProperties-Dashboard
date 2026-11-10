@@ -24,7 +24,7 @@ import {
 } from "../_shared/crud.ts";
 import { getVisitasEnriquecidas, syncDataVisitaDerivada } from "../_shared/queries.ts";
 import {
-  docEmbedeLocalizacao, generateCompiledReport,
+  generateCompiledReport,
 } from "../_shared/pdfImovelDocs.ts";
 import { persistDocumento, listDocumentos, urlAssinadaDocumento, apagarDocumentosDoImovel, apagarFotosDoImovel } from "../_shared/documentLifecycle.ts";
 import { generateImovelPDF } from "../_shared/pdfReport.ts";
@@ -545,39 +545,6 @@ async function disparoVendaFracaoAutomatico(fracaoId: string): Promise<void> {
   } catch (e) { console.error("[venda-auto]", (e as Error).message); }
 }
 
-// Regenera a imagem do estudo de localizacao se estiver desactualizada
-// (gerada antes da ultima recolha de distancias, ou legacy sem marca de
-// geracao). Preserva highlights/destaque/modo guardados. Nunca lanca: em
-// erro devolve o imovel original (o relatorio usa a imagem em cache).
-// So corre quando ha GOOGLE_MAPS_API_KEY + Supabase Storage. Port de
-// routes.js 475-501.
-async function refreshEstudoLocalizacaoSeNecessario(imovel: any): Promise<any> {
-  try {
-    if (!imovel?.localizacao_imagem) return imovel;
-    if (!Deno.env.get("GOOGLE_MAPS_API_KEY") || !supabase) return imovel;
-    const p = imovel.pois_distancias || {};
-    const genMs = p.imagem_gerada_em ? new Date(p.imagem_gerada_em).getTime() : 0;
-    const poisMs = imovel.pois_atualizado_em ? new Date(imovel.pois_atualizado_em).getTime() : 0;
-    // Desactualizada: sem marca (legacy) ou dados de POIs mudaram >1s depois da imagem.
-    const stale = !genMs || (poisMs - genMs > 1000);
-    if (!stale) return imovel;
-    await runEstudoLocalizacao({
-      pool,
-      supabaseStorage: supabase,
-      imovelId: imovel.id,
-      destinos: undefined, // usa os guardados em pois_distancias
-      mode: p.mode || "driving",
-      highlights: Array.isArray(p.highlights) ? p.highlights : [],
-      destaque: p.destaque || null,
-      origem: p.origem || imovel.morada || null,
-    });
-    const fresco = await Imoveis.getById(imovel.id);
-    return fresco || imovel;
-  } catch (e) {
-    console.error(`[estudo-refresh imovel=${imovel?.id}] falhou, usa imagem em cache:`, (e as Error).message);
-    return imovel;
-  }
-}
 
 // ── Auth: crm tem verify_jwt=false no gateway (para o fallback ?token= dos PDFs),
 // por isso a validacao e em codigo: exige Bearer OU ?token=. _health isento.
@@ -1201,9 +1168,7 @@ app.get("/imoveis/:id/documento/:tipo", async (c: any) => {
       analise = a;
     } catch { /* ignore */ }
 
-    // Regenerar a imagem do estudo se desactualizada (so docs que a embutem).
-    let im = imovel;
-    if (docEmbedeLocalizacao(tipo)) im = await refreshEstudoLocalizacaoSeNecessario(imovel);
+    const im = imovel;
 
     // Servir PDF em cache APENAS se ainda reflecte os dados actuais. Regenera
     // quando o imovel ou a analise mudaram depois da ultima geracao.
@@ -1305,9 +1270,6 @@ app.get("/imoveis/:id/relatorio-investidor", async (c: any) => {
     const { rows: [analise] } = await pool.query(
       "SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1", [imovel.id],
     ).catch(() => ({ rows: [] }));
-
-    // Garante que o estudo de localizacao embutido reflecte os dados actuais.
-    imovel = await refreshEstudoLocalizacaoSeNecessario(imovel);
 
     const seccoes = (c.req.query("seccoes") || "investimento,comparaveis,caep,stress_tests").split(",").filter(Boolean);
     const nome = (imovel.nome || "imovel").replace(/[^a-zA-Z0-9À-ú ]/g, "").replace(/\s+/g, "_");
@@ -5846,103 +5808,7 @@ app.get("/backup/:id/download", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── Estudo de localizacao: POIs sugeridos — port de routes.js 3279-3292 ──
-const POIS_SUGERIDOS = [
-  { categoria: "Mercearia/Supermercado", icone: "🛒" },
-  { categoria: "Hospital", icone: "🏥" },
-  { categoria: "Farmácia", icone: "💊" },
-  { categoria: "Escola Básica", icone: "🏫" },
-  { categoria: "Estação de Comboios", icone: "🚆" },
-  { categoria: "Centro Comercial", icone: "🛍️" },
-  { categoria: "Restaurante", icone: "🍽️" },
-  { categoria: "Ginásio", icone: "🏋️" },
-  { categoria: "Acesso A1/A8", icone: "🛣️" },
-  { categoria: "Aeroporto", icone: "✈️" },
-];
 
-app.get("/imoveis/pois/sugeridos", (c: any) => c.json(POIS_SUGERIDOS));
-
-// ── Distancias: Distance Matrix API (Google Maps + UPDATE imoveis) — port de routes.js 3294-3374 ──
-app.post("/imoveis/:id/distancias", async (c: any) => {
-  try {
-    const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
-    if (!apiKey) return c.json({ error: "GOOGLE_MAPS_API_KEY não configurada" }, 500);
-
-    const { rows: [imovel] } = await pool.query("SELECT id, nome, morada, zona FROM imoveis WHERE id = $1", [c.req.param("id")]);
-    if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
-
-    const body = await c.req.json().catch(() => ({}));
-    const origem = (body?.origem || imovel.morada || imovel.zona || "").trim();
-    if (!origem) return c.json({ error: "Indica morada/origem do imóvel (ou preenche o campo morada)." }, 400);
-
-    const destinos = Array.isArray(body?.destinos) ? body.destinos.filter((d: any) => d?.endereco?.trim()) : [];
-    if (destinos.length === 0) return c.json({ error: "Lista de destinos vazia." }, 400);
-    if (destinos.length > 25) return c.json({ error: "Máximo 25 destinos por chamada (limite Distance Matrix)." }, 400);
-
-    const mode = body?.mode === "walking" ? "walking" : body?.mode === "bicycling" ? "bicycling" : body?.mode === "transit" ? "transit" : "driving";
-    const region = "pt";
-
-    async function matrixFor(modeX: string) {
-      const url = new URL("https://maps.googleapis.com/maps/api/distancematrix/json");
-      url.searchParams.set("origins", origem);
-      url.searchParams.set("destinations", destinos.map((d: any) => d.endereco).join("|"));
-      url.searchParams.set("mode", modeX);
-      url.searchParams.set("region", region);
-      url.searchParams.set("language", "pt");
-      url.searchParams.set("key", apiKey!);
-      const resp = await fetch(url.toString());
-      const j = await resp.json();
-      if (j.status !== "OK") {
-        const err: any = new Error(`Distance Matrix (${modeX}): ${j.status}${j.error_message ? " — " + j.error_message : ""}`);
-        err.detalhe = j.error_message || null;
-        throw err;
-      }
-      return j;
-    }
-
-    const [jCar, jWalk] = await Promise.all([matrixFor("driving"), matrixFor("walking")]);
-    const carEls = jCar.rows?.[0]?.elements || [];
-    const walkEls = jWalk.rows?.[0]?.elements || [];
-    const pick = (el: any) => ({
-      distancia_metros: el?.status === "OK" ? el.distance?.value ?? null : null,
-      distancia_texto: el?.status === "OK" ? el.distance?.text ?? null : null,
-      duracao_segundos: el?.status === "OK" ? el.duration?.value ?? null : null,
-      duracao_texto: el?.status === "OK" ? el.duration?.text ?? null : null,
-      status: el?.status || "UNKNOWN",
-    });
-
-    const resultados = destinos.map((d: any, i: number) => {
-      const carro = pick(carEls[i]);
-      const pe = pick(walkEls[i]);
-      return {
-        categoria: d.categoria || null,
-        icone: d.icone || null,
-        endereco: d.endereco,
-        carro,
-        pe,
-        ...carro,
-      };
-    });
-
-    const payload = {
-      origem,
-      mode,
-      origem_resolvida: jCar.origin_addresses?.[0] || jWalk.origin_addresses?.[0] || null,
-      atualizado_em: new Date().toISOString(),
-      resultados,
-    };
-
-    await pool.query(
-      `UPDATE imoveis SET pois_distancias = $1::jsonb, pois_atualizado_em = NOW(), morada = COALESCE(NULLIF($2,''), morada), updated_at = NOW()::text WHERE id = $3`,
-      [JSON.stringify(payload), origem, imovel.id],
-    );
-
-    return c.json(payload);
-  } catch (e) {
-    console.error("[distancias]", e);
-    return c.json({ error: (e as Error).message }, 500);
-  }
-});
 
 // ── Análise IA da localização (pontos de interesse + pontos fortes/fracos) — gémeo em routes.js ──
 app.get("/imoveis/:id/analise-localizacao-ia", async (c: any) => {
@@ -5974,7 +5840,8 @@ app.post("/imoveis/:id/analise-localizacao-ia/estudo", async (c: any) => {
     if (!supabase) return c.json({ error: "Supabase Storage não configurado" }, 500);
     const id = c.req.param("id");
     const dados = await lerAnaliseLocalizacao(pool, id);
-    return c.json(await gerarEstudoComAprovados({ pool, supabaseStorage: supabase, imovelId: id, dados, runEstudoLocalizacao }));
+    const body = await c.req.json().catch(() => ({}));
+    return c.json(await gerarEstudoComAprovados({ pool, supabaseStorage: supabase, imovelId: id, dados, runEstudoLocalizacao, highlights: Array.isArray(body?.highlights) ? body.highlights : undefined, destaque: body?.destaque }));
   } catch (e) { console.error("[analise-localizacao-ia/estudo]", e); return c.json({ error: (e as Error).message }, 400); }
 });
 app.post("/imoveis/:id/analise-localizacao-ia/aplicar", async (c: any) => {
@@ -5982,40 +5849,7 @@ app.post("/imoveis/:id/analise-localizacao-ia/aplicar", async (c: any) => {
   catch (e) { return c.json({ error: (e as Error).message }, 400); }
 });
 
-// ── Estudo de localizacao auto — port de routes.js 3377-3395 ──
-app.post("/imoveis/:id/estudo-localizacao", async (c: any) => {
-  try {
-    if (!supabase) return c.json({ error: "Supabase Storage não configurado" }, 500);
-    const reqBody = await c.req.json().catch(() => ({}));
-    const r = await runEstudoLocalizacao({
-      pool,
-      supabaseStorage: supabase,
-      imovelId: c.req.param("id"),
-      destinos: reqBody?.destinos,
-      mode: reqBody?.mode || "driving",
-      highlights: Array.isArray(reqBody?.highlights) ? reqBody.highlights : [],
-      destaque: reqBody?.destaque || null,
-      origem: reqBody?.origem || null,
-    });
-    return c.json(r);
-  } catch (e) {
-    console.error("[estudo-localizacao]", e);
-    return c.json({ error: (e as Error).message }, 500);
-  }
-});
 
-// ── GET distancias gravadas — port de routes.js 3397-3407 ──
-app.get("/imoveis/:id/distancias", async (c: any) => {
-  try {
-    const { rows: [imovel] } = await pool.query("SELECT pois_distancias, pois_atualizado_em, morada FROM imoveis WHERE id = $1", [c.req.param("id")]);
-    if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
-    return c.json({
-      morada: imovel.morada || null,
-      atualizado_em: imovel.pois_atualizado_em,
-      payload: imovel.pois_distancias || null,
-    });
-  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
-});
 
 // "relatorios-semanais", "relatorios-documentos" e "reunioes-documentos" são
 // conteúdo interno de administração (resumos de reuniões, relatórios da

@@ -1,7 +1,8 @@
 // @ts-nocheck
 /**
- * Mapa do Estudo de Localização sem Google (gratuito): mosaicos do
- * OpenStreetMap, rotas reais do OSRM (FOSSGIS) e marcadores Somnium,
+ * Mapa do Estudo de Localização sem Google (gratuito): imagem de satélite
+ * OrtoSat 2023 da DGT (dados abertos; mosaicos do OpenStreetMap se a DGT
+ * falhar), rotas reais do OSRM (FOSSGIS) e marcadores Somnium,
  * devolvido como fragmento SVG para o composeEstudoSvg (mesma caixa de 1100×640).
  * Usado quando o estudo é gerado a partir dos pontos de interesse aprovados
  * na Análise IA da localização. Importado pela Edge Function e pelo Express.
@@ -9,6 +10,18 @@
 
 const UA = { 'User-Agent': 'SomniumCRM/1.0 (estudo-localizacao)' }
 const TILE = 256
+export const DGT_SATELITE = { url: 'https://ortos.dgterritorio.gov.pt/wms/ortosat2023', camada: 'ortoSat2023-CorVerdadeira' }
+const MERC = 20037508.342789244
+
+// Satélite DGT para o retângulo em píxeis (zoom z) — um único GetMap WMS em EPSG:3857.
+async function sateliteDGT({ ox, oy, w, h, z }) {
+  const res = (2 * MERC) / (TILE * 2 ** z)
+  const bbox = [ox * res - MERC, MERC - (oy + h) * res, (ox + w) * res - MERC, MERC - oy * res].map((v) => v.toFixed(2)).join(',')
+  const url = `${DGT_SATELITE.url}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${DGT_SATELITE.camada}&STYLES=&CRS=EPSG:3857&BBOX=${bbox}&WIDTH=${w * 2}&HEIGHT=${h * 2}&FORMAT=image/jpeg`
+  const r = await comPrazo(url, 40000)
+  if (!r.ok || !(r.headers.get('content-type') || '').startsWith('image/')) return null
+  return `<image x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none" href="data:image/jpeg;base64,${base64(await r.arrayBuffer())}"/>`
+}
 
 const px = (lat, lng, z) => {
   const n = TILE * 2 ** z
@@ -68,17 +81,20 @@ export async function mapaOSMSvg({ centro, destinos = [], w = 1100, h = 640 }) {
   const ox = cx - w / 2, oy = cy - h / 2
   const local = (lat, lng) => { const p = px(lat, lng, z); return { x: p.x - ox, y: p.y - oy } }
 
-  // Mosaicos
+  // Fundo: satélite DGT; se falhar, mosaicos de ruas do OpenStreetMap.
+  const satelite = await sateliteDGT({ ox, oy, w, h, z }).catch(() => null)
   const tiles = []
-  for (let tx = Math.floor(ox / TILE); tx <= Math.floor((ox + w) / TILE); tx++) {
-    for (let ty = Math.floor(oy / TILE); ty <= Math.floor((oy + h) / TILE); ty++) tiles.push({ tx, ty })
+  if (!satelite) {
+    for (let tx = Math.floor(ox / TILE); tx <= Math.floor((ox + w) / TILE); tx++) {
+      for (let ty = Math.floor(oy / TILE); ty <= Math.floor((oy + h) / TILE); ty++) tiles.push({ tx, ty })
+    }
   }
   const imgs = await emLotes(tiles, 4, async ({ tx, ty }) => {
     const r = await comPrazo(`https://tile.openstreetmap.org/${z}/${tx}/${ty}.png`)
     if (!r.ok || !(r.headers.get('content-type') || '').startsWith('image/')) return null
     return base64(await r.arrayBuffer())
   })
-  const tilesSvg = tiles.map(({ tx, ty }, i) => imgs[i]
+  const tilesSvg = satelite || tiles.map(({ tx, ty }, i) => imgs[i]
     ? `<image x="${(tx * TILE - ox).toFixed(1)}" y="${(ty * TILE - oy).toFixed(1)}" width="${TILE + 0.5}" height="${TILE + 0.5}" href="data:image/png;base64,${imgs[i]}"/>`
     : '').join('')
 
@@ -94,7 +110,7 @@ export async function mapaOSMSvg({ centro, destinos = [], w = 1100, h = 640 }) {
   const marcadores = destinos.map((d, i) => {
     const p = local(d.lat, d.lng)
     return `<g transform="translate(${p.x.toFixed(1)},${p.y.toFixed(1)})">
-      <circle r="13" fill="#111111" stroke="#FFFFFF" stroke-width="2.5"/>
+      <circle r="14" fill="#111111" stroke="#FFFFFF" stroke-width="3"/>
       <text y="4.5" font-size="13" font-weight="800" fill="#FFFFFF" text-anchor="middle">${i + 1}</text></g>`
   }).join('')
   const c = local(centro.lat, centro.lng)
@@ -108,8 +124,8 @@ export async function mapaOSMSvg({ centro, destinos = [], w = 1100, h = 640 }) {
       <rect x="0" y="0" width="${w}" height="${h}" fill="#EEEDE8"/>
       ${tilesSvg}${rotasSvg}${marcadores}${imovel}
     </g>
-    <rect x="${w - 232}" y="${h - 24}" width="226" height="18" rx="3" fill="#000000" opacity="0.5"/>
-    <text x="${w - 14}" y="${h - 10}" font-size="10" fill="#FFFFFF" text-anchor="end" font-weight="600">${esc('Mapa: © contribuidores do OpenStreetMap')}</text>`
+    <rect x="${w - 312}" y="${h - 24}" width="306" height="18" rx="3" fill="#000000" opacity="0.55"/>
+    <text x="${w - 14}" y="${h - 10}" font-size="10" fill="#FFFFFF" text-anchor="end" font-weight="600">${esc(satelite ? 'Imagem: DGT, OrtoSat 2023 · Dados: © OpenStreetMap' : 'Mapa: © contribuidores do OpenStreetMap')}</text>`
 }
 
 // ── Estudo a partir dos pontos de interesse aprovados ────────────
@@ -132,12 +148,12 @@ export function resultadosDosAprovados(dados) {
     .sort((a, b) => a.distancia_metros - b.distancia_metros)
 }
 
-export async function gerarEstudoComAprovados({ pool, supabaseStorage, imovelId, dados, runEstudoLocalizacao }) {
+export async function gerarEstudoComAprovados({ pool, supabaseStorage, imovelId, dados, runEstudoLocalizacao, highlights, destaque }) {
   const resultados = resultadosDosAprovados(dados)
   if (!resultados.length) throw new Error('Aprova pelo menos um ponto de interesse para gerar o estudo')
   const centro = { lat: dados.origem.lat, lng: dados.origem.lng }
   // Os 9 mais próximos têm número no mapa, pela mesma ordem da legenda do estudo.
   const destinos = resultados.slice(0, 9).map((r) => ({ lat: r.lat, lng: r.lng, perfil: (r.pe?.distancia_metros ?? Infinity) <= 1500 ? 'pe' : 'carro' }))
   const mapaSvg = await mapaOSMSvg({ centro, destinos })
-  return runEstudoLocalizacao({ pool, supabaseStorage, imovelId, resultadosProntos: resultados, mapaSvgPronto: mapaSvg, origem: dados.origem.texto || null })
+  return runEstudoLocalizacao({ pool, supabaseStorage, imovelId, resultadosProntos: resultados, mapaSvgPronto: mapaSvg, origem: dados.origem.texto || null, highlights, destaque })
 }
