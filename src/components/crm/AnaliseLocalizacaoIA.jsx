@@ -198,6 +198,20 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onEstudo
     setGerandoEstudo(false)
   }
 
+  // Sem destaques guardados, propõe o transporte público à porta (como o «SMTUC à porta» da Lages).
+  useEffect(() => {
+    const tp = dados?.transporte_publico
+    if (!tp || pd.highlights?.length || hl[0].titulo || (tp.pe?.s ?? Infinity) > 600) return
+    const minutos = Math.max(1, Math.round(tp.pe.s / 60))
+    const metro = /metro/i.test(tp.categoria || '')
+    setHl(prev => [{
+      titulo: metro ? 'Metrobus à porta' : 'Autocarro à porta',
+      descricao: `Paragem ${tp.nome} a ${minutos} min a pé${tp.linhas ? `, com as linhas ${tp.linhas}` : ''}${tp.rede ? ` (${tp.rede})` : ''}`,
+      subtitulo: 'Sem necessidade de carro para o dia a dia',
+      badge: tp.linhas ? tp.linhas.split(/,\s*/).slice(0, 6).join(', ') : '',
+    }, prev[1]])
+  }, [dados?.transporte_publico])
+
   async function procurarManual() {
     if (!manualTexto.trim() || !dados?.origem) return
     setManualAProcurar(true)

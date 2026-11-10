@@ -55,8 +55,14 @@ async function emLotes(itens, n, fn) {
 async function rota(origem, destino, perfil) {
   const base = perfil === 'pe' ? 'https://routing.openstreetmap.de/routed-foot' : 'https://routing.openstreetmap.de/routed-car'
   const url = `${base}/route/v1/driving/${origem.lng},${origem.lat};${destino.lng},${destino.lat}?overview=simplified&geometries=geojson`
-  const j = await (await comPrazo(url)).json()
-  return j.code === 'Ok' ? j.routes?.[0]?.geometry?.coordinates || null : null
+  // FOSSGIS (perfil certo) e, se não responder, o servidor de demonstração do OSRM (só carro).
+  const alternativa = `https://router.project-osrm.org/route/v1/driving/${origem.lng},${origem.lat};${destino.lng},${destino.lat}?overview=simplified&geometries=geojson`
+  for (const [tentativa, u] of [url, url, alternativa].entries()) {
+    if (tentativa) await new Promise((r) => setTimeout(r, 1500))
+    const j = await comPrazo(u, 12000).then((r) => r.json()).catch(() => null)
+    if (j?.code === 'Ok') return j.routes?.[0]?.geometry?.coordinates || null
+  }
+  return null
 }
 
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -99,7 +105,7 @@ export async function mapaOSMSvg({ centro, destinos = [], w = 1100, h = 640 }) {
     : '').join('')
 
   // Rotas (por baixo dos marcadores)
-  const rotas = await emLotes(destinos, 3, (d) => rota(centro, d, d.perfil))
+  const rotas = await emLotes(destinos, 2, (d) => rota(centro, d, d.perfil))
   const rotasSvg = rotas.map((coords) => {
     if (!coords?.length) return ''
     const d = coords.map(([lng, lat], i) => { const p = local(lat, lng); return `${i ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}` }).join('')
@@ -107,16 +113,17 @@ export async function mapaOSMSvg({ centro, destinos = [], w = 1100, h = 640 }) {
             <path d="${d}" fill="none" stroke="#C9A84C" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`
   }).join('')
 
+  // Pinos em gota (como no estudo da Lages): a ponta assenta no local.
+  const pino = (x, y, cor, texto, corTexto, escala = 1) => `<g transform="translate(${x.toFixed(1)},${y.toFixed(1)}) scale(${escala})">
+      <ellipse cx="0" cy="0" rx="6" ry="2.5" fill="#000000" opacity="0.35"/>
+      <path d="M0,0 C-4,-9 -15,-17 -15,-28 A15,15 0 1 1 15,-28 C15,-17 4,-9 0,0 Z" fill="${cor}" stroke="#FFFFFF" stroke-width="2.5"/>
+      <text x="0" y="-23" font-size="14" font-weight="800" fill="${corTexto}" text-anchor="middle">${texto}</text></g>`
   const marcadores = destinos.map((d, i) => {
     const p = local(d.lat, d.lng)
-    return `<g transform="translate(${p.x.toFixed(1)},${p.y.toFixed(1)})">
-      <circle r="14" fill="#111111" stroke="#FFFFFF" stroke-width="3"/>
-      <text y="4.5" font-size="13" font-weight="800" fill="#FFFFFF" text-anchor="middle">${i + 1}</text></g>`
-  }).join('')
+    return d.destaque ? pino(p.x, p.y, '#C9A84C', '*', '#0d0d0d') : pino(p.x, p.y, '#111111', i + 1, '#FFFFFF')
+  }).reverse().join('') // o n.º 1 fica por cima
   const c = local(centro.lat, centro.lng)
-  const imovel = `<g transform="translate(${c.x.toFixed(1)},${c.y.toFixed(1)})">
-      <circle r="18" fill="#C9A84C" stroke="#FFFFFF" stroke-width="3"/>
-      <text y="5.5" font-size="16" font-weight="800" fill="#0d0d0d" text-anchor="middle">I</text></g>`
+  const imovel = pino(c.x, c.y, '#C9A84C', 'I', '#0d0d0d', 1.25)
 
   return `
     <defs><clipPath id="mapClip"><rect x="0" y="0" width="${w}" height="${h}" rx="8"/></clipPath></defs>
@@ -145,7 +152,8 @@ export function resultadosDosAprovados(dados) {
       pe: p.pe ? { status: 'OK', distancia_metros: p.pe.m, distancia_texto: fmtDist(p.pe.m), duracao_segundos: p.pe.s, duracao_texto: fmtMin(p.pe.s) } : null,
       bicicleta: p.bicicleta ? { distancia_metros: p.bicicleta.m, duracao_segundos: p.bicicleta.s } : null,
     }))
-    .sort((a, b) => a.distancia_metros - b.distancia_metros)
+    // Mesma ordem do estudo (composeEstudoSvg): pela distância a pé.
+    .sort((a, b) => (a.pe?.distancia_metros ?? a.distancia_metros) - (b.pe?.distancia_metros ?? b.distancia_metros))
 }
 
 export async function gerarEstudoComAprovados({ pool, supabaseStorage, imovelId, dados, runEstudoLocalizacao, highlights, destaque }) {
@@ -153,7 +161,11 @@ export async function gerarEstudoComAprovados({ pool, supabaseStorage, imovelId,
   if (!resultados.length) throw new Error('Aprova pelo menos um ponto de interesse para gerar o estudo')
   const centro = { lat: dados.origem.lat, lng: dados.origem.lng }
   // Os 9 mais próximos têm número no mapa, pela mesma ordem da legenda do estudo.
-  const destinos = resultados.slice(0, 9).map((r) => ({ lat: r.lat, lng: r.lng, perfil: (r.pe?.distancia_metros ?? Infinity) <= 1500 ? 'pe' : 'carro' }))
+  const destaqueAtual = (destaque !== undefined ? destaque : null) || ''
+  const destinos = resultados.slice(0, 9).map((r) => ({
+    lat: r.lat, lng: r.lng, perfil: (r.pe?.distancia_metros ?? Infinity) <= 1500 ? 'pe' : 'carro',
+    destaque: !!destaqueAtual && r.categoria.toLowerCase().includes(destaqueAtual.toLowerCase()),
+  }))
   const mapaSvg = await mapaOSMSvg({ centro, destinos })
   return runEstudoLocalizacao({ pool, supabaseStorage, imovelId, resultadosProntos: resultados, mapaSvgPronto: mapaSvg, origem: dados.origem.texto || null, highlights, destaque })
 }

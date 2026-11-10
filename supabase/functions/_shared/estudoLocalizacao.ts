@@ -25,9 +25,9 @@ const ICONE_PARA_SECCAO = {
 // Cor por categoria — usado no badge antes do nome (substitui emojis
 // que o Resvg nao consegue rasterizar sem a fonte de emojis do sistema).
 const SECCOES = {
-  acessos:            { titulo: 'ACESSOS',              cor: '#3B6EA8' },
-  saude_universidade: { titulo: 'UNIV. & SAÚDE',        cor: '#2D6A2D' },
-  lazer:              { titulo: 'LAZER & CULTURA',      cor: '#8B5A2B' },
+  acessos:            { titulo: 'TRANSPORTES',          cor: '#3B6EA8' },
+  saude_universidade: { titulo: 'SAÚDE & EDUCAÇÃO',     cor: '#2D6A2D' },
+  lazer:              { titulo: 'LAZER & DESPORTO',      cor: '#8B5A2B' },
   comercio:           { titulo: 'COMÉRCIO & SERVIÇOS',  cor: '#C9A84C' },
 }
 
@@ -90,6 +90,7 @@ function fmtKm(metros) {
 function fmtMin(segundos) {
   if (segundos == null) return '—'
   const min = Math.round(segundos / 60)
+  if (min < 1) return '< 1 min'
   if (min >= 60) {
     const h = Math.floor(min / 60)
     const m = min % 60
@@ -135,15 +136,17 @@ export function composeEstudoSvg({
   mapaSvgPronto = null, // mapa já em SVG (OpenStreetMap, ver estudoMapaOSM.js)
 }) {
   const distrito = distritoDeRegiao(regiao)
-  const ok = resultados.filter(r => r.status === 'OK')
-                       .sort((a, b) => (a.distancia_metros ?? Infinity) - (b.distancia_metros ?? Infinity))
+  // Estudos com os três meios (OpenStreetMap, desde 11/2026) ordenam pela distância a pé.
+  const tresMeios = resultados.some(r => r.bicicleta)
+  const chave = r => (tresMeios ? r.pe?.distancia_metros : null) ?? r.distancia_metros ?? Infinity
+  const ok = resultados.filter(r => r.status === 'OK').sort((a, b) => chave(a) - chave(b))
 
   // top 7 para tabela
   const principais = ok.slice(0, 7)
   // agrupar todos por secção
   const grupos = { acessos: [], saude_universidade: [], lazer: [], comercio: [] }
   ok.forEach(r => { const sec = categorizar(r); if (grupos[sec]) grupos[sec].push(r) })
-  Object.values(grupos).forEach(arr => arr.sort((a, b) => a.distancia_metros - b.distancia_metros))
+  Object.values(grupos).forEach(arr => arr.sort((a, b) => chave(a) - chave(b)))
 
   // ----- Mapa satélite (Google Static Maps) -----
   const mapW = 1100, mapH = MAP_H
@@ -239,14 +242,19 @@ export function composeEstudoSvg({
   const tableY = HEADER_H + 33 + MAP_H + 20 + highlightsH + (highlightsH > 0 ? 30 : 0)
   const tabelaSvg = `
     <g transform="translate(50, ${tableY})">
-      <text x="0" y="0" font-size="18" fill="${T.body}" font-weight="700">Distâncias e tempos — carro e a pé</text>
+      <text x="0" y="0" font-size="18" fill="${T.body}" font-weight="700">${tresMeios ? 'Distâncias e tempos — a pé, bicicleta e carro' : 'Distâncias e tempos — carro e a pé'}</text>
       <line x1="0" y1="10" x2="540" y2="10" stroke="${T.gold}" stroke-width="2"/>
       <g transform="translate(0, 30)">
         <rect width="540" height="32" rx="4" fill="${T.body}"/>
         <text x="18" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1">#</text>
         <text x="44" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1">PONTO DE INTERESSE</text>
+        ${tresMeios ? `
+        <text x="300" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1" text-anchor="end">DIST.</text>
+        <text x="380" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1" text-anchor="end">A PÉ</text>
+        <text x="460" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1" text-anchor="end">BICICLETA</text>
+        <text x="530" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1" text-anchor="end">CARRO</text>` : `
         <text x="385" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1" text-anchor="end">CARRO</text>
-        <text x="535" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1" text-anchor="end">A PÉ</text>
+        <text x="535" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1" text-anchor="end">A PÉ</text>`}
       </g>
       <g transform="translate(0, 70)" font-size="13" fill="${T.body}">
         ${principais.map((r, i) => {
@@ -256,13 +264,22 @@ export function composeEstudoSvg({
           const pe = r.pe
           const peDentro5km = pe && pe.status === 'OK' && pe.distancia_metros != null && pe.distancia_metros <= 5000
           const peTxt = peDentro5km ? `${fmtKm(pe.distancia_metros)} · ${fmtMin(pe.duracao_segundos)}` : '—'
+          if (tresMeios) {
+            return `<rect x="0" y="${yRow}" width="540" height="34" fill="${fill}"/>
+                  <text x="18" y="${yRow + 22}" font-weight="700">${i + 1}</text>
+                  <text x="44" y="${yRow + 22}" font-weight="600">${escapeXml(ellide(r.categoria || r.endereco || '', 24))}</text>
+                  <text x="300" y="${yRow + 22}" text-anchor="end" font-weight="500" fill="${T.muted}">${escapeXml(fmtKm(pe?.distancia_metros ?? r.distancia_metros))}</text>
+                  <text x="380" y="${yRow + 22}" text-anchor="end" font-weight="700">${escapeXml(peDentro5km ? fmtMin(pe.duracao_segundos) : '—')}</text>
+                  <text x="460" y="${yRow + 22}" text-anchor="end" font-weight="600">${escapeXml(fmtMin(r.bicicleta?.duracao_segundos))}</text>
+                  <text x="530" y="${yRow + 22}" text-anchor="end" font-weight="600">${escapeXml(fmtMin(r.duracao_segundos))}</text>`
+          }
           return `<rect x="0" y="${yRow}" width="540" height="34" fill="${fill}"/>
                   <text x="18" y="${yRow + 22}" font-weight="700">${i + 1}</text>
                   <text x="44" y="${yRow + 22}" font-weight="600">${escapeXml((r.categoria || r.endereco || '').slice(0, 28))}</text>
                   <text x="385" y="${yRow + 22}" text-anchor="end" font-weight="700">${escapeXml(carroTxt)}</text>
                   <text x="535" y="${yRow + 22}" text-anchor="end" font-weight="600" fill="${T.muted}">${escapeXml(peTxt)}</text>`
         }).join('')}
-        <text x="0" y="${principais.length * 34 + 16}" font-size="10" fill="${T.muted}" font-style="italic">A pé indicado até 5 km de distância.</text>
+        <text x="0" y="${principais.length * 34 + 16}" font-size="10" fill="${T.muted}" font-style="italic">${tresMeios ? 'Distância pelo percurso a pé. A pé indicado até 5 km.' : 'A pé indicado até 5 km de distância.'}</text>
       </g>
     </g>`
 
@@ -293,7 +310,7 @@ export function composeEstudoSvg({
           const colVal = isDestaque ? T.goldDark : T.body
           const wTxt = isDestaque ? '700' : '500'
           const wVal = isDestaque ? '800' : '700'
-          const nome = ellide(r.categoria || '', NOME_MAX)
+          const nome = ellide(r.categoria || '', tresMeios ? 15 : NOME_MAX)
           // Valor compacto: prefere fmtMin (curto: "1h50") ao texto Google
           // ("1 hora 50 minutos") para evitar overflow no card.
           const distancia = r.distancia_texto || fmtKm(r.distancia_metros)
@@ -302,11 +319,20 @@ export function composeEstudoSvg({
           // Tempo a pé numa 2.ª linha — só até 5 km (acima não faz sentido).
           const pe = r.pe
           const peDentro5km = pe && pe.status === 'OK' && pe.distancia_metros != null && pe.distancia_metros <= 5000
-          const valorPe = peDentro5km ? `a pé ${fmtMin(pe.duracao_segundos)}` : ''
+          let valorPe = peDentro5km ? `a pé ${fmtMin(pe.duracao_segundos)}` : ''
+          let valorLinha1 = valor
+          if (tresMeios) {
+            // Perto: a pé em destaque; longe: carro. Os outros dois meios na 2.ª linha.
+            const longe = !peDentro5km || pe.distancia_metros > 2000
+            valorLinha1 = longe ? `${fmtKm(r.distancia_metros)} · carro ${fmtMin(r.duracao_segundos)}` : `${fmtKm(pe.distancia_metros)} · a pé ${fmtMin(pe.duracao_segundos)}`
+            valorPe = longe
+              ? [peDentro5km && `a pé ${fmtMin(pe.duracao_segundos)}`, r.bicicleta && `bicicleta ${fmtMin(r.bicicleta.duracao_segundos)}`].filter(Boolean).join(' · ')
+              : [r.bicicleta && `bicicleta ${fmtMin(r.bicicleta.duracao_segundos)}`, `carro ${fmtMin(r.duracao_segundos)}`].filter(Boolean).join(' · ')
+          }
           return `
             ${isDestaque ? `<polygon points="6,${y - 8} 10,${y - 5} 6,${y - 2}" fill="${T.gold}"/>` : ''}
             <text x="14" y="${y}" font-weight="${wTxt}" fill="${colTxt}">${escapeXml(nome)}</text>
-            <text x="${VALOR_X}" y="${y}" text-anchor="end" font-weight="${wVal}" fill="${colVal}">${escapeXml(valor)}</text>
+            <text x="${VALOR_X}" y="${y}" text-anchor="end" font-weight="${wVal}" fill="${colVal}">${escapeXml(valorLinha1)}</text>
             ${valorPe ? `<text x="${VALOR_X}" y="${y + 13}" text-anchor="end" font-size="10" font-weight="500" fill="${T.muted}">${escapeXml(valorPe)}</text>` : ''}`
         }).join('')
         return `<g transform="translate(${xCard}, ${yCard})">
@@ -382,7 +408,7 @@ export function composeEstudoSvg({
     <line x1="50" y1="0" x2="${W - 50}" y2="0" stroke="${T.gold}" stroke-width="1"/>
     <text x="50" y="32" font-size="10" fill="${T.muted}" font-weight="700" letter-spacing="2.5">SOMNIUM PROPERTIES</text>
     <text x="50" y="50" font-size="9" fill="${T.muted}">Estudo de localização · gerado para apresentação a investidor</text>
-    <text x="50" y="66" font-size="9" fill="${T.muted}" font-style="italic">Distâncias e tempos calculados em modo de condução.</text>
+    <text x="50" y="66" font-size="9" fill="${T.muted}" font-style="italic">${tresMeios ? 'Tempos a pé, de bicicleta e de carro por rotas reais (OSRM) · Imagem: DGT, OrtoSat 2023 · Dados: © contribuidores do OpenStreetMap' : 'Distâncias e tempos calculados em modo de condução.'}</text>
     <text x="${W - 50}" y="32" font-size="9" fill="${T.muted}" text-anchor="end">${escapeXml(distrito)} · Portugal</text>
     <text x="${W - 50}" y="50" font-size="9" fill="${T.muted}" font-style="italic" text-anchor="end">${escapeXml(imovelNome || '')}</text>
   </g>
