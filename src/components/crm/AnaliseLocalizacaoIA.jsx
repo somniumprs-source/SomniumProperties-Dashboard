@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Sparkles, Search, Check, X, MapPin, Footprints, Car, Bike, Bus, Star, Loader2, ChevronDown, ChevronRight, ThumbsUp, TrendingDown, ArrowDownToLine } from 'lucide-react'
+import { Sparkles, Search, Check, X, MapPin, Footprints, Car, Bike, Bus, Star, Loader2, ChevronDown, ChevronRight, ThumbsUp, TrendingDown } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { pesquisarPOIs } from '../../../supabase/functions/_shared/analiseLocalizacaoIA.js'
 
@@ -8,7 +8,7 @@ const GRUPOS = {
   transportes: 'Transportes', desporto: 'Desporto', lazer: 'Lazer e cultura', servicos: 'Serviços',
 }
 const FILTROS = [
-  { v: 'todos', l: 'Todos' }, { v: 'proposto', l: 'Por rever' }, { v: 'validado', l: 'Validados' }, { v: 'excluido', l: 'Excluídos' },
+  { v: 'todos', l: 'Todos' }, { v: 'proposto', l: 'Por aprovar' }, { v: 'validado', l: 'Aprovados' }, { v: 'excluido', l: 'Excluídos' },
 ]
 
 const fmtDist = m => m == null ? '—' : m < 1000 ? `${m} m` : `${(m / 1000).toFixed(1).replace('.', ',')} km`
@@ -22,7 +22,7 @@ const fmtData = iso => iso ? new Date(iso).toLocaleString('pt-PT', { day: '2-dig
 function BotoesDecisao({ estado, onChange }) {
   return (
     <div className="flex gap-1 shrink-0">
-      <button type="button" title="Validar" onClick={() => onChange(estado === 'validado' ? 'proposto' : 'validado')}
+      <button type="button" title="Aprovar" onClick={() => onChange(estado === 'validado' ? 'proposto' : 'validado')}
         className={`p-1.5 rounded-md border ${estado === 'validado' ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-line text-ink-muted hover:text-emerald-700 hover:border-emerald-400'}`}>
         <Check className="w-3.5 h-3.5" />
       </button>
@@ -57,7 +57,7 @@ function ItemAnalise({ item, campoExtra, labelExtra, onDecidir, onEditar }) {
   )
 }
 
-export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onUsarNoEstudo }) {
+export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onEstudoGerado }) {
   const base = `/api/crm/imoveis/${imovel.id}/analise-localizacao-ia`
   const [dados, setDados] = useState(null)
   const [emFila, setEmFila] = useState(false)
@@ -67,6 +67,7 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onUsarNo
   const [progresso, setProgresso] = useState(null)
   const [pedindo, setPedindo] = useState(false)
   const [aplicando, setAplicando] = useState(false)
+  const [gerandoEstudo, setGerandoEstudo] = useState(false)
   const [filtro, setFiltro] = useState('todos')
   const [abertos, setAbertos] = useState({})
   const [aberto, setAberto] = useState(true)
@@ -162,15 +163,18 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onUsarNo
     setAplicando(false)
   }
 
-  // O mais próximo validado de cada categoria, até 20, para o estudo em imagem.
-  function usarNoEstudo() {
-    const porCat = new Map()
-    for (const p of [...validados].sort((a, b) => a.linha_reta_m - b.linha_reta_m)) {
-      if (!porCat.has(p.categoria)) porCat.set(p.categoria, p)
-    }
-    const destinos = [...porCat.values()].slice(0, 20).map(p => ({ categoria: p.nome, icone: '📍', endereco: `${p.nome}, ${p.endereco}` }))
-    onUsarNoEstudo?.(destinos)
-    toast(`${destinos.length} destinos passados para o estudo de localização, mais abaixo`, 'success')
+  // Estudo de localização (imagem do dossier) só com os pontos aprovados, sem Google.
+  async function gerarEstudo() {
+    setGerandoEstudo(true)
+    try {
+      const r = await apiFetch(`${base}/estudo`, { method: 'POST' })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error)
+      onEstudoGerado?.(j.localizacao_imagem)
+      await onUpdate()
+      toast(`Estudo de localização gerado com ${validados.length} pontos aprovados`, 'success')
+    } catch (e) { toast('Erro: ' + e.message, 'error') }
+    setGerandoEstudo(false)
   }
 
   const pois = dados?.pois || []
@@ -198,7 +202,7 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onUsarNo
         className="w-full px-4 py-3 border-b border-line bg-gradient-to-r from-yellow-50 to-white flex items-center gap-2 text-left">
         <Sparkles className="w-4 h-4 text-brand-gold" />
         <span className="text-sm font-bold text-ink flex-1">Análise IA da localização</span>
-        {pois.length > 0 && <span className="text-[11px] text-ink-muted">{contagem.validado} validados · {contagem.proposto} por rever · {contagem.excluido} excluídos</span>}
+        {pois.length > 0 && <span className="text-[11px] text-ink-muted">{contagem.validado} aprovados · {contagem.proposto} por aprovar · {contagem.excluido} excluídos</span>}
         {aberto ? <ChevronDown className="w-4 h-4 text-ink-muted" /> : <ChevronRight className="w-4 h-4 text-ink-muted" />}
       </button>
 
@@ -207,7 +211,7 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onUsarNo
           {/* 1. Pesquisa */}
           <div className="space-y-2">
             <p className="text-xs text-ink-muted">
-              Procura no OpenStreetMap, gratuitamente, tudo o que existe à volta do imóvel (saúde, educação, comércio, restauração, transportes, desporto, lazer e serviços), com os tempos a pé e de carro. Depois valida ou exclui cada ponto e pede a análise dos pontos fortes e fracos.
+              Procura no OpenStreetMap, gratuitamente, tudo o que existe à volta do imóvel (saúde, educação, comércio, restauração, transportes, desporto, lazer e serviços), com os tempos a pé e de carro. Tudo fica por aprovar: escolhe os pontos que entram no estudo de localização e na análise dos pontos fortes e fracos.
             </p>
             <div className="flex flex-col sm:flex-row gap-2">
               <input value={origem} onChange={e => setOrigem(e.target.value)} placeholder="Morada do imóvel"
@@ -264,7 +268,7 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onUsarNo
                         <span className="text-[11px] text-ink-muted">({lista.length})</span>
                       </button>
                       <button type="button" onClick={() => decidirPois(lista.map(p => p.id), 'validado')}
-                        className="text-[11px] px-2 py-0.5 rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50">Validar todos</button>
+                        className="text-[11px] px-2 py-0.5 rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50">Aprovar todos</button>
                       <button type="button" onClick={() => decidirPois(lista.map(p => p.id), 'excluido')}
                         className="text-[11px] px-2 py-0.5 rounded border border-rose-300 text-rose-700 hover:bg-rose-50">Excluir todos</button>
                     </div>
@@ -301,16 +305,15 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onUsarNo
                 <button type="button" onClick={pedirAnalise} disabled={pedindo || emFila || validados.length === 0}
                   className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-brand-gold text-brand-dark text-sm font-semibold disabled:opacity-50">
                   {pedindo || emFila ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                  {emFila ? 'Análise em curso…' : analise ? `Refazer análise IA (${validados.length} validados)` : `Gerar análise IA (${validados.length} validados)`}
+                  {emFila ? 'Análise em curso…' : analise ? `Refazer análise IA (${validados.length} aprovados)` : `Gerar análise IA (${validados.length} aprovados)`}
                 </button>
-                {onUsarNoEstudo && validados.length > 0 && (
-                  <button type="button" onClick={usarNoEstudo}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-line text-sm text-ink hover:bg-surface">
-                    <ArrowDownToLine className="w-4 h-4" /> Usar validados no estudo de localização
-                  </button>
-                )}
+                <button type="button" onClick={gerarEstudo} disabled={gerandoEstudo || validados.length === 0}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-brand-dark text-white text-sm font-semibold disabled:opacity-50">
+                  {gerandoEstudo ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
+                  {gerandoEstudo ? 'A gerar o estudo…' : `Gerar estudo de localização com os aprovados (${validados.length})`}
+                </button>
               </div>
-              {validados.length === 0 && <p className="text-[11px] text-ink-muted">Valida pelo menos um ponto de interesse para pedir a análise.</p>}
+              {validados.length === 0 && <p className="text-[11px] text-ink-muted">Aprova pelo menos um ponto de interesse para gerar o estudo e a análise. No estudo, os 9 mais próximos ficam numerados no mapa.</p>}
               {emFila && <p className="text-[11px] text-ink-muted">A análise corre no Mac da equipa (plano Claude). Esta área atualiza sozinha quando estiver pronta.</p>}
               {erroFila && !emFila && <p className="text-[11px] text-rose-700">A última análise falhou: {erroFila}</p>}
             </div>
@@ -321,7 +324,7 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onUsarNo
             <div className="space-y-4 border-t border-line pt-4">
               <div>
                 <h4 className="text-sm font-bold text-ink">Pontos fortes e fracos da localização</h4>
-                <p className="text-[11px] text-ink-muted">Gerada em {fmtData(analise.gerado_em)}. Edita o texto se for preciso, valida ou exclui cada ponto e acrescenta os validados à ficha.</p>
+                <p className="text-[11px] text-ink-muted">Gerada em {fmtData(analise.gerado_em)}. Tudo por aprovar: edita o texto se for preciso, aprova ou exclui cada ponto e acrescenta os aprovados à ficha.</p>
               </div>
               {analise.resumo && <p className="text-sm text-ink bg-surface rounded-lg p-3 border border-line">{analise.resumo}</p>}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -346,7 +349,7 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onUsarNo
                 <button type="button" onClick={aplicar} disabled={aplicando || validadosAnalise === 0}
                   className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-brand-dark text-white text-sm font-semibold disabled:opacity-50">
                   {aplicando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  Acrescentar validados aos Pontos & Riscos ({validadosAnalise})
+                  Acrescentar aprovados aos Pontos & Riscos ({validadosAnalise})
                 </button>
                 {dados.aplicado_em && <span className="text-[11px] text-ink-muted">Última vez acrescentados em {fmtData(dados.aplicado_em)}</span>}
               </div>

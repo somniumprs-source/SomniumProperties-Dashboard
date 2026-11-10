@@ -39,6 +39,7 @@ import { analyzeReuniao, pedirAnaliseReuniao, aplicarAnaliseReuniao } from "../_
 import { estadoIA, emFilaIA, enfileirarIA, jsonDaResposta, pedidosIAPendentes, iniciarIA, concluirIA, falharIA } from "../_shared/filaIA.ts";
 import { isConfigured as firefliesConfigured, syncFireflies } from "../_shared/firefliesSync.ts";
 import { runEstudoLocalizacao } from "../_shared/estudoLocalizacao.ts";
+import { gerarEstudoComAprovados } from "../_shared/estudoMapaOSM.js";
 import { TIPO_FILA_LOCALIZACAO, lerAnaliseLocalizacao, guardarPesquisa, atualizarDecisoes, construirPedidoAnalise, marcarAnalisePedida, aplicarAnaliseLocalizacao, aplicarAFicha } from "../_shared/analiseLocalizacaoIA.js";
 import { streamToBuffer } from "../_shared/pdfkitGuard.ts";
 import PDFKitGuard from "../_shared/pdfkitGuard.ts";
@@ -5967,6 +5968,14 @@ app.post("/imoveis/:id/analise-localizacao-ia/analisar", async (c: any) => {
     await enfileirarIA(pool, { tipo: TIPO_FILA_LOCALIZACAO, ref_id: id, prompt, modelo: "opus", contexto: { total_validados } });
     return c.json({ dados: await marcarAnalisePedida(pool, id), em_fila: true });
   } catch (e) { return c.json({ error: (e as Error).message }, 400); }
+});
+app.post("/imoveis/:id/analise-localizacao-ia/estudo", async (c: any) => {
+  try {
+    if (!supabase) return c.json({ error: "Supabase Storage não configurado" }, 500);
+    const id = c.req.param("id");
+    const dados = await lerAnaliseLocalizacao(pool, id);
+    return c.json(await gerarEstudoComAprovados({ pool, supabaseStorage: supabase, imovelId: id, dados, runEstudoLocalizacao }));
+  } catch (e) { console.error("[analise-localizacao-ia/estudo]", e); return c.json({ error: (e as Error).message }, 400); }
 });
 app.post("/imoveis/:id/analise-localizacao-ia/aplicar", async (c: any) => {
   try { return c.json(await aplicarAFicha(pool, c.req.param("id"))); }

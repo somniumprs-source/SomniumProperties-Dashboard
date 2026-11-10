@@ -397,7 +397,7 @@ export async function atualizarDecisoes(pool, imovelId, { pois = {}, itens = {} 
 export async function construirPedidoAnalise(pool, imovelId) {
   const dados = await lerAnaliseLocalizacao(pool, imovelId)
   const validados = (dados?.pois || []).filter((p) => p.estado === 'validado')
-  if (validados.length === 0) throw new Error('Valida pelo menos um ponto de interesse antes de pedir a análise')
+  if (validados.length === 0) throw new Error('Aprova pelo menos um ponto de interesse antes de pedir a análise')
   const { rows: [im] } = await pool.query(
     `SELECT nome, tipologia, morada, zona, freguesia, concelho, modelo_negocio, area_bruta, area_util,
             numero_pisos_predio, tem_elevador, ano_construcao, pontos_fortes, pontos_fracos
@@ -405,7 +405,7 @@ export async function construirPedidoAnalise(pool, imovelId) {
 
   const porCategoria = CATEGORIAS.map((cat) => {
     const ps = validados.filter((p) => p.categoria === cat.id).sort((a, b) => a.linha_reta_m - b.linha_reta_m)
-    if (ps.length === 0) return `- ${GRUPOS[cat.grupo]} / ${cat.label}: nenhum validado num raio de ${fmtDist(cat.raio)}.`
+    if (ps.length === 0) return `- ${GRUPOS[cat.grupo]} / ${cat.label}: nenhum aprovado num raio de ${fmtDist(cat.raio)}.`
     return `- ${GRUPOS[cat.grupo]} / ${cat.label}:\n` + ps.map((p) =>
       `    • ${p.nome}${p.endereco ? ` (${p.endereco})` : ''}${p.linhas ? ` [linhas ${p.linhas}${p.rede ? `, ${p.rede}` : ''}]` : ''}: ${fmtDist(p.linha_reta_m)} em linha reta; ${Object.entries(MEIOS).map(([k, l]) => `${l} ${p[k]?.estimado ? '≈' : ''}${fmtMin(p[k]?.s)} (${fmtDist(p[k]?.m)})`).join('; ')}${p.rating ? `; ${String(p.rating).replace('.', ',')}★ (${p.avaliacoes || 0} avaliações)` : ''}`).join('\n')
   }).join('\n')
@@ -423,7 +423,7 @@ export async function construirPedidoAnalise(pool, imovelId) {
 FICHA DO IMÓVEL
 ${ficha}
 
-PONTOS DE INTERESSE VALIDADOS PELA EQUIPA (distâncias e tempos a pé, de bicicleta e de carro a partir do imóvel; «≈» = estimativa)
+PONTOS DE INTERESSE APROVADOS PELA EQUIPA (distâncias e tempos a pé, de bicicleta e de carro a partir do imóvel; «≈» = estimativa)
 ${porCategoria}
 ${dados.transporte_publico ? `\nTRANSPORTE PÚBLICO: a paragem mais próxima é ${dados.transporte_publico.nome} (${dados.transporte_publico.categoria}${dados.transporte_publico.linhas ? `, linhas ${dados.transporte_publico.linhas}` : ''}), a ${fmtMin(dados.transporte_publico.pe?.s)} a pé.` : ''}
 
@@ -485,7 +485,7 @@ export async function aplicarAFicha(pool, imovelId) {
   const val = (l) => (dados.analise[l] || []).filter((p) => p.estado === 'validado').map((p) => p.texto)
   const fortes = juntar(im?.pontos_fortes, val('pontos_fortes'))
   const fracos = juntar(im?.pontos_fracos, val('pontos_fracos'))
-  if (fortes.n + fracos.n === 0) throw new Error('Não há pontos validados novos para acrescentar à ficha')
+  if (fortes.n + fracos.n === 0) throw new Error('Não há pontos aprovados novos para acrescentar à ficha')
   await pool.query('UPDATE imoveis SET pontos_fortes = $2, pontos_fracos = $3 WHERE id = $1', [imovelId, fortes.texto, fracos.texto])
   dados.aplicado_em = new Date().toISOString()
   await gravar(pool, imovelId, dados)

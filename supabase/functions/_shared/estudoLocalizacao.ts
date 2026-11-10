@@ -232,6 +232,7 @@ export function composeEstudoSvg({
   destaque = null,    // categoria/string a marcar como ★ gold
   modo = 'driving',
   mapaPngBase64 = null, // imagem satélite Google Static Maps
+  mapaSvgPronto = null, // mapa já em SVG (OpenStreetMap, ver estudoMapaOSM.js)
 }) {
   const distrito = distritoDeRegiao(regiao)
   const ok = resultados.filter(r => r.status === 'OK')
@@ -250,7 +251,7 @@ export function composeEstudoSvg({
   // Lista de pinos para legenda (1..9, matching markers no PNG)
   const pinsLegenda = ok.slice(0, 9)
 
-  const mapaSvg = mapaPngBase64
+  const mapaSvg = mapaSvgPronto ? mapaSvgPronto : mapaPngBase64
     ? `
       <defs>
         <clipPath id="mapClip"><rect x="0" y="0" width="${mapW}" height="${mapH}" rx="8"/></clipPath>
@@ -491,7 +492,10 @@ export function composeEstudoSvg({
 
 // ── Pipeline completo ────────────────────────────────────────────
 
-export async function runEstudoLocalizacao({ pool, supabaseStorage, imovelId, destinos, mode = 'driving', highlights = [], destaque = null, origem: origemOverride = null }) {
+// resultadosProntos + mapaSvgPronto: estudo gratuito a partir dos pontos de interesse
+// aprovados na Análise IA da localização (sem Google; não mexe na morada da ficha).
+export async function runEstudoLocalizacao({ pool, supabaseStorage, imovelId, destinos, mode = 'driving', highlights = [], destaque = null, origem: origemOverride = null, resultadosProntos = null, mapaSvgPronto = null }) {
+  if (resultadosProntos) return gerarEstudoPronto({ pool, supabaseStorage, imovelId, resultados: resultadosProntos, mapaSvg: mapaSvgPronto, origem: origemOverride })
   const apiKey = Deno.env.get('GOOGLE_MAPS_API_KEY')
   if (!apiKey) throw new Error('GOOGLE_MAPS_API_KEY não configurada no servidor')
   if (!supabaseStorage) throw new Error('Supabase Storage não configurado (SUPABASE_SERVICE_KEY ausente)')
@@ -603,4 +607,31 @@ export async function runEstudoLocalizacao({ pool, supabaseStorage, imovelId, de
     localizacao_imagem: publicUrl,
     resultados,
   }
+}
+
+async function gerarEstudoPronto({ pool, supabaseStorage, imovelId, resultados, mapaSvg, origem }) {
+  if (!supabaseStorage) throw new Error('Supabase Storage não configurado (SUPABASE_SERVICE_KEY ausente)')
+  const { rows: [imovel] } = await pool.query('SELECT id, nome, morada, freguesia, regiao, pois_distancias FROM imoveis WHERE id = $1', [imovelId])
+  if (!imovel) throw new Error('Imóvel não encontrado')
+  const highlights = imovel.pois_distancias?.highlights || []
+  const destaque = imovel.pois_distancias?.destaque || null
+  const regiao = imovel.regiao || 'Coimbra'
+  const prefixoRegional = regiao === 'AMP' ? 'Porto/Gaia' : 'Coimbra'
+  const morada = origem || imovel.morada || ''
+  const svg = composeEstudoSvg({
+    imovelNome: imovel.nome, morada,
+    freguesia: imovel.freguesia ? `${prefixoRegional} · ${imovel.freguesia}` : null,
+    regiao, resultados, highlights, destaque, modo: 'driving', mapaSvgPronto: mapaSvg,
+  })
+  const pngBuffer = await rasterizarSvgParaPng(svg)
+  const storagePath = `imoveis/${imovelId}/localizacao_estudo_auto_${Date.now()}.png`
+  const { error: upErr } = await supabaseStorage.storage.from('Imoveis').upload(storagePath, pngBuffer, { contentType: 'image/png', upsert: true })
+  if (upErr) throw new Error(`Supabase Storage: ${upErr.message}`)
+  const publicUrl = supabaseStorage.storage.from('Imoveis').getPublicUrl(storagePath).data.publicUrl
+  const agora = new Date().toISOString()
+  const payload = { origem: morada, mode: 'driving', fonte: 'OpenStreetMap', atualizado_em: agora, imagem_gerada_em: agora, resultados, highlights, destaque, freguesia: imovel.freguesia || null }
+  await pool.query(
+    `UPDATE imoveis SET pois_distancias = $1::jsonb, pois_atualizado_em = $4, localizacao_imagem = $2, updated_at = NOW()::text WHERE id = $3`,
+    [JSON.stringify(payload), publicUrl, imovelId, agora])
+  return { ok: true, imovel_id: imovelId, imovel_nome: imovel.nome, localizacao_imagem: publicUrl, resultados }
 }

@@ -310,7 +310,7 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
   return (
     <div className="space-y-5">
       <AnaliseLocalizacaoIA imovel={imovel} toast={toast} onUpdate={onUpdate}
-        onUsarNoEstudo={novos => { setDestinos(novos); if (imovel.morada) setOrigem(imovel.morada) }} />
+        onEstudoGerado={url => url && setImagemUrl(`${url}?t=${Date.now()}`)} />
 
       {/* Imagem do estudo no topo */}
       {imagemUrl ? (

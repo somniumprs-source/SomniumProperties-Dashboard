@@ -48,6 +48,7 @@ import { listarFaturas, exportarZip, marcarEnviadas } from './contabilidade.js'
 import { scrapePhotosFromLink } from './linkScraper.js'
 import { generateDocx, getAvailableTypes } from './docxGenerator.js'
 import { runEstudoLocalizacao } from '../lib/estudoLocalizacao.js'
+import { gerarEstudoComAprovados } from '../../supabase/functions/_shared/estudoMapaOSM.js'
 import { TIPO_FILA_LOCALIZACAO, lerAnaliseLocalizacao, guardarPesquisa, atualizarDecisoes, construirPedidoAnalise, marcarAnalisePedida, aplicarAnaliseLocalizacao, aplicarAFicha } from '../../supabase/functions/_shared/analiseLocalizacaoIA.js'
 import { FASES_FIX_FLIP, FASES_POR_CATEGORIA, getTemplateFases, getFaseConfigGlobal } from './fasesFixFlip.js'
 import { avaliarEntrada, painelRequisitos, carregarDadosEntrada } from './dealBreakers.js'
@@ -5132,6 +5133,12 @@ router.post('/imoveis/:id/analise-localizacao-ia/analisar', async (req, res) => 
     await enfileirarIA(pool, { tipo: TIPO_FILA_LOCALIZACAO, ref_id: req.params.id, prompt, modelo: 'opus', contexto: { total_validados } })
     res.json({ dados: await marcarAnalisePedida(pool, req.params.id), em_fila: true })
   } catch (e) { res.status(400).json({ error: e.message }) }
+})
+router.post('/imoveis/:id/analise-localizacao-ia/estudo', async (req, res) => {
+  try {
+    const dados = await lerAnaliseLocalizacao(pool, req.params.id)
+    res.json(await gerarEstudoComAprovados({ pool, supabaseStorage, imovelId: req.params.id, dados, runEstudoLocalizacao }))
+  } catch (e) { console.error('[analise-localizacao-ia/estudo]', e); res.status(400).json({ error: e.message }) }
 })
 router.post('/imoveis/:id/analise-localizacao-ia/aplicar', async (req, res) => {
   try { res.json(await aplicarAFicha(pool, req.params.id)) }
