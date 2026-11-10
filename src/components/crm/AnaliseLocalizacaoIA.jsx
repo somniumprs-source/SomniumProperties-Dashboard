@@ -1,0 +1,332 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Sparkles, Search, Check, X, MapPin, Footprints, Car, Star, Loader2, ChevronDown, ChevronRight, ThumbsUp, TrendingDown, ArrowDownToLine } from 'lucide-react'
+import { apiFetch } from '../../lib/api.js'
+
+const GRUPOS = {
+  saude: 'Saúde', educacao: 'Educação', comercio: 'Comércio', restauracao: 'Restauração',
+  transportes: 'Transportes', desporto: 'Desporto', lazer: 'Lazer e cultura', servicos: 'Serviços',
+}
+const FILTROS = [
+  { v: 'todos', l: 'Todos' }, { v: 'proposto', l: 'Por rever' }, { v: 'validado', l: 'Validados' }, { v: 'excluido', l: 'Excluídos' },
+]
+
+const fmtDist = m => m == null ? '—' : m < 1000 ? `${m} m` : `${(m / 1000).toFixed(1).replace('.', ',')} km`
+const fmtMin = s => {
+  if (s == null) return '—'
+  const m = Math.max(1, Math.round(s / 60))
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`
+}
+const fmtData = iso => iso ? new Date(iso).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
+
+function BotoesDecisao({ estado, onChange }) {
+  return (
+    <div className="flex gap-1 shrink-0">
+      <button type="button" title="Validar" onClick={() => onChange(estado === 'validado' ? 'proposto' : 'validado')}
+        className={`p-1.5 rounded-md border ${estado === 'validado' ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-line text-ink-muted hover:text-emerald-700 hover:border-emerald-400'}`}>
+        <Check className="w-3.5 h-3.5" />
+      </button>
+      <button type="button" title="Excluir" onClick={() => onChange(estado === 'excluido' ? 'proposto' : 'excluido')}
+        className={`p-1.5 rounded-md border ${estado === 'excluido' ? 'bg-rose-600 border-rose-600 text-white' : 'border-line text-ink-muted hover:text-rose-700 hover:border-rose-400'}`}>
+        <X className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  )
+}
+
+function ItemAnalise({ item, campoExtra, labelExtra, onDecidir, onEditar }) {
+  const [texto, setTexto] = useState(item.texto)
+  const [extra, setExtra] = useState(item[campoExtra] || '')
+  useEffect(() => { setTexto(item.texto); setExtra(item[campoExtra] || '') }, [item.texto, item[campoExtra]])
+  const tom = item.estado === 'validado' ? 'border-emerald-300 bg-emerald-50/40' : item.estado === 'excluido' ? 'border-line opacity-50' : 'border-line'
+  return (
+    <div className={`rounded-lg border p-3 ${tom}`}>
+      <div className="flex gap-2 items-start">
+        <div className="flex-1 space-y-1.5">
+          <textarea value={texto} rows={2} onChange={e => setTexto(e.target.value)}
+            onBlur={() => texto !== item.texto && onEditar({ texto })}
+            className="w-full text-sm font-medium text-ink bg-transparent resize-none focus:outline-none focus:ring-1 focus:ring-yellow-300 rounded" />
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">{labelExtra}</div>
+          <textarea value={extra} rows={2} onChange={e => setExtra(e.target.value)}
+            onBlur={() => extra !== (item[campoExtra] || '') && onEditar({ [campoExtra]: extra })}
+            className="w-full text-xs text-ink-muted bg-transparent resize-none focus:outline-none focus:ring-1 focus:ring-yellow-300 rounded" />
+        </div>
+        <BotoesDecisao estado={item.estado} onChange={onDecidir} />
+      </div>
+    </div>
+  )
+}
+
+export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onUsarNoEstudo }) {
+  const base = `/api/crm/imoveis/${imovel.id}/analise-localizacao-ia`
+  const [dados, setDados] = useState(null)
+  const [emFila, setEmFila] = useState(false)
+  const [erroFila, setErroFila] = useState(null)
+  const [origem, setOrigem] = useState(imovel.morada || '')
+  const [pesquisando, setPesquisando] = useState(false)
+  const [pedindo, setPedindo] = useState(false)
+  const [aplicando, setAplicando] = useState(false)
+  const [filtro, setFiltro] = useState('todos')
+  const [abertos, setAbertos] = useState({})
+  const [aberto, setAberto] = useState(true)
+  const poll = useRef(null)
+
+  async function carregar() {
+    try {
+      const r = await apiFetch(base)
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error)
+      setDados(j.dados)
+      setEmFila(j.em_fila)
+      setErroFila(j.fila?.estado === 'erro' ? j.fila.erro : null)
+      if (j.dados?.origem?.texto) setOrigem(o => o || j.dados.origem.texto)
+    } catch (e) { toast('Erro: ' + e.message, 'error') }
+  }
+  useEffect(() => { carregar() }, [imovel.id])
+
+  // Enquanto a análise estiver na fila (corre no Mac), atualiza a cada 15 s.
+  useEffect(() => {
+    clearInterval(poll.current)
+    if (emFila) poll.current = setInterval(carregar, 15000)
+    return () => clearInterval(poll.current)
+  }, [emFila])
+
+  async function pesquisar() {
+    setPesquisando(true)
+    try {
+      const r = await apiFetch(`${base}/pesquisar`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ origem: origem.trim() && origem.trim() !== (imovel.morada || '').trim() ? origem.trim() : null }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error)
+      setDados(j.dados)
+      toast(`${j.dados.pois.length} pontos de interesse encontrados`, 'success')
+    } catch (e) { toast('Erro: ' + e.message, 'error') }
+    setPesquisando(false)
+  }
+
+  async function guardar(patch, otimista) {
+    if (otimista) setDados(otimista)
+    try {
+      const r = await apiFetch(base, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error)
+      setDados(j.dados)
+    } catch (e) { toast('Erro: ' + e.message, 'error'); carregar() }
+  }
+
+  function decidirPois(ids, estado) {
+    const set = new Set(ids)
+    const novo = { ...dados, pois: dados.pois.map(p => set.has(p.id) ? { ...p, estado } : p) }
+    guardar({ pois: Object.fromEntries(ids.map(id => [id, estado])) }, novo)
+  }
+
+  function mudarItem(lista, id, patch) {
+    const novo = { ...dados, analise: { ...dados.analise, [lista]: dados.analise[lista].map(it => it.id === id ? { ...it, ...patch } : it) } }
+    guardar({ itens: { [id]: patch } }, novo)
+  }
+
+  async function pedirAnalise() {
+    setPedindo(true)
+    try {
+      const r = await apiFetch(`${base}/analisar`, { method: 'POST' })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error)
+      setDados(j.dados); setEmFila(true); setErroFila(null)
+      toast('Análise pedida. Corre no Mac da equipa e aparece aqui quando estiver pronta.', 'success')
+    } catch (e) { toast('Erro: ' + e.message, 'error') }
+    setPedindo(false)
+  }
+
+  async function aplicar() {
+    setAplicando(true)
+    try {
+      const r = await apiFetch(`${base}/aplicar`, { method: 'POST' })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error)
+      await onUpdate()
+      await carregar()
+      toast(`Acrescentados ${j.acrescentados_fortes} pontos fortes e ${j.acrescentados_fracos} pontos fracos à aba Pontos & Riscos`, 'success')
+    } catch (e) { toast('Erro: ' + e.message, 'error') }
+    setAplicando(false)
+  }
+
+  // O mais próximo validado de cada categoria, até 20, para o estudo em imagem.
+  function usarNoEstudo() {
+    const porCat = new Map()
+    for (const p of [...validados].sort((a, b) => a.linha_reta_m - b.linha_reta_m)) {
+      if (!porCat.has(p.categoria)) porCat.set(p.categoria, p)
+    }
+    const destinos = [...porCat.values()].slice(0, 20).map(p => ({ categoria: p.nome, icone: '📍', endereco: `${p.nome}, ${p.endereco}` }))
+    onUsarNoEstudo?.(destinos)
+    toast(`${destinos.length} destinos passados para o estudo de localização, mais abaixo`, 'success')
+  }
+
+  const pois = dados?.pois || []
+  const validados = pois.filter(p => p.estado === 'validado')
+  const contagem = useMemo(() => ({
+    proposto: pois.filter(p => p.estado === 'proposto').length,
+    validado: validados.length,
+    excluido: pois.filter(p => p.estado === 'excluido').length,
+  }), [dados])
+  const porGrupo = useMemo(() => {
+    const g = {}
+    for (const p of pois) {
+      if (filtro !== 'todos' && p.estado !== filtro) continue
+      ;(g[p.grupo] ||= []).push(p)
+    }
+    for (const k in g) g[k].sort((a, b) => a.categoria_label.localeCompare(b.categoria_label) || a.linha_reta_m - b.linha_reta_m)
+    return g
+  }, [dados, filtro])
+  const analise = dados?.analise
+  const validadosAnalise = analise ? [...analise.pontos_fortes, ...analise.pontos_fracos].filter(i => i.estado === 'validado').length : 0
+
+  return (
+    <div className="rounded-xl border border-line bg-surface-raised overflow-hidden">
+      <button type="button" onClick={() => setAberto(a => !a)}
+        className="w-full px-4 py-3 border-b border-line bg-gradient-to-r from-yellow-50 to-white flex items-center gap-2 text-left">
+        <Sparkles className="w-4 h-4 text-brand-gold" />
+        <span className="text-sm font-bold text-ink flex-1">Análise IA da localização</span>
+        {pois.length > 0 && <span className="text-[11px] text-ink-muted">{contagem.validado} validados · {contagem.proposto} por rever · {contagem.excluido} excluídos</span>}
+        {aberto ? <ChevronDown className="w-4 h-4 text-ink-muted" /> : <ChevronRight className="w-4 h-4 text-ink-muted" />}
+      </button>
+
+      {aberto && (
+        <div className="p-4 space-y-5">
+          {/* 1. Pesquisa */}
+          <div className="space-y-2">
+            <p className="text-xs text-ink-muted">
+              Procura tudo o que existe à volta do imóvel (saúde, educação, comércio, restauração, transportes, desporto, lazer e serviços), com os tempos a pé e de carro. Depois valida ou exclui cada ponto e pede a análise dos pontos fortes e fracos.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input value={origem} onChange={e => setOrigem(e.target.value)} placeholder="Morada do imóvel"
+                className="flex-1 px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+              <button type="button" onClick={pesquisar} disabled={pesquisando}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-brand-dark text-white text-sm font-semibold disabled:opacity-50">
+                {pesquisando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                {pesquisando ? 'A procurar…' : pois.length ? 'Procurar de novo' : 'Procurar pontos de interesse'}
+              </button>
+            </div>
+            {dados?.origem && (
+              <p className="text-[11px] text-ink-muted flex items-center gap-1">
+                <MapPin className="w-3 h-3" /> Ponto de partida: {dados.origem.resolvida || dados.origem.texto} ({dados.origem.lat?.toFixed(5)}, {dados.origem.lng?.toFixed(5)}) · pesquisa de {fmtData(dados.pesquisado_em)}
+              </p>
+            )}
+            {dados?.avisos?.length > 0 && (
+              <p className="text-[11px] text-amber-700">Avisos da pesquisa: {dados.avisos.join(' · ')}</p>
+            )}
+          </div>
+
+          {/* 2. Pontos de interesse */}
+          {pois.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {FILTROS.map(f => (
+                  <button key={f.v} type="button" onClick={() => setFiltro(f.v)}
+                    className={`text-[11px] px-2.5 py-1 rounded-full border ${filtro === f.v ? 'bg-brand-dark text-white border-brand-dark' : 'border-line text-ink-muted hover:bg-surface'}`}>
+                    {f.l}{f.v !== 'todos' ? ` (${contagem[f.v]})` : ` (${pois.length})`}
+                  </button>
+                ))}
+              </div>
+              {Object.keys(GRUPOS).filter(g => porGrupo[g]?.length).map(g => {
+                const lista = porGrupo[g]
+                const fechado = abertos[g] === false
+                return (
+                  <div key={g} className="rounded-lg border border-line">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-surface border-b border-line">
+                      <button type="button" onClick={() => setAbertos(a => ({ ...a, [g]: fechado }))} className="flex items-center gap-1.5 flex-1 text-left">
+                        {fechado ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        <span className="text-xs font-bold text-ink">{GRUPOS[g]}</span>
+                        <span className="text-[11px] text-ink-muted">({lista.length})</span>
+                      </button>
+                      <button type="button" onClick={() => decidirPois(lista.map(p => p.id), 'validado')}
+                        className="text-[11px] px-2 py-0.5 rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50">Validar todos</button>
+                      <button type="button" onClick={() => decidirPois(lista.map(p => p.id), 'excluido')}
+                        className="text-[11px] px-2 py-0.5 rounded border border-rose-300 text-rose-700 hover:bg-rose-50">Excluir todos</button>
+                    </div>
+                    {!fechado && (
+                      <ul className="divide-y divide-line">
+                        {lista.map(p => (
+                          <li key={p.id} className={`flex items-center gap-3 px-3 py-2 ${p.estado === 'excluido' ? 'opacity-45' : ''} ${p.estado === 'validado' ? 'bg-emerald-50/40' : ''}`}>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm text-ink truncate">
+                                <span className="font-medium">{p.nome}</span>
+                                <span className="text-[11px] text-ink-muted ml-2">{p.categoria_label}</span>
+                              </div>
+                              <div className="text-[11px] text-ink-muted truncate">{p.endereco}</div>
+                            </div>
+                            <div className="hidden sm:flex items-center gap-3 text-[11px] text-ink-muted shrink-0">
+                              <span title="Linha reta">{fmtDist(p.linha_reta_m)}</span>
+                              <span className="inline-flex items-center gap-0.5" title="A pé"><Footprints className="w-3 h-3" />{fmtMin(p.pe?.s)}</span>
+                              <span className="inline-flex items-center gap-0.5" title="De carro"><Car className="w-3 h-3" />{fmtMin(p.carro?.s)}</span>
+                              {p.rating != null && <span className="inline-flex items-center gap-0.5" title={`${p.avaliacoes || 0} avaliações`}><Star className="w-3 h-3" />{String(p.rating).replace('.', ',')}</span>}
+                            </div>
+                            <BotoesDecisao estado={p.estado} onChange={e => decidirPois([p.id], e)} />
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )
+              })}
+
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={pedirAnalise} disabled={pedindo || emFila || validados.length === 0}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-brand-gold text-brand-dark text-sm font-semibold disabled:opacity-50">
+                  {pedindo || emFila ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  {emFila ? 'Análise em curso…' : analise ? `Refazer análise IA (${validados.length} validados)` : `Gerar análise IA (${validados.length} validados)`}
+                </button>
+                {onUsarNoEstudo && validados.length > 0 && (
+                  <button type="button" onClick={usarNoEstudo}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-line text-sm text-ink hover:bg-surface">
+                    <ArrowDownToLine className="w-4 h-4" /> Usar validados no estudo de localização
+                  </button>
+                )}
+              </div>
+              {validados.length === 0 && <p className="text-[11px] text-ink-muted">Valida pelo menos um ponto de interesse para pedir a análise.</p>}
+              {emFila && <p className="text-[11px] text-ink-muted">A análise corre no Mac da equipa (plano Claude). Esta área atualiza sozinha quando estiver pronta.</p>}
+              {erroFila && !emFila && <p className="text-[11px] text-rose-700">A última análise falhou: {erroFila}</p>}
+            </div>
+          )}
+
+          {/* 3. Análise */}
+          {analise && (
+            <div className="space-y-4 border-t border-line pt-4">
+              <div>
+                <h4 className="text-sm font-bold text-ink">Pontos fortes e fracos da localização</h4>
+                <p className="text-[11px] text-ink-muted">Gerada em {fmtData(analise.gerado_em)}. Edita o texto se for preciso, valida ou exclui cada ponto e acrescenta os validados à ficha.</p>
+              </div>
+              {analise.resumo && <p className="text-sm text-ink bg-surface rounded-lg p-3 border border-line">{analise.resumo}</p>}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-ink"><ThumbsUp className="w-3.5 h-3.5 text-emerald-600" />Pontos fortes</div>
+                  {analise.pontos_fortes.map(it => (
+                    <ItemAnalise key={it.id} item={it} campoExtra="uso_venda" labelExtra="Como se usa na venda"
+                      onDecidir={estado => mudarItem('pontos_fortes', it.id, { estado })}
+                      onEditar={patch => mudarItem('pontos_fortes', it.id, patch)} />
+                  ))}
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-ink"><TrendingDown className="w-3.5 h-3.5 text-amber-600" />Pontos fracos</div>
+                  {analise.pontos_fracos.map(it => (
+                    <ItemAnalise key={it.id} item={it} campoExtra="resposta" labelExtra="Como se responde"
+                      onDecidir={estado => mudarItem('pontos_fracos', it.id, { estado })}
+                      onEditar={patch => mudarItem('pontos_fracos', it.id, patch)} />
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <button type="button" onClick={aplicar} disabled={aplicando || validadosAnalise === 0}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-brand-dark text-white text-sm font-semibold disabled:opacity-50">
+                  {aplicando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  Acrescentar validados aos Pontos & Riscos ({validadosAnalise})
+                </button>
+                {dados.aplicado_em && <span className="text-[11px] text-ink-muted">Última vez acrescentados em {fmtData(dados.aplicado_em)}</span>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}

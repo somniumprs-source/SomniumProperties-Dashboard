@@ -39,6 +39,7 @@ import { analyzeReuniao, pedirAnaliseReuniao, aplicarAnaliseReuniao } from "../_
 import { estadoIA, emFilaIA, enfileirarIA, jsonDaResposta, pedidosIAPendentes, iniciarIA, concluirIA, falharIA } from "../_shared/filaIA.ts";
 import { isConfigured as firefliesConfigured, syncFireflies } from "../_shared/firefliesSync.ts";
 import { runEstudoLocalizacao } from "../_shared/estudoLocalizacao.ts";
+import { TIPO_FILA_LOCALIZACAO, lerAnaliseLocalizacao, correrPesquisa, atualizarDecisoes, construirPedidoAnalise, marcarAnalisePedida, aplicarAnaliseLocalizacao, aplicarAFicha } from "../_shared/analiseLocalizacaoIA.js";
 import { streamToBuffer } from "../_shared/pdfkitGuard.ts";
 import PDFKitGuard from "../_shared/pdfkitGuard.ts";
 import * as PDFLib from "pdf-lib";
@@ -2934,6 +2935,7 @@ const APLICADORES_IA: Record<string, (pedido: any, texto: string) => Promise<any
   resumo_projeto: aplicarResumoProjeto,
   documento_imovel: aplicarDocumentoImovel,
   fatura_despesa: aplicarFaturaDespesa,
+  [TIPO_FILA_LOCALIZACAO]: (p: any, t: string) => aplicarAnaliseLocalizacao(pool, p, t),
   predicoes_portfolio: async (pedido: any, texto: string) => ({
     predicoes: jsonDaResposta(texto).predicoes || [],
     gerado_em: new Date().toISOString(),
@@ -5939,6 +5941,38 @@ app.post("/imoveis/:id/distancias", async (c: any) => {
     console.error("[distancias]", e);
     return c.json({ error: (e as Error).message }, 500);
   }
+});
+
+// ── Análise IA da localização (pontos de interesse + pontos fortes/fracos) — gémeo em routes.js ──
+app.get("/imoveis/:id/analise-localizacao-ia", async (c: any) => {
+  try {
+    const id = c.req.param("id");
+    const dados = await lerAnaliseLocalizacao(pool, id);
+    const fila = await estadoIA(pool, TIPO_FILA_LOCALIZACAO, id);
+    return c.json({ dados, fila: fila ? { estado: fila.estado, erro: fila.erro, updated_at: fila.updated_at } : null, em_fila: emFilaIA(fila) });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+app.post("/imoveis/:id/analise-localizacao-ia/pesquisar", async (c: any) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    return c.json({ dados: await correrPesquisa(pool, { imovelId: c.req.param("id"), apiKey: Deno.env.get("GOOGLE_MAPS_API_KEY"), origemTexto: body?.origem || null }) });
+  } catch (e) { console.error("[analise-localizacao-ia]", e); return c.json({ error: (e as Error).message }, 500); }
+});
+app.patch("/imoveis/:id/analise-localizacao-ia", async (c: any) => {
+  try { return c.json({ dados: await atualizarDecisoes(pool, c.req.param("id"), await c.req.json().catch(() => ({}))) }); }
+  catch (e) { return c.json({ error: (e as Error).message }, 400); }
+});
+app.post("/imoveis/:id/analise-localizacao-ia/analisar", async (c: any) => {
+  try {
+    const id = c.req.param("id");
+    const { prompt, total_validados } = await construirPedidoAnalise(pool, id);
+    await enfileirarIA(pool, { tipo: TIPO_FILA_LOCALIZACAO, ref_id: id, prompt, modelo: "opus", contexto: { total_validados } });
+    return c.json({ dados: await marcarAnalisePedida(pool, id), em_fila: true });
+  } catch (e) { return c.json({ error: (e as Error).message }, 400); }
+});
+app.post("/imoveis/:id/analise-localizacao-ia/aplicar", async (c: any) => {
+  try { return c.json(await aplicarAFicha(pool, c.req.param("id"))); }
+  catch (e) { return c.json({ error: (e as Error).message }, 400); }
 });
 
 // ── Estudo de localizacao auto — port de routes.js 3377-3395 ──

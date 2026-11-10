@@ -26,6 +26,7 @@ import { DealBreakersPanel } from './DealBreakersPanel.jsx'
 import { TransicaoFaseModal } from './TransicaoFaseModal.jsx'
 import { ProximosPassos } from './ProximosPassos.jsx'
 import { ContactoPessoa } from './ContactoPessoa.jsx'
+import AnaliseLocalizacaoIA from './AnaliseLocalizacaoIA.jsx'
 import { BaseLegalRGPD } from './BaseLegalRGPD.jsx'
 import { ESTADOS_IMOVEIS, eFaseFollowUp, limpaEstado } from '../../constants/pipelineImoveis.js'
 
@@ -308,6 +309,9 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
 
   return (
     <div className="space-y-5">
+      <AnaliseLocalizacaoIA imovel={imovel} toast={toast} onUpdate={onUpdate}
+        onUsarNoEstudo={novos => { setDestinos(novos); if (imovel.morada) setOrigem(imovel.morada) }} />
+
       {/* Imagem do estudo no topo */}
       {imagemUrl ? (
         <div className="rounded-xl border border-line bg-surface-raised overflow-hidden">

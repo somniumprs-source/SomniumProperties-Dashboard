@@ -48,6 +48,7 @@ import { listarFaturas, exportarZip, marcarEnviadas } from './contabilidade.js'
 import { scrapePhotosFromLink } from './linkScraper.js'
 import { generateDocx, getAvailableTypes } from './docxGenerator.js'
 import { runEstudoLocalizacao } from '../lib/estudoLocalizacao.js'
+import { TIPO_FILA_LOCALIZACAO, lerAnaliseLocalizacao, correrPesquisa, atualizarDecisoes, construirPedidoAnalise, marcarAnalisePedida, aplicarAnaliseLocalizacao, aplicarAFicha } from '../../supabase/functions/_shared/analiseLocalizacaoIA.js'
 import { FASES_FIX_FLIP, FASES_POR_CATEGORIA, getTemplateFases, getFaseConfigGlobal } from './fasesFixFlip.js'
 import { avaliarEntrada, painelRequisitos, carregarDadosEntrada } from './dealBreakers.js'
 import { carregarChecklist, gravarManual } from './checklistImovel.js'
@@ -1974,6 +1975,7 @@ const APLICADORES_IA = {
   resumo_projeto: aplicarResumoProjeto,
   documento_imovel: (p, t) => aplicarDocumentoImovel(p, t),
   fatura_despesa: (p, t) => aplicarFaturaDespesa(p, t),
+  [TIPO_FILA_LOCALIZACAO]: (p, t) => aplicarAnaliseLocalizacao(pool, p, t),
   predicoes_portfolio: async (pedido, texto) => ({
     predicoes: jsonDaResposta(texto).predicoes || [],
     gerado_em: new Date().toISOString(),
@@ -5108,6 +5110,35 @@ router.post('/imoveis/:id/distancias', async (req, res) => {
 })
 
 // ── Estudo de localização auto: Distance Matrix + composição SVG + upload Supabase + UPDATE localizacao_imagem
+// ── Análise IA da localização (pontos de interesse + pontos fortes/fracos) ──
+router.get('/imoveis/:id/analise-localizacao-ia', async (req, res) => {
+  try {
+    const dados = await lerAnaliseLocalizacao(pool, req.params.id)
+    const fila = await estadoIA(pool, TIPO_FILA_LOCALIZACAO, req.params.id)
+    res.json({ dados, fila: fila ? { estado: fila.estado, erro: fila.erro, updated_at: fila.updated_at } : null, em_fila: emFilaIA(fila) })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+router.post('/imoveis/:id/analise-localizacao-ia/pesquisar', async (req, res) => {
+  try {
+    res.json({ dados: await correrPesquisa(pool, { imovelId: req.params.id, apiKey: process.env.GOOGLE_MAPS_API_KEY, origemTexto: req.body?.origem || null }) })
+  } catch (e) { console.error('[analise-localizacao-ia]', e); res.status(500).json({ error: e.message }) }
+})
+router.patch('/imoveis/:id/analise-localizacao-ia', async (req, res) => {
+  try { res.json({ dados: await atualizarDecisoes(pool, req.params.id, req.body || {}) }) }
+  catch (e) { res.status(400).json({ error: e.message }) }
+})
+router.post('/imoveis/:id/analise-localizacao-ia/analisar', async (req, res) => {
+  try {
+    const { prompt, total_validados } = await construirPedidoAnalise(pool, req.params.id)
+    await enfileirarIA(pool, { tipo: TIPO_FILA_LOCALIZACAO, ref_id: req.params.id, prompt, modelo: 'opus', contexto: { total_validados } })
+    res.json({ dados: await marcarAnalisePedida(pool, req.params.id), em_fila: true })
+  } catch (e) { res.status(400).json({ error: e.message }) }
+})
+router.post('/imoveis/:id/analise-localizacao-ia/aplicar', async (req, res) => {
+  try { res.json(await aplicarAFicha(pool, req.params.id)) }
+  catch (e) { res.status(400).json({ error: e.message }) }
+})
+
 router.post('/imoveis/:id/estudo-localizacao', async (req, res) => {
   try {
     if (!supabaseStorage) return res.status(500).json({ error: 'Supabase Storage não configurado' })
