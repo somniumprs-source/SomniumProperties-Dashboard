@@ -554,7 +554,7 @@ export function Metricas() {
               <SectionTitle>Wholesaling — Margem</SectionTitle>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 <M label="Margem bruta média" value={wh.margemBrutaMedia != null ? PCT(wh.margemBrutaMedia) : '—'} sub="Faturação estimada / Ask Price" />
-                <M label="Margem líquida média (após IRC)" value={wh.margemLiquidaMedia != null ? PCT(wh.margemLiquidaMedia) : '—'} sub="~21% IRC" />
+                <M label="Margem líquida média (após IRC)" value={wh.margemLiquidaMedia != null ? PCT(wh.margemLiquidaMedia) : '—'} sub="IRC 19% + derrama 1,25%" />
                 <M label="Desvio orçamento obra médio" value={wh.desvioObraMedia != null ? `${wh.desvioObraMedia > 0 ? '+' : ''}${PCT(wh.desvioObraMedia)}` : '—'}
                   sub="Custo real vs estimado" warn={wh.desvioObraMedia > 20} />
               </div>

@@ -326,7 +326,7 @@ export async function initSchema() {
 
         -- F. Fiscalidade
         regime_fiscal TEXT DEFAULT 'Empresa',
-        derrama_perc REAL DEFAULT 1.5,
+        derrama_perc REAL DEFAULT 1.25,
         perc_dividendos REAL DEFAULT 100,
         ano_aquisicao INTEGER,
         englobamento BOOLEAN DEFAULT false,

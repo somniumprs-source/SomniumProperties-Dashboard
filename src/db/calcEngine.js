@@ -28,9 +28,9 @@ const IMT_HS = [
   { limite: Infinity, taxa: 0.075, parcela: 0 }, // taxa flat
 ]
 
-const IRC_TAXA_1 = 0.15  // primeiros 50.000€
-const IRC_TAXA_2 = 0.19  // acima de 50.000€
-const IRC_LIMIAR = 50000
+// IRC: 19% a direito sobre todo o lucro (decisão Somnium, nov 2026 — não se usa a taxa reduzida PME)
+const IRC_TAXA = 0.19
+const DERRAMA_MUNICIPAL_PERC = 1.25
 const DIVIDENDOS_RETENCAO = 0.28
 
 const IRS_ESCALOES = [
@@ -108,9 +108,7 @@ function calcPenalizacaoAmortizacao(valorFinanciado, tipoTaxa) {
 
 export function calcIRC(lucroTributavel, derramaPerc) {
   if (lucroTributavel <= 0) return { irc: 0, derrama: 0, total: 0 }
-  const base1 = Math.min(lucroTributavel, IRC_LIMIAR)
-  const base2 = Math.max(lucroTributavel - IRC_LIMIAR, 0)
-  const irc = round2(base1 * IRC_TAXA_1 + base2 * IRC_TAXA_2)
+  const irc = round2(lucroTributavel * IRC_TAXA)
   const derrama = round2(lucroTributavel * (derramaPerc / 100))
   return { irc, derrama, total: round2(irc + derrama) }
 }
@@ -226,7 +224,7 @@ export function calcAnalise(inputs) {
 
   const regimeFiscal = i.regime_fiscal || 'Empresa'
   const categoriaIrs = i.categoria_irs || 'G'  // só relevante quando regime=Particular
-  const derramaPerc = isNaN(parseFloat(i.derrama_perc)) ? 1.5 : parseFloat(i.derrama_perc)
+  const derramaPerc = isNaN(parseFloat(i.derrama_perc)) ? DERRAMA_MUNICIPAL_PERC : parseFloat(i.derrama_perc)
   const percDividendos = isNaN(parseFloat(i.perc_dividendos)) ? 100 : parseFloat(i.perc_dividendos)
   const anoAquisicao = parseInt(i.ano_aquisicao) || new Date().getFullYear()
   const englobamento = !!i.englobamento
@@ -450,7 +448,7 @@ export function calcCAEP(inputs, caepConfig) {
 
     let impostos = 0
     if (tipo === 'empresa') {
-      const { total } = calcIRC(Math.max(lucro, 0), 1.5)
+      const { total } = calcIRC(Math.max(lucro, 0), DERRAMA_MUNICIPAL_PERC)
       impostos = total
     } else {
       impostos = round2(Math.max(lucro, 0) * DIVIDENDOS_RETENCAO)
@@ -524,7 +522,7 @@ export function quickCheck({ compra, obra, vvr, meses }) {
   const lucroBruto = round2(v - custoTotal)
 
   // IRC PME
-  const { total: irc } = calcIRC(Math.max(lucroBruto, 0), 1.5)
+  const { total: irc } = calcIRC(Math.max(lucroBruto, 0), DERRAMA_MUNICIPAL_PERC)
   const lucroLiquido = round2(lucroBruto - irc)
 
   // Alinhado com calcAnalise: capital_necessario exclui comissão (paga pelo sinal do comprador).

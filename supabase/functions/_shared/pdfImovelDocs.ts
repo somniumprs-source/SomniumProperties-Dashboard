@@ -2114,7 +2114,7 @@ function renderAnaliseRentabilidade(b, im, a, opts = {}) {
     { label: 'Regime', value: regimeFiscalLabel },
   ]
   if (a.regime_fiscal === 'Empresa' && m.fiscal && m.fiscal.total_irc != null) {
-    fiscRows.push({ label: 'IRC Base (15% até 50k + 19% acima)', value: EUR(m.fiscal.irc_base) })
+    fiscRows.push({ label: 'IRC (19%)', value: EUR(m.fiscal.irc_base) })
     fiscRows.push({ label: `Derrama Municipal (${PCT(a.derrama_perc)})`, value: EUR(m.fiscal.derrama_eur) })
     fiscRows.push({ label: 'Total IRC', value: EUR(m.fiscal.total_irc) })
     fiscRows.push({ label: '% Distribuição Dividendos', value: PCT(a.perc_dividendos) })

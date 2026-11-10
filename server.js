@@ -3164,7 +3164,7 @@ app.get('/api/metricas', async (req, res) => {
       const askPrice = imovelRel?.askPrice || 0
       const custoTotal = askPrice + (n.custoRealObra || imovelRel?.custoObra || 0)
       const margemBruta = askPrice > 0 ? round2((n.lucroEstimado || 0) / askPrice * 100) : null
-      const margemLiquida = margemBruta != null ? round2(margemBruta * 0.79) : null // ~21% IRC
+      const margemLiquida = margemBruta != null ? round2(margemBruta * 0.7975) : null // IRC 19% + derrama 1,25%
       const desvioObra = n.custoRealObra > 0 && imovelRel?.custoObra > 0
         ? round2((n.custoRealObra - imovelRel.custoObra) / imovelRel.custoObra * 100) : null
       return { movimento: n.movimento, categoria: n.categoria, margemBruta, margemLiquida, desvioObra }

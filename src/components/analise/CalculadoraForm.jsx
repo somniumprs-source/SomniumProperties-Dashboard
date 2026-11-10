@@ -253,7 +253,7 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <Select label="Regime Fiscal" field="regime_fiscal" value={form.regime_fiscal} options={REGIMES} onChange={handleChange} />
           {form.regime_fiscal === 'Empresa' ? <>
-            <Input label="Derrama Municipal %" field="derrama_perc" value={form.derrama_perc} onChange={handleChange} step="0.5" placeholder="1.5" />
+            <Input label="Derrama Municipal %" field="derrama_perc" value={form.derrama_perc} onChange={handleChange} step="0.05" placeholder="1.25" />
             <Input label="% Distribuição Dividendos" field="perc_dividendos" value={form.perc_dividendos} onChange={handleChange} step="10" placeholder="100" />
           </> : form.regime_fiscal === 'Sem' ? null : <>
             <Select label="Categoria IRS" field="categoria_irs" value={form.categoria_irs || 'G'} options={CATEGORIAS_IRS} onChange={handleChange} />

@@ -93,7 +93,7 @@ export function calcMetricsExtra(a, im = {}) {
   const valorFin = safeNum(a.valor_financiado)
   const percFin = safeNum(a.perc_financiamento)
   const regime = a.regime_fiscal || 'Empresa'
-  const derramaPerc = a.derrama_perc != null ? safeNum(a.derrama_perc) : 1.5
+  const derramaPerc = a.derrama_perc != null ? safeNum(a.derrama_perc) : 1.25
   const percDiv = a.perc_dividendos != null ? safeNum(a.perc_dividendos) : 100
   const comissaoPerc = a.comissao_perc != null ? safeNum(a.comissao_perc) : 2.5
   const seguroMensal = safeNum(a.seguro_mensal)
