@@ -2,9 +2,10 @@
 /**
  * Análise IA da localização de um imóvel (botão na aba Localização).
  *
- * 1. Procura no Google Places tudo o que existe à volta do imóvel (saúde,
+ * 1. Procura no OpenStreetMap tudo o que existe à volta do imóvel (saúde,
  *    educação, comércio, restauração, transportes, desporto, lazer, serviços),
- *    com a distância em linha reta e os tempos de carro e a pé.
+ *    com a distância em linha reta e os tempos de carro e a pé. Tudo gratuito
+ *    (decisão do João, 10/11/2026): sem Google nem outra API paga.
  * 2. Os pontos de interesse ficam "propostos": a equipa valida ou exclui cada um.
  * 3. Com os validados, a análise (pontos fortes e fracos, na perspetiva do
  *    comprador, como no PEV) é pedida à fila IA (Claude no Mac, plano Claude).
@@ -12,7 +13,7 @@
  *    acrescentados aos campos Pontos fortes / Pontos fracos da ficha.
  *
  * Módulo único em JS simples, importado pela Edge Function (crm/index.ts) e
- * pelo Express de dev (src/db/routes.js). A chave do Google entra por parâmetro.
+ * pelo Express de dev (src/db/routes.js).
  */
 
 // Igual ao jsonDaResposta da fila IA (o Claude pode acrescentar texto à volta).
@@ -36,43 +37,94 @@ export const GRUPOS = {
 }
 
 // raio em metros; max = quantos se guardam por categoria (os mais próximos).
+// osm = filtros Overpass; ok(tags) decide a categoria (a primeira que aceitar
+// fica com o local); semNome = nome a usar quando o OSM não tem nome (senão é ignorado).
+const re = (s) => new RegExp(s, 'i')
+const temRede = (t, r) => re(r).test(`${t.network || ''} ${t.operator || ''} ${t.name || ''}`)
+const privado = (t) => ['private', 'customers', 'no'].includes(t.access)
+
 export const CATEGORIAS = [
-  { id: 'hospitais', grupo: 'saude', label: 'Hospitais', tipos: ['hospital'], raio: 6000, max: 3 },
-  { id: 'clinicas', grupo: 'saude', label: 'Centros de saúde e clínicas', tipos: ['doctor'], raio: 2500, max: 4 },
-  { id: 'farmacias', grupo: 'saude', label: 'Farmácias', tipos: ['pharmacy'], raio: 2000, max: 4 },
-  { id: 'dentistas', grupo: 'saude', label: 'Dentistas', tipos: ['dentist'], raio: 1500, max: 2 },
-  { id: 'creches', grupo: 'educacao', label: 'Creches e pré-escolar', tipos: ['preschool'], raio: 2000, max: 3 },
-  { id: 'escolas_basicas', grupo: 'educacao', label: 'Escolas básicas', tipos: ['primary_school'], raio: 2500, max: 4 },
-  { id: 'escolas_secundarias', grupo: 'educacao', label: 'Escolas secundárias', tipos: ['secondary_school'], raio: 3500, max: 3 },
-  { id: 'universidades', grupo: 'educacao', label: 'Universidades', tipos: ['university'], raio: 5000, max: 4 },
-  { id: 'supermercados', grupo: 'comercio', label: 'Supermercados e mercearias', tipos: ['supermarket', 'grocery_store'], raio: 2500, max: 6 },
-  { id: 'centros_comerciais', grupo: 'comercio', label: 'Centros comerciais', tipos: ['shopping_mall'], raio: 6000, max: 3 },
-  { id: 'padarias', grupo: 'comercio', label: 'Padarias e pastelarias', tipos: ['bakery'], raio: 1000, max: 3 },
-  { id: 'restaurantes', grupo: 'restauracao', label: 'Restaurantes', tipos: ['restaurant'], raio: 1200, max: 8 },
-  { id: 'cafes', grupo: 'restauracao', label: 'Cafés e bares', tipos: ['cafe', 'bar'], raio: 800, max: 5 },
-  { id: 'autocarros', grupo: 'transportes', label: 'Paragens de autocarro', tipos: ['bus_stop', 'bus_station'], raio: 800, max: 5 },
-  { id: 'metro', grupo: 'transportes', label: 'Metro e Metrobus', tipos: ['subway_station', 'light_rail_station'], textos: ['Metrobus', 'estação de metro'], raio: 3000, max: 3 },
-  { id: 'comboio', grupo: 'transportes', label: 'Comboio', tipos: ['train_station'], raio: 6000, max: 2 },
-  { id: 'taxis', grupo: 'transportes', label: 'Praças de táxi', tipos: ['taxi_stand'], raio: 2000, max: 1 },
-  { id: 'ginasios', grupo: 'desporto', label: 'Ginásios', tipos: ['gym', 'fitness_center'], raio: 2500, max: 4 },
-  { id: 'desporto', grupo: 'desporto', label: 'Pavilhões, piscinas e estádios', tipos: ['sports_complex', 'swimming_pool', 'stadium'], raio: 4000, max: 3 },
-  { id: 'parques', grupo: 'lazer', label: 'Parques, jardins e parques infantis', tipos: ['park', 'playground'], raio: 2000, max: 4 },
-  { id: 'cultura', grupo: 'lazer', label: 'Museus, cinemas e bibliotecas', tipos: ['museum', 'movie_theater', 'library'], raio: 4000, max: 4 },
-  { id: 'bancos', grupo: 'servicos', label: 'Bancos e multibanco', tipos: ['bank', 'atm'], raio: 1500, max: 3 },
-  { id: 'correios', grupo: 'servicos', label: 'Correios', tipos: ['post_office'], raio: 2500, max: 1 },
-  { id: 'seguranca', grupo: 'servicos', label: 'Polícia e bombeiros', tipos: ['police', 'fire_station'], raio: 3000, max: 2 },
-  { id: 'camara', grupo: 'servicos', label: 'Câmara e juntas', tipos: ['city_hall'], raio: 5000, max: 1 },
-  { id: 'combustivel', grupo: 'servicos', label: 'Postos de combustível', tipos: ['gas_station'], raio: 3000, max: 2 },
-  { id: 'estacionamento', grupo: 'servicos', label: 'Parques de estacionamento', tipos: ['parking'], raio: 800, max: 3 },
+  { id: 'hospitais', grupo: 'saude', label: 'Hospitais', raio: 6000, max: 3,
+    osm: ['[amenity=hospital]', '[healthcare=hospital]'], ok: (t) => t.amenity === 'hospital' || t.healthcare === 'hospital' },
+  { id: 'clinicas', grupo: 'saude', label: 'Centros de saúde e clínicas', raio: 2500, max: 4,
+    osm: ['[amenity~"^(clinic|doctors)$"]', '[healthcare~"^(centre|clinic|doctor)$"]'],
+    ok: (t) => ['clinic', 'doctors'].includes(t.amenity) || ['centre', 'clinic', 'doctor'].includes(t.healthcare) },
+  { id: 'farmacias', grupo: 'saude', label: 'Farmácias', raio: 2000, max: 4, osm: ['[amenity=pharmacy]'], ok: (t) => t.amenity === 'pharmacy' },
+  { id: 'dentistas', grupo: 'saude', label: 'Dentistas', raio: 1500, max: 2, osm: ['[amenity=dentist]'], ok: (t) => t.amenity === 'dentist' },
+  { id: 'creches', grupo: 'educacao', label: 'Creches e pré-escolar', raio: 2000, max: 3,
+    osm: ['[amenity~"^(kindergarten|childcare)$"]'], ok: (t) => ['kindergarten', 'childcare'].includes(t.amenity) },
+  { id: 'escolas_secundarias', grupo: 'educacao', label: 'Escolas secundárias', raio: 3500, max: 3,
+    osm: ['[amenity=school]'], ok: (t) => t.amenity === 'school' && re('secund|liceu').test(t.name || '') },
+  { id: 'escolas_basicas', grupo: 'educacao', label: 'Escolas básicas', raio: 2500, max: 4,
+    osm: ['[amenity=school]'], ok: (t) => t.amenity === 'school' },
+  { id: 'universidades', grupo: 'educacao', label: 'Universidades e politécnicos', raio: 5000, max: 4,
+    osm: ['[amenity~"^(university|college)$"]'], ok: (t) => ['university', 'college'].includes(t.amenity) },
+  { id: 'supermercados', grupo: 'comercio', label: 'Supermercados e mercearias', raio: 2500, max: 6,
+    osm: ['[shop~"^(supermarket|convenience|greengrocer)$"]'], ok: (t) => ['supermarket', 'convenience', 'greengrocer'].includes(t.shop) },
+  { id: 'centros_comerciais', grupo: 'comercio', label: 'Centros comerciais', raio: 6000, max: 3,
+    osm: ['[shop=mall]'], ok: (t) => t.shop === 'mall' },
+  { id: 'padarias', grupo: 'comercio', label: 'Padarias e pastelarias', raio: 1000, max: 3,
+    osm: ['[shop~"^(bakery|pastry)$"]'], ok: (t) => ['bakery', 'pastry'].includes(t.shop) },
+  { id: 'restaurantes', grupo: 'restauracao', label: 'Restaurantes', raio: 1200, max: 8,
+    osm: ['[amenity~"^(restaurant|fast_food)$"]'], ok: (t) => ['restaurant', 'fast_food'].includes(t.amenity) },
+  { id: 'cafes', grupo: 'restauracao', label: 'Cafés e bares', raio: 800, max: 5,
+    osm: ['[amenity~"^(cafe|bar|pub)$"]'], ok: (t) => ['cafe', 'bar', 'pub'].includes(t.amenity) },
+  { id: 'metro', grupo: 'transportes', label: 'Metro e Metrobus', raio: 3000, max: 3,
+    osm: ['[station~"^(subway|light_rail)$"]', '[public_transport][network~"metro",i]', '[public_transport][operator~"metro",i]', '[highway=bus_stop][name~"metrobus",i]'],
+    ok: (t) => ['subway', 'light_rail'].includes(t.station) || (!!(t.public_transport || t.highway === 'bus_stop') && temRede(t, 'metrobus|metro mondego|metropolitano|metro do porto')) },
+  { id: 'autocarros', grupo: 'transportes', label: 'Paragens de autocarro', raio: 800, max: 5, semNome: 'Paragem de autocarro',
+    osm: ['[highway=bus_stop]', '[amenity=bus_station]'], ok: (t) => t.highway === 'bus_stop' || t.amenity === 'bus_station' },
+  { id: 'comboio', grupo: 'transportes', label: 'Comboio', raio: 6000, max: 2,
+    osm: ['[railway~"^(station|halt)$"]'], ok: (t) => ['station', 'halt'].includes(t.railway) && !['subway', 'light_rail'].includes(t.station) },
+  { id: 'taxis', grupo: 'transportes', label: 'Praças de táxi', raio: 2000, max: 1, semNome: 'Praça de táxis',
+    osm: ['[amenity=taxi]'], ok: (t) => t.amenity === 'taxi' },
+  { id: 'ginasios', grupo: 'desporto', label: 'Ginásios', raio: 2500, max: 4,
+    osm: ['[leisure=fitness_centre]', '[amenity=gym]'], ok: (t) => t.leisure === 'fitness_centre' || t.amenity === 'gym' },
+  { id: 'desporto', grupo: 'desporto', label: 'Pavilhões, piscinas e estádios', raio: 4000, max: 3,
+    osm: ['[leisure~"^(sports_centre|stadium|sports_hall|swimming_pool)$"][name]'],
+    ok: (t) => ['sports_centre', 'stadium', 'sports_hall', 'swimming_pool'].includes(t.leisure) && !privado(t) },
+  { id: 'parques', grupo: 'lazer', label: 'Parques, jardins e parques infantis', raio: 2000, max: 4, semNome: 'Parque infantil',
+    osm: ['[leisure~"^(park|playground)$"]', '[leisure=garden][name]'],
+    ok: (t) => ['park', 'playground', 'garden'].includes(t.leisure) && !privado(t) && (t.leisure !== 'park' || !!t.name) },
+  { id: 'cultura', grupo: 'lazer', label: 'Museus, cinemas, teatros e bibliotecas', raio: 4000, max: 4,
+    osm: ['[tourism=museum]', '[amenity~"^(library|cinema|theatre|arts_centre)$"]'],
+    ok: (t) => t.tourism === 'museum' || ['library', 'cinema', 'theatre', 'arts_centre'].includes(t.amenity) },
+  { id: 'bancos', grupo: 'servicos', label: 'Bancos e multibanco', raio: 1500, max: 3, semNome: 'Multibanco',
+    osm: ['[amenity~"^(bank|atm)$"]'], ok: (t) => ['bank', 'atm'].includes(t.amenity) },
+  { id: 'correios', grupo: 'servicos', label: 'Correios', raio: 2500, max: 1, osm: ['[amenity=post_office]'], ok: (t) => t.amenity === 'post_office' },
+  { id: 'seguranca', grupo: 'servicos', label: 'Polícia e bombeiros', raio: 3000, max: 2,
+    osm: ['[amenity~"^(police|fire_station)$"]'], ok: (t) => ['police', 'fire_station'].includes(t.amenity) },
+  { id: 'camara', grupo: 'servicos', label: 'Câmara e juntas de freguesia', raio: 5000, max: 2, osm: ['[amenity=townhall]'], ok: (t) => t.amenity === 'townhall' },
+  { id: 'combustivel', grupo: 'servicos', label: 'Postos de combustível', raio: 3000, max: 2, osm: ['[amenity=fuel]'], ok: (t) => t.amenity === 'fuel' },
+  { id: 'estacionamento', grupo: 'servicos', label: 'Parques de estacionamento públicos', raio: 800, max: 3, semNome: 'Parque de estacionamento',
+    osm: ['[amenity=parking]'], ok: (t) => t.amenity === 'parking' && !privado(t) },
 ]
 
-// Places API antiga (fallback se a nova não estiver ativa na chave): um tipo por pedido.
-const TIPO_LEGADO = {
-  preschool: 'school', grocery_store: 'grocery_or_supermarket', bus_stop: 'transit_station',
-  fitness_center: 'gym', sports_complex: 'stadium', swimming_pool: null, playground: 'park',
+// ── Serviços gratuitos do OpenStreetMap (sem chave nem faturação) ──
+// Nominatim (moradas), Overpass (locais) e OSRM da FOSSGIS (tempos a pé e de
+// carro). São servidores públicos, às vezes sobrecarregados: a pesquisa corre
+// no browser (sem o limite de tempo da Edge Function) e usa vários espelhos.
+// O servidor só guarda o resultado (guardarPesquisa).
+const EM_BROWSER = typeof window !== 'undefined'
+const UA = EM_BROWSER ? {} : { 'User-Agent': 'SomniumCRM/1.0 (analise-localizacao)' }
+const OVERPASS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+]
+const OSRM = {
+  pe: 'https://routing.openstreetmap.de/routed-foot',
+  bicicleta: 'https://routing.openstreetmap.de/routed-bike',
+  carro: 'https://routing.openstreetmap.de/routed-car',
 }
-
-const CAMPOS_PLACES = 'places.id,places.displayName,places.formattedAddress,places.shortFormattedAddress,places.location,places.primaryType,places.rating,places.userRatingCount,places.businessStatus'
+export const MEIOS = { pe: 'a pé', bicicleta: 'de bicicleta', carro: 'de carro' }
+// Estimativa quando o OSRM não responde: linha reta × desvio típico ÷ velocidade média urbana.
+const ESTIMATIVA = { pe: { desvio: 1.3, kmh: 4.8 }, bicicleta: { desvio: 1.3, kmh: 14 }, carro: { desvio: 1.4, kmh: 28 } }
+function estimar(perfil, linhaRetaM) {
+  const e = ESTIMATIVA[perfil], m = Math.round(linhaRetaM * e.desvio)
+  return { m, s: Math.round((m / 1000 / e.kmh) * 3600), estimado: true }
+}
 
 // ── Utilitários ──────────────────────────────────────────────────
 
@@ -84,6 +136,13 @@ export function linhaReta(a, b) {
 }
 
 const novoId = () => (globalThis.crypto?.randomUUID?.() || String(Date.now() + Math.random()))
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms))
+
+async function fetchComPrazo(url, opts = {}, ms = 30000) {
+  const ctl = new AbortController()
+  const t = setTimeout(() => ctl.abort(), ms)
+  try { return await fetch(url, { ...opts, signal: ctl.signal }) } finally { clearTimeout(t) }
+}
 
 function fmtDist(m) {
   if (m == null) return '—'
@@ -95,128 +154,91 @@ function fmtMin(s) {
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`
 }
 
-// ── Google ───────────────────────────────────────────────────────
+// ── Morada → coordenadas (Nominatim) ─────────────────────────────
 
-async function geocodificar(texto, apiKey) {
-  const url = new URL('https://maps.googleapis.com/maps/api/geocode/json')
-  url.searchParams.set('address', texto)
-  url.searchParams.set('region', 'pt')
-  url.searchParams.set('language', 'pt')
-  url.searchParams.set('key', apiKey)
-  const j = await (await fetch(url.toString())).json()
-  if (j.status === 'OK' && j.results?.[0]) {
-    const r = j.results[0]
-    return { lat: r.geometry.location.lat, lng: r.geometry.location.lng, resolvida: r.formatted_address, fonte: 'geocoding' }
+async function geocodificar(texto) {
+  // Tenta a morada completa e, se falhar, versões mais curtas (sem n.º, só código postal/localidade).
+  const semNumero = texto.replace(/\(.*?\)/g, '').replace(/\b(n\.?º|nº|n\.)\s*\d+\w*/gi, '').replace(/\s\d{1,4}[A-Za-z]?(?=,|$)/g, '')
+  const cp = texto.match(/\d{4}-\d{3}\s*[^,]*/)?.[0]
+  const tentativas = [...new Set([texto, semNumero, cp].map((s) => s?.replace(/\s+/g, ' ').trim()).filter(Boolean))]
+  for (const q of tentativas) {
+    const url = new URL('https://nominatim.openstreetmap.org/search')
+    url.searchParams.set('q', q)
+    url.searchParams.set('format', 'json')
+    url.searchParams.set('limit', '1')
+    url.searchParams.set('countrycodes', 'pt')
+    url.searchParams.set('accept-language', 'pt')
+    const resp = await fetchComPrazo(url.toString(), { headers: UA }, 15000).catch(() => null)
+    const j = resp?.ok ? await resp.json().catch(() => []) : []
+    if (j[0]) return { lat: Number(j[0].lat), lng: Number(j[0].lon), resolvida: j[0].display_name, fonte: 'nominatim' }
+    await esperar(1100) // política do Nominatim: 1 pedido por segundo
   }
-  // Sem Geocoding ativo: tenta o Places (Text Search).
-  const resp = await fetch('https://places.googleapis.com/v1/places:searchText', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': 'places.formattedAddress,places.location' },
-    body: JSON.stringify({ textQuery: texto, languageCode: 'pt', regionCode: 'PT', maxResultCount: 1 }),
-  })
-  const p = await resp.json().catch(() => ({}))
-  const pl = p.places?.[0]
-  if (pl?.location) return { lat: pl.location.latitude, lng: pl.location.longitude, resolvida: pl.formattedAddress, fonte: 'places' }
-  throw new Error(`Não foi possível localizar a morada (Geocoding: ${j.status}${j.error_message ? ' — ' + j.error_message : ''})`)
+  throw new Error('Não foi possível localizar a morada no OpenStreetMap. Escreve a rua, o código postal e a localidade.')
 }
 
-class PlacesNovaIndisponivel extends Error {}
+// ── Locais à volta (Overpass) ────────────────────────────────────
 
-async function placesNearbyNova({ centro, tipos, raio, apiKey }) {
-  const resp = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': CAMPOS_PLACES },
-    body: JSON.stringify({
-      includedTypes: tipos,
-      maxResultCount: 20,
-      rankPreference: 'DISTANCE',
-      languageCode: 'pt',
-      regionCode: 'PT',
-      locationRestriction: { circle: { center: { latitude: centro.lat, longitude: centro.lng }, radius: raio } },
-    }),
-  })
-  const j = await resp.json().catch(() => ({}))
-  if (!resp.ok) {
-    const msg = j?.error?.message || `HTTP ${resp.status}`
-    if (resp.status === 403 || j?.error?.status === 'PERMISSION_DENIED') throw new PlacesNovaIndisponivel(msg)
-    // Tipo não suportado: repete tipo a tipo e ignora os inválidos.
-    if (resp.status === 400 && tipos.length > 1) {
-      const out = []
-      for (const t of tipos) out.push(...(await placesNearbyNova({ centro, tipos: [t], raio, apiKey }).catch(() => [])))
-      return out
-    }
-    throw new Error(`Places: ${msg}`)
+// Retângulo à volta do centro (o filtro por raio exato faz-se depois, em JS):
+// com bbox o Overpass usa o índice espacial e responde muito mais depressa do que com `around`.
+function bbox(c, raio) {
+  const dLat = raio / 111320, dLng = raio / (111320 * Math.cos((c.lat * Math.PI) / 180))
+  return [c.lat - dLat, c.lng - dLng, c.lat + dLat, c.lng + dLng].map((v) => v.toFixed(5)).join(',')
+}
+
+// Um só pedido, enviado a dois espelhos em paralelo; fica a primeira resposta válida.
+async function overpass(centro, aoTentar) {
+  const partes = []
+  for (const cat of CATEGORIAS) for (const f of cat.osm) partes.push(`nwr${f}(${bbox(centro, cat.raio)});`)
+  const corpo = 'data=' + encodeURIComponent(`[out:json][timeout:60];(${partes.join('')});out center tags;`)
+  const erros = []
+  const pedir = async (url, ctl) => {
+    const t = setTimeout(() => ctl.abort(), 70000)
+    try {
+      const resp = await fetch(url, { method: 'POST', headers: { ...UA, 'Content-Type': 'application/x-www-form-urlencoded' }, body: corpo, signal: ctl.signal })
+      const txt = await resp.text()
+      if (resp.ok && txt.trim().startsWith('{')) return JSON.parse(txt).elements || []
+      throw new Error(`HTTP ${resp.status}`)
+    } catch (e) {
+      erros.push(`${new URL(url).host}: ${e.name === 'AbortError' ? 'sem resposta' : e.message}`)
+      throw e
+    } finally { clearTimeout(t) }
   }
-  return (j.places || []).map((p) => ({
-    id: p.id,
-    nome: p.displayName?.text || '',
-    endereco: p.shortFormattedAddress || p.formattedAddress || '',
-    lat: p.location?.latitude, lng: p.location?.longitude,
-    tipo: p.primaryType || tipos[0],
-    rating: p.rating ?? null, avaliacoes: p.userRatingCount ?? null,
-    fechado: p.businessStatus && p.businessStatus !== 'OPERATIONAL',
-  }))
-}
-
-async function placesTextoNova({ centro, texto, raio, apiKey }) {
-  const resp = await fetch('https://places.googleapis.com/v1/places:searchText', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': CAMPOS_PLACES },
-    body: JSON.stringify({
-      textQuery: texto, languageCode: 'pt', regionCode: 'PT', maxResultCount: 10,
-      locationBias: { circle: { center: { latitude: centro.lat, longitude: centro.lng }, radius: raio } },
-    }),
-  })
-  const j = await resp.json().catch(() => ({}))
-  if (!resp.ok) return []
-  return (j.places || []).map((p) => ({
-    id: p.id, nome: p.displayName?.text || '', endereco: p.shortFormattedAddress || p.formattedAddress || '',
-    lat: p.location?.latitude, lng: p.location?.longitude, tipo: p.primaryType || 'transit_station',
-    rating: p.rating ?? null, avaliacoes: p.userRatingCount ?? null,
-    fechado: p.businessStatus && p.businessStatus !== 'OPERATIONAL',
-  }))
-}
-
-async function placesNearbyLegado({ centro, tipos, apiKey }) {
-  const out = []
-  for (const t of tipos) {
-    const tipo = t in TIPO_LEGADO ? TIPO_LEGADO[t] : t
-    if (!tipo) continue
-    const url = new URL('https://maps.googleapis.com/maps/api/place/nearbysearch/json')
-    url.searchParams.set('location', `${centro.lat},${centro.lng}`)
-    url.searchParams.set('rankby', 'distance')
-    url.searchParams.set('type', tipo)
-    url.searchParams.set('language', 'pt')
-    url.searchParams.set('key', apiKey)
-    const j = await (await fetch(url.toString())).json()
-    if (j.status === 'REQUEST_DENIED') throw new Error(`Places API não está ativa na chave do Google: ${j.error_message || j.status}`)
-    for (const p of j.results || []) {
-      out.push({
-        id: p.place_id, nome: p.name || '', endereco: p.vicinity || '',
-        lat: p.geometry?.location?.lat, lng: p.geometry?.location?.lng, tipo,
-        rating: p.rating ?? null, avaliacoes: p.user_ratings_total ?? null,
-        fechado: p.business_status && p.business_status !== 'OPERATIONAL',
-      })
-    }
+  for (let ronda = 0; ronda < 4; ronda++) {
+    const urls = [OVERPASS[(ronda * 2) % OVERPASS.length], OVERPASS[(ronda * 2 + 1) % OVERPASS.length]]
+    const ctls = urls.map(() => new AbortController())
+    try {
+      const els = await Promise.any(urls.map((u, i) => pedir(u, ctls[i])))
+      ctls.forEach((c) => c.abort())
+      return els
+    } catch { /* os dois falharam: espera e tenta outros espelhos */ }
+    aoTentar?.(ronda + 2)
+    await esperar(3000 * (ronda + 1))
   }
-  return out
+  throw new Error(`Os servidores do OpenStreetMap estão ocupados. Tenta de novo daqui a uns minutos. (${erros.slice(-2).join('; ')})`)
 }
 
-// Tempos de carro e a pé (Distance Matrix, 25 destinos por pedido).
-async function tempos({ centro, pois, modo, apiKey }) {
+function moradaDe(t) {
+  const rua = [t['addr:street'], t['addr:housenumber']].filter(Boolean).join(' ')
+  return [rua, t['addr:city'] || t['addr:place']].filter(Boolean).join(', ')
+}
+
+// ── Tempos a pé e de carro (OSRM) ────────────────────────────────
+
+async function tempos(centro, pois, perfil) {
   const res = new Map()
-  for (let i = 0; i < pois.length; i += 25) {
-    const lote = pois.slice(i, i + 25)
-    const url = new URL('https://maps.googleapis.com/maps/api/distancematrix/json')
-    url.searchParams.set('origins', `${centro.lat},${centro.lng}`)
-    url.searchParams.set('destinations', lote.map((p) => `${p.lat},${p.lng}`).join('|'))
-    url.searchParams.set('mode', modo)
-    url.searchParams.set('region', 'pt')
-    url.searchParams.set('key', apiKey)
-    const j = await (await fetch(url.toString())).json()
-    if (j.status !== 'OK') throw new Error(`Distance Matrix (${modo}): ${j.status}`)
-    ;(j.rows?.[0]?.elements || []).forEach((el, k) => {
-      if (el.status === 'OK') res.set(lote[k].id, { m: el.distance.value, s: el.duration.value })
+  for (let i = 0; i < pois.length; i += 50) {
+    const lote = pois.slice(i, i + 50)
+    const coords = [centro, ...lote].map((p) => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`).join(';')
+    let j = null
+    for (let tentativa = 0; tentativa < 3 && j?.code !== 'Ok'; tentativa++) {
+      if (tentativa) await esperar(2000 * tentativa)
+      const resp = await fetchComPrazo(`${OSRM[perfil]}/table/v1/driving/${coords}?sources=0&annotations=duration,distance`, { headers: UA }, 30000).catch(() => null)
+      j = resp ? await resp.json().catch(() => null) : null
+    }
+    if (j?.code !== 'Ok') continue // fica a estimativa para este lote
+    lote.forEach((p, k) => {
+      const s = j.durations?.[0]?.[k + 1], m = j.distances?.[0]?.[k + 1]
+      if (s != null) res.set(p.id, { m: Math.round(m), s: Math.round(s) })
     })
   }
   return res
@@ -224,70 +246,79 @@ async function tempos({ centro, pois, modo, apiKey }) {
 
 // ── Pesquisa completa ────────────────────────────────────────────
 
-export async function pesquisarPOIs({ apiKey, origemTexto, centro: centroDado }) {
-  if (!apiKey) throw new Error('GOOGLE_MAPS_API_KEY não configurada no servidor')
+// aoProgresso({ passo, total, texto }) para a barra de progresso do painel.
+export async function pesquisarPOIs({ origemTexto, centro: centroDado, aoProgresso }) {
+  const total = 3
+  const progresso = (passo, texto) => aoProgresso?.({ passo, total, texto })
+  progresso(0, 'A localizar a morada…')
   let origem
   if (centroDado?.lat && centroDado?.lng) origem = { lat: Number(centroDado.lat), lng: Number(centroDado.lng), resolvida: origemTexto || '', fonte: 'coordenadas' }
   else {
     if (!origemTexto?.trim()) throw new Error('Imóvel sem morada nem coordenadas')
-    origem = await geocodificar(origemTexto, apiKey)
+    origem = await geocodificar(origemTexto)
   }
   const centro = { lat: origem.lat, lng: origem.lng }
+  progresso(1, 'A procurar saúde, educação, comércio, restauração, transportes, desporto, lazer e serviços…')
+  const elementos = await overpass(centro, (n) => progresso(1, `Servidores do OpenStreetMap ocupados; tentativa ${n}…`))
 
-  let api = 'places_new'
+  // Cada local vai para a primeira categoria que o aceita.
+  const candidatos = new Map(CATEGORIAS.map((c) => [c.id, []]))
   const vistos = new Set()
+  for (const el of elementos) {
+    const t = el.tags || {}
+    const lat = el.lat ?? el.center?.lat, lng = el.lon ?? el.center?.lon
+    const id = `osm:${el.type}/${el.id}`
+    if (lat == null || vistos.has(id) || t.disused || t['disused:amenity']) continue
+    const cat = CATEGORIAS.find((c) => c.ok(t))
+    if (!cat) continue
+    const nome = t.name || t.brand || cat.semNome
+    if (!nome) continue
+    const dist = linhaReta(centro, { lat, lng })
+    if (dist > cat.raio) continue
+    vistos.add(id)
+    candidatos.get(cat.id).push({
+      id, nome, endereco: moradaDe(t), lat, lng, tipo: t.amenity || t.shop || t.leisure || t.highway || t.railway || t.tourism || t.healthcare || '',
+      linhas: t.route_ref ? String(t.route_ref).replace(/\s*[;,]\s*/g, ', ') : null,
+      rede: t.network || t.operator || null, linha_reta_m: dist,
+    })
+  }
+
+  // Os mais próximos de cada categoria, sem repetir o mesmo nome (ex.: paragem nos dois sentidos).
   const pois = []
-  const avisos = []
   for (const cat of CATEGORIAS) {
-    let encontrados = []
-    try {
-      if (api === 'places_new') {
-        encontrados = await placesNearbyNova({ centro, tipos: cat.tipos, raio: cat.raio, apiKey })
-        for (const t of cat.textos || []) encontrados.push(...(await placesTextoNova({ centro, texto: t, raio: cat.raio, apiKey })))
-      } else {
-        encontrados = await placesNearbyLegado({ centro, tipos: cat.tipos, apiKey })
-      }
-    } catch (e) {
-      if (e instanceof PlacesNovaIndisponivel && api === 'places_new') {
-        api = 'places_legacy'
-        encontrados = await placesNearbyLegado({ centro, tipos: cat.tipos, apiKey })
-      } else {
-        avisos.push(`${cat.label}: ${e.message}`)
-        continue
-      }
-    }
-    const daCategoria = encontrados
-      .filter((p) => p.id && p.lat != null && !p.fechado && !vistos.has(p.id))
-      .map((p) => ({ ...p, linha_reta_m: linhaReta(centro, p) }))
-      .filter((p) => p.linha_reta_m <= cat.raio)
-      .sort((a, b) => a.linha_reta_m - b.linha_reta_m)
-    const unicos = []
-    for (const p of daCategoria) {
-      if (vistos.has(p.id)) continue
-      vistos.add(p.id)
-      unicos.push(p)
-      if (unicos.length >= cat.max) break
-    }
-    for (const p of unicos) {
-      pois.push({
-        id: p.id, nome: p.nome, endereco: p.endereco, lat: p.lat, lng: p.lng,
-        grupo: cat.grupo, categoria: cat.id, categoria_label: cat.label, tipo: p.tipo,
-        rating: p.rating, avaliacoes: p.avaliacoes, linha_reta_m: p.linha_reta_m,
-        carro: null, pe: null, estado: 'proposto',
-      })
+    const nomes = new Set()
+    const lista = candidatos.get(cat.id).sort((a, b) => a.linha_reta_m - b.linha_reta_m)
+    for (const p of lista) {
+      const chave = p.nome.toLowerCase()
+      if (p.nome !== cat.semNome && nomes.has(chave)) continue
+      nomes.add(chave)
+      pois.push({ ...p, grupo: cat.grupo, categoria: cat.id, categoria_label: cat.label, rating: null, avaliacoes: null, carro: null, pe: null, estado: 'proposto' })
+      if (pois.filter((x) => x.categoria === cat.id).length >= cat.max) break
     }
   }
 
-  for (const [modo, campo] of [['driving', 'carro'], ['walking', 'pe']]) {
-    try {
-      const t = await tempos({ centro, pois, modo, apiKey })
-      for (const p of pois) p[campo] = t.get(p.id) || null
-    } catch (e) { avisos.push(e.message) }
+  // Tempos sempre preenchidos: rota real (OSRM) ou, se o serviço falhar, estimativa marcada.
+  const avisos = []
+  progresso(2, 'A calcular os tempos a pé, de bicicleta e de carro…')
+  const perfis = Object.keys(MEIOS)
+  const mapas = await Promise.all(perfis.map((perfil) => tempos(centro, pois, perfil).catch(() => new Map())))
+  for (const [i, perfil] of perfis.entries()) {
+    const t = mapas[i]
+    let estimados = 0
+    for (const p of pois) {
+      p[perfil] = t.get(p.id) || estimar(perfil, p.linha_reta_m)
+      if (p[perfil].estimado) estimados++
+    }
+    if (estimados) avisos.push(`${estimados} tempos ${MEIOS[perfil]} estimados pela distância (serviço de rotas indisponível).`)
   }
+
+  // Transporte público: paragem de autocarro/Metrobus mais próxima do imóvel (não há rotas de TP gratuitas).
+  const paragens = pois.filter((p) => p.categoria === 'autocarros' || p.categoria === 'metro').sort((a, b) => a.linha_reta_m - b.linha_reta_m)
+  const tp = paragens[0] ? { nome: paragens[0].nome, linhas: paragens[0].linhas, rede: paragens[0].rede, categoria: paragens[0].categoria_label, pe: paragens[0].pe, linha_reta_m: paragens[0].linha_reta_m } : null
 
   return {
     origem: { texto: origemTexto || '', resolvida: origem.resolvida, lat: origem.lat, lng: origem.lng, fonte: origem.fonte },
-    api, pesquisado_em: new Date().toISOString(), pois, avisos,
+    fonte_dados: 'OpenStreetMap', pesquisado_em: new Date().toISOString(), pois, avisos, transporte_publico: tp,
   }
 }
 
@@ -311,20 +342,35 @@ async function gravar(pool, imovelId, dados) {
   return dados
 }
 
-// Nova pesquisa: mantém a decisão (validado/excluído) dos pontos já revistos.
-export async function correrPesquisa(pool, { imovelId, apiKey, origemTexto }) {
+// Guarda a pesquisa feita no browser; mantém a decisão (validado/excluído) dos pontos já revistos.
+const txt = (v, n = 300) => (v == null ? null : String(v).slice(0, n))
+const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null)
+const tempo = (t) => (t && num(t.s) != null ? { m: num(t.m), s: num(t.s), ...(t.estimado ? { estimado: true } : {}) } : null)
+
+export async function guardarPesquisa(pool, imovelId, r) {
   await ensureColunaAnaliseLocalizacao(pool)
-  const { rows: [im] } = await pool.query(
-    'SELECT id, morada, zona, freguesia, concelho, coordenadas_lat, coordenadas_lng, analise_localizacao_ia FROM imoveis WHERE id = $1', [imovelId])
+  const { rows: [im] } = await pool.query('SELECT analise_localizacao_ia FROM imoveis WHERE id = $1', [imovelId])
   if (!im) throw new Error('Imóvel não encontrado')
-  const texto = (origemTexto || im.morada || [im.zona, im.freguesia, im.concelho].filter(Boolean).join(', ')).trim()
-  // Com origem escrita à mão diferente da morada, ignora as coordenadas gravadas.
-  const usarCoord = im.coordenadas_lat && im.coordenadas_lng && (!origemTexto || origemTexto.trim() === (im.morada || '').trim())
-  const r = await pesquisarPOIs({ apiKey, origemTexto: texto, centro: usarCoord ? { lat: im.coordenadas_lat, lng: im.coordenadas_lng } : null })
+  if (!r || !Array.isArray(r.pois) || num(r.origem?.lat) == null) throw new Error('Resultado da pesquisa inválido')
+  const cats = new Map(CATEGORIAS.map((c) => [c.id, c]))
+  const pois = r.pois.slice(0, 300).filter((p) => cats.has(p.categoria) && p.id).map((p) => ({
+    id: txt(p.id, 80), nome: txt(p.nome, 150), endereco: txt(p.endereco), lat: num(p.lat), lng: num(p.lng),
+    grupo: cats.get(p.categoria).grupo, categoria: p.categoria, categoria_label: cats.get(p.categoria).label,
+    tipo: txt(p.tipo, 40), linhas: txt(p.linhas, 120), rede: txt(p.rede, 80), rating: null, avaliacoes: null,
+    linha_reta_m: num(p.linha_reta_m), pe: tempo(p.pe), bicicleta: tempo(p.bicicleta), carro: tempo(p.carro), estado: 'proposto',
+  }))
   const anterior = im.analise_localizacao_ia || {}
   const decisoes = new Map((anterior.pois || []).filter((p) => p.estado !== 'proposto').map((p) => [p.id, p.estado]))
-  for (const p of r.pois) if (decisoes.has(p.id)) p.estado = decisoes.get(p.id)
-  return gravar(pool, imovelId, { ...anterior, ...r, versao: 1 })
+  for (const p of pois) if (decisoes.has(p.id)) p.estado = decisoes.get(p.id)
+  return gravar(pool, imovelId, {
+    ...anterior, versao: 1, fonte_dados: 'OpenStreetMap', pesquisado_em: new Date().toISOString(), pois,
+    origem: { texto: txt(r.origem.texto), resolvida: txt(r.origem.resolvida), lat: num(r.origem.lat), lng: num(r.origem.lng), fonte: txt(r.origem.fonte, 20) },
+    avisos: (r.avisos || []).slice(0, 5).map((a) => txt(a)),
+    transporte_publico: r.transporte_publico ? {
+      nome: txt(r.transporte_publico.nome, 150), linhas: txt(r.transporte_publico.linhas, 120), rede: txt(r.transporte_publico.rede, 80),
+      categoria: txt(r.transporte_publico.categoria, 60), pe: tempo(r.transporte_publico.pe), linha_reta_m: num(r.transporte_publico.linha_reta_m),
+    } : null,
+  })
 }
 
 // Validar/excluir pontos de interesse e itens da análise; editar o texto dos itens.
@@ -361,7 +407,7 @@ export async function construirPedidoAnalise(pool, imovelId) {
     const ps = validados.filter((p) => p.categoria === cat.id).sort((a, b) => a.linha_reta_m - b.linha_reta_m)
     if (ps.length === 0) return `- ${GRUPOS[cat.grupo]} / ${cat.label}: nenhum validado num raio de ${fmtDist(cat.raio)}.`
     return `- ${GRUPOS[cat.grupo]} / ${cat.label}:\n` + ps.map((p) =>
-      `    • ${p.nome} (${p.endereco || 's/ morada'}): ${fmtDist(p.linha_reta_m)} em linha reta; a pé ${fmtMin(p.pe?.s)} (${fmtDist(p.pe?.m)}); de carro ${fmtMin(p.carro?.s)} (${fmtDist(p.carro?.m)})${p.rating ? `; ${String(p.rating).replace('.', ',')}★ (${p.avaliacoes || 0} avaliações)` : ''}`).join('\n')
+      `    • ${p.nome}${p.endereco ? ` (${p.endereco})` : ''}${p.linhas ? ` [linhas ${p.linhas}${p.rede ? `, ${p.rede}` : ''}]` : ''}: ${fmtDist(p.linha_reta_m)} em linha reta; ${Object.entries(MEIOS).map(([k, l]) => `${l} ${p[k]?.estimado ? '≈' : ''}${fmtMin(p[k]?.s)} (${fmtDist(p[k]?.m)})`).join('; ')}${p.rating ? `; ${String(p.rating).replace('.', ',')}★ (${p.avaliacoes || 0} avaliações)` : ''}`).join('\n')
   }).join('\n')
 
   const ficha = [
@@ -377,8 +423,9 @@ export async function construirPedidoAnalise(pool, imovelId) {
 FICHA DO IMÓVEL
 ${ficha}
 
-PONTOS DE INTERESSE VALIDADOS PELA EQUIPA (distâncias calculadas a partir do imóvel)
+PONTOS DE INTERESSE VALIDADOS PELA EQUIPA (distâncias e tempos a pé, de bicicleta e de carro a partir do imóvel; «≈» = estimativa)
 ${porCategoria}
+${dados.transporte_publico ? `\nTRANSPORTE PÚBLICO: a paragem mais próxima é ${dados.transporte_publico.nome} (${dados.transporte_publico.categoria}${dados.transporte_publico.linhas ? `, linhas ${dados.transporte_publico.linhas}` : ''}), a ${fmtMin(dados.transporte_publico.pe?.s)} a pé.` : ''}
 
 O QUE PRECISO
 1. Pontos fortes da localização. Para cada um, indica como se usa na venda (anúncio, vídeo, visitas).
@@ -388,7 +435,7 @@ O QUE PRECISO
 REGRAS
 - Português de Portugal, com o Acordo Ortográfico de 1990 (ex.: «ótimo», «direção», «fatura»).
 - Frases completas, profissionais e humanizadas. Nada de «rótulo: fragmento».
-- Usa nomes e tempos concretos (ex.: «Lidl a 4 minutos a pé»). Arredonda os tempos ao minuto.
+- Usa nomes e tempos concretos, escolhendo o meio que faz sentido (ex.: «Lidl a 4 minutos a pé», «hospital a 6 minutos de carro», «universidade a 8 minutos de bicicleta»). Arredonda os tempos ao minuto.
 - Baseia-te apenas nos dados acima. Não inventes linhas de autocarro, obras, segurança ou valorização da zona; se algo tiver de ser confirmado no local, diz isso no próprio ponto.
 - Agrupa o que for do mesmo tipo (ex.: um ponto para «comércio de proximidade») em vez de repetir um ponto por estabelecimento.
 - Entre 4 e 8 pontos fortes e entre 2 e 5 pontos fracos, por ordem de importância para o comprador.

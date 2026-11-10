@@ -39,7 +39,7 @@ import { analyzeReuniao, pedirAnaliseReuniao, aplicarAnaliseReuniao } from "../_
 import { estadoIA, emFilaIA, enfileirarIA, jsonDaResposta, pedidosIAPendentes, iniciarIA, concluirIA, falharIA } from "../_shared/filaIA.ts";
 import { isConfigured as firefliesConfigured, syncFireflies } from "../_shared/firefliesSync.ts";
 import { runEstudoLocalizacao } from "../_shared/estudoLocalizacao.ts";
-import { TIPO_FILA_LOCALIZACAO, lerAnaliseLocalizacao, correrPesquisa, atualizarDecisoes, construirPedidoAnalise, marcarAnalisePedida, aplicarAnaliseLocalizacao, aplicarAFicha } from "../_shared/analiseLocalizacaoIA.js";
+import { TIPO_FILA_LOCALIZACAO, lerAnaliseLocalizacao, guardarPesquisa, atualizarDecisoes, construirPedidoAnalise, marcarAnalisePedida, aplicarAnaliseLocalizacao, aplicarAFicha } from "../_shared/analiseLocalizacaoIA.js";
 import { streamToBuffer } from "../_shared/pdfkitGuard.ts";
 import PDFKitGuard from "../_shared/pdfkitGuard.ts";
 import * as PDFLib from "pdf-lib";
@@ -5952,11 +5952,9 @@ app.get("/imoveis/:id/analise-localizacao-ia", async (c: any) => {
     return c.json({ dados, fila: fila ? { estado: fila.estado, erro: fila.erro, updated_at: fila.updated_at } : null, em_fila: emFilaIA(fila) });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
-app.post("/imoveis/:id/analise-localizacao-ia/pesquisar", async (c: any) => {
-  try {
-    const body = await c.req.json().catch(() => ({}));
-    return c.json({ dados: await correrPesquisa(pool, { imovelId: c.req.param("id"), apiKey: Deno.env.get("GOOGLE_MAPS_API_KEY"), origemTexto: body?.origem || null }) });
-  } catch (e) { console.error("[analise-localizacao-ia]", e); return c.json({ error: (e as Error).message }, 500); }
+app.post("/imoveis/:id/analise-localizacao-ia/pesquisa", async (c: any) => {
+  try { return c.json({ dados: await guardarPesquisa(pool, c.req.param("id"), await c.req.json().catch(() => null)) }); }
+  catch (e) { return c.json({ error: (e as Error).message }, 400); }
 });
 app.patch("/imoveis/:id/analise-localizacao-ia", async (c: any) => {
   try { return c.json({ dados: await atualizarDecisoes(pool, c.req.param("id"), await c.req.json().catch(() => ({}))) }); }

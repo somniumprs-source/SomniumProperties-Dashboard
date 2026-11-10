@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Sparkles, Search, Check, X, MapPin, Footprints, Car, Star, Loader2, ChevronDown, ChevronRight, ThumbsUp, TrendingDown, ArrowDownToLine } from 'lucide-react'
+import { Sparkles, Search, Check, X, MapPin, Footprints, Car, Bike, Bus, Star, Loader2, ChevronDown, ChevronRight, ThumbsUp, TrendingDown, ArrowDownToLine } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
+import { pesquisarPOIs } from '../../../supabase/functions/_shared/analiseLocalizacaoIA.js'
 
 const GRUPOS = {
   saude: 'Saúde', educacao: 'Educação', comercio: 'Comércio', restauracao: 'Restauração',
@@ -63,6 +64,7 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onUsarNo
   const [erroFila, setErroFila] = useState(null)
   const [origem, setOrigem] = useState(imovel.morada || '')
   const [pesquisando, setPesquisando] = useState(false)
+  const [progresso, setProgresso] = useState(null)
   const [pedindo, setPedindo] = useState(false)
   const [aplicando, setAplicando] = useState(false)
   const [filtro, setFiltro] = useState('todos')
@@ -91,11 +93,19 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onUsarNo
   }, [emFila])
 
   async function pesquisar() {
+    const texto = origem.trim()
+    if (!texto && !imovel.coordenadas_lat) { toast('Indica a morada do imóvel', 'error'); return }
+    // Com a morada da ficha e coordenadas gravadas, parte das coordenadas; morada escrita à mão é localizada de novo.
+    const usarCoord = imovel.coordenadas_lat && imovel.coordenadas_lng && texto === (imovel.morada || '').trim()
     setPesquisando(true)
     try {
-      const r = await apiFetch(`${base}/pesquisar`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ origem: origem.trim() && origem.trim() !== (imovel.morada || '').trim() ? origem.trim() : null }),
+      const resultado = await pesquisarPOIs({
+        origemTexto: texto,
+        centro: usarCoord ? { lat: imovel.coordenadas_lat, lng: imovel.coordenadas_lng } : null,
+        aoProgresso: setProgresso,
+      })
+      const r = await apiFetch(`${base}/pesquisa`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(resultado),
       })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error)
@@ -103,6 +113,7 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onUsarNo
       toast(`${j.dados.pois.length} pontos de interesse encontrados`, 'success')
     } catch (e) { toast('Erro: ' + e.message, 'error') }
     setPesquisando(false)
+    setProgresso(null)
   }
 
   async function guardar(patch, otimista) {
@@ -196,7 +207,7 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onUsarNo
           {/* 1. Pesquisa */}
           <div className="space-y-2">
             <p className="text-xs text-ink-muted">
-              Procura tudo o que existe à volta do imóvel (saúde, educação, comércio, restauração, transportes, desporto, lazer e serviços), com os tempos a pé e de carro. Depois valida ou exclui cada ponto e pede a análise dos pontos fortes e fracos.
+              Procura no OpenStreetMap, gratuitamente, tudo o que existe à volta do imóvel (saúde, educação, comércio, restauração, transportes, desporto, lazer e serviços), com os tempos a pé e de carro. Depois valida ou exclui cada ponto e pede a análise dos pontos fortes e fracos.
             </p>
             <div className="flex flex-col sm:flex-row gap-2">
               <input value={origem} onChange={e => setOrigem(e.target.value)} placeholder="Morada do imóvel"
@@ -207,9 +218,22 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onUsarNo
                 {pesquisando ? 'A procurar…' : pois.length ? 'Procurar de novo' : 'Procurar pontos de interesse'}
               </button>
             </div>
+            {pesquisando && progresso && (
+              <div className="space-y-1">
+                <div className="h-1.5 rounded-full bg-surface overflow-hidden border border-line">
+                  <div className="h-full bg-brand-gold transition-all" style={{ width: `${Math.round((progresso.passo / progresso.total) * 100)}%` }} />
+                </div>
+                <p className="text-[11px] text-ink-muted">{progresso.texto} Pode demorar um ou dois minutos; não feches a ficha.</p>
+              </div>
+            )}
             {dados?.origem && (
               <p className="text-[11px] text-ink-muted flex items-center gap-1">
-                <MapPin className="w-3 h-3" /> Ponto de partida: {dados.origem.resolvida || dados.origem.texto} ({dados.origem.lat?.toFixed(5)}, {dados.origem.lng?.toFixed(5)}) · pesquisa de {fmtData(dados.pesquisado_em)}
+                <MapPin className="w-3 h-3 shrink-0" /> Ponto de partida: {dados.origem.resolvida || dados.origem.texto} ({dados.origem.lat?.toFixed(5)}, {dados.origem.lng?.toFixed(5)}) · pesquisa de {fmtData(dados.pesquisado_em)} · dados © contribuidores do OpenStreetMap
+              </p>
+            )}
+            {dados?.transporte_publico && (
+              <p className="text-[11px] text-ink flex items-center gap-1">
+                <Bus className="w-3 h-3 shrink-0 text-brand-gold" /> Transporte público: {dados.transporte_publico.nome} ({dados.transporte_publico.categoria.toLowerCase()}{dados.transporte_publico.linhas ? `, linhas ${dados.transporte_publico.linhas}` : ''}) a {fmtMin(dados.transporte_publico.pe?.s)} a pé.
               </p>
             )}
             {dados?.avisos?.length > 0 && (
@@ -247,18 +271,21 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onUsarNo
                     {!fechado && (
                       <ul className="divide-y divide-line">
                         {lista.map(p => (
-                          <li key={p.id} className={`flex items-center gap-3 px-3 py-2 ${p.estado === 'excluido' ? 'opacity-45' : ''} ${p.estado === 'validado' ? 'bg-emerald-50/40' : ''}`}>
+                          <li key={p.id} className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 ${p.estado === 'excluido' ? 'opacity-45' : ''} ${p.estado === 'validado' ? 'bg-emerald-50/40' : ''}`}>
                             <div className="flex-1 min-w-0">
                               <div className="text-sm text-ink truncate">
                                 <span className="font-medium">{p.nome}</span>
                                 <span className="text-[11px] text-ink-muted ml-2">{p.categoria_label}</span>
                               </div>
-                              <div className="text-[11px] text-ink-muted truncate">{p.endereco}</div>
+                              <div className="text-[11px] text-ink-muted truncate">{[p.linhas && `Linhas ${p.linhas}`, p.endereco].filter(Boolean).join(' · ')}</div>
                             </div>
-                            <div className="hidden sm:flex items-center gap-3 text-[11px] text-ink-muted shrink-0">
+                            <div className="flex items-center gap-2 text-[11px] text-ink-muted shrink-0 order-3 sm:order-none w-full sm:w-auto">
                               <span title="Linha reta">{fmtDist(p.linha_reta_m)}</span>
-                              <span className="inline-flex items-center gap-0.5" title="A pé"><Footprints className="w-3 h-3" />{fmtMin(p.pe?.s)}</span>
-                              <span className="inline-flex items-center gap-0.5" title="De carro"><Car className="w-3 h-3" />{fmtMin(p.carro?.s)}</span>
+                              {[['pe', Footprints, 'A pé'], ['bicicleta', Bike, 'De bicicleta'], ['carro', Car, 'De carro']].map(([k, Icone, l]) => (
+                                <span key={k} className="inline-flex items-center gap-0.5 w-14" title={`${l}${p[k]?.estimado ? ' (estimativa pela distância)' : ''}: ${fmtDist(p[k]?.m)}`}>
+                                  <Icone className="w-3 h-3" />{p[k]?.estimado ? '≈' : ''}{fmtMin(p[k]?.s)}
+                                </span>
+                              ))}
                               {p.rating != null && <span className="inline-flex items-center gap-0.5" title={`${p.avaliacoes || 0} avaliações`}><Star className="w-3 h-3" />{String(p.rating).replace('.', ',')}</span>}
                             </div>
                             <BotoesDecisao estado={p.estado} onChange={e => decidirPois([p.id], e)} />

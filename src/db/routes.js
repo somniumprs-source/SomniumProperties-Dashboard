@@ -48,7 +48,7 @@ import { listarFaturas, exportarZip, marcarEnviadas } from './contabilidade.js'
 import { scrapePhotosFromLink } from './linkScraper.js'
 import { generateDocx, getAvailableTypes } from './docxGenerator.js'
 import { runEstudoLocalizacao } from '../lib/estudoLocalizacao.js'
-import { TIPO_FILA_LOCALIZACAO, lerAnaliseLocalizacao, correrPesquisa, atualizarDecisoes, construirPedidoAnalise, marcarAnalisePedida, aplicarAnaliseLocalizacao, aplicarAFicha } from '../../supabase/functions/_shared/analiseLocalizacaoIA.js'
+import { TIPO_FILA_LOCALIZACAO, lerAnaliseLocalizacao, guardarPesquisa, atualizarDecisoes, construirPedidoAnalise, marcarAnalisePedida, aplicarAnaliseLocalizacao, aplicarAFicha } from '../../supabase/functions/_shared/analiseLocalizacaoIA.js'
 import { FASES_FIX_FLIP, FASES_POR_CATEGORIA, getTemplateFases, getFaseConfigGlobal } from './fasesFixFlip.js'
 import { avaliarEntrada, painelRequisitos, carregarDadosEntrada } from './dealBreakers.js'
 import { carregarChecklist, gravarManual } from './checklistImovel.js'
@@ -5118,10 +5118,9 @@ router.get('/imoveis/:id/analise-localizacao-ia', async (req, res) => {
     res.json({ dados, fila: fila ? { estado: fila.estado, erro: fila.erro, updated_at: fila.updated_at } : null, em_fila: emFilaIA(fila) })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
-router.post('/imoveis/:id/analise-localizacao-ia/pesquisar', async (req, res) => {
-  try {
-    res.json({ dados: await correrPesquisa(pool, { imovelId: req.params.id, apiKey: process.env.GOOGLE_MAPS_API_KEY, origemTexto: req.body?.origem || null }) })
-  } catch (e) { console.error('[analise-localizacao-ia]', e); res.status(500).json({ error: e.message }) }
+router.post('/imoveis/:id/analise-localizacao-ia/pesquisa', async (req, res) => {
+  try { res.json({ dados: await guardarPesquisa(pool, req.params.id, req.body) }) }
+  catch (e) { res.status(400).json({ error: e.message }) }
 })
 router.patch('/imoveis/:id/analise-localizacao-ia', async (req, res) => {
   try { res.json({ dados: await atualizarDecisoes(pool, req.params.id, req.body || {}) }) }
