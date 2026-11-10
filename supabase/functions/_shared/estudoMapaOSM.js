@@ -32,6 +32,12 @@ const px = (lat, lng, z) => {
   return { x: ((lng + 180) / 360) * n, y: (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * n }
 }
 
+function metros(a, b) {
+  const R = 6371000, rad = (x) => (x * Math.PI) / 180
+  const h = Math.sin(rad(b.lat - a.lat) / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lng - a.lng) / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(h))
+}
+
 function base64(buf) {
   const bytes = new Uint8Array(buf)
   let s = ''
@@ -74,21 +80,23 @@ const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').
  * centro: { lat, lng } do imóvel
  * destinos: [{ lat, lng, numero, perfil: 'pe'|'carro', destaque, rota }] — numero = n.º da legenda
  */
-export async function mapaOSMSvg({ centro, destinos = [], w = 1100, h = 640 }) {
+export async function mapaOSMSvg({ centro, destinos = [], w = 1100, h = 640, focoM = null }) {
   const pontos = [centro, ...destinos]
   const escala = destinos.length > 16 ? 0.72 : destinos.length > 10 ? 0.82 : 1
-  // Zoom máximo (13–17) em que todos os pontos cabem com margem.
-  let z = 17
-  for (; z > 13; z--) {
-    const ps = pontos.map((p) => px(p.lat, p.lng, z))
-    const largura = Math.max(...ps.map((p) => p.x)) - Math.min(...ps.map((p) => p.x))
-    const altura = Math.max(...ps.map((p) => p.y)) - Math.min(...ps.map((p) => p.y))
-    if (largura <= w * 0.86 && altura <= h * 0.8) break
+  // Centrado no imóvel: o maior zoom (13–17) em que todos os pontos cabem à volta dele,
+  // com folga para os pinos (que sobem ~40 px acima do local).
+  // focoM: o zoom é escolhido só pelos pontos até essa distância; os outros entram se couberem.
+  const cabeEm = (p, z) => {
+    const c = px(centro.lat, centro.lng, z), q = px(p.lat, p.lng, z)
+    const dx = q.x - c.x, dy = q.y - c.y
+    return Math.abs(dx) <= w / 2 - 28 && dy >= -(h / 2 - 48) && dy <= h / 2 - 14
   }
-  const ps = pontos.map((p) => px(p.lat, p.lng, z))
-  const cx = (Math.max(...ps.map((p) => p.x)) + Math.min(...ps.map((p) => p.x))) / 2
-  const cy = (Math.max(...ps.map((p) => p.y)) + Math.min(...ps.map((p) => p.y))) / 2
-  const ox = cx - w / 2, oy = cy - h / 2
+  const foco = focoM ? destinos.filter((d) => metros(centro, d) <= focoM) : destinos
+  let z = 17
+  for (; z > 13; z--) if (foco.every((p) => cabeEm(p, z))) break
+  destinos = destinos.filter((p) => cabeEm(p, z))
+  const c0 = px(centro.lat, centro.lng, z)
+  const ox = c0.x - w / 2, oy = c0.y - h / 2
   const local = (lat, lng) => { const p = px(lat, lng, z); return { x: p.x - ox, y: p.y - oy } }
 
   // Fundo: satélite DGT; se falhar, mosaicos de ruas do OpenStreetMap.
@@ -128,9 +136,10 @@ export async function mapaOSMSvg({ centro, destinos = [], w = 1100, h = 640 }) {
     return d.destaque ? pino(p.x, p.y, '#C9A84C', n, '#0d0d0d', escala) : pino(p.x, p.y, '#111111', n, '#FFFFFF', escala)
   }).reverse().join('') // o n.º 1 fica por cima
   const c = local(centro.lat, centro.lng)
-  const imovel = pino(c.x, c.y, '#C9A84C', 'I', '#0d0d0d', Math.max(escala, 0.9))
+  // Imóvel sempre a verde (pedido do João).
+  const imovel = pino(c.x, c.y, '#16a34a', 'I', '#FFFFFF', Math.max(escala, 0.95))
 
-  return `
+  const svg = `
     <defs><clipPath id="mapClip"><rect x="0" y="0" width="${w}" height="${h}" rx="8"/></clipPath></defs>
     <g clip-path="url(#mapClip)">
       <rect x="0" y="0" width="${w}" height="${h}" fill="#EEEDE8"/>
@@ -138,6 +147,7 @@ export async function mapaOSMSvg({ centro, destinos = [], w = 1100, h = 640 }) {
     </g>
     <rect x="${w - 312}" y="${h - 24}" width="306" height="18" rx="3" fill="#000000" opacity="0.55"/>
     <text x="${w - 14}" y="${h - 10}" font-size="10" fill="#FFFFFF" text-anchor="end" font-weight="600">${esc(satelite ? 'Imagem: DGT, OrtoSat 2023 · Dados: © OpenStreetMap' : 'Mapa: © contribuidores do OpenStreetMap')}</text>`
+  return { svg, desenhados: new Set(destinos.map((d, i) => d.numero ?? i + 1)) }
 }
 
 // ── Estudo a partir dos pontos de interesse aprovados (corre no browser) ──
@@ -145,7 +155,7 @@ export async function mapaOSMSvg({ centro, destinos = [], w = 1100, h = 640 }) {
 const SECCAO = { transportes: 'acessos', saude: 'saude_universidade', educacao: 'saude_universidade', desporto: 'lazer', lazer: 'lazer' }
 const fmtDist = (m) => (m == null ? null : m < 1000 ? `${m} m` : `${(m / 1000).toFixed(1).replace('.', ',')} km`)
 const fmtMin = (s) => (s == null ? null : `${Math.max(1, Math.round(s / 60))} min`)
-const LIMITE_MAPA_M = 3000 // mais longe do que isto (estações distantes, autoestrada, aeroportos) fica só na legenda, como na Lages
+const FOCO_MAPA_M = 900 // o zoom enquadra os pontos até 900 m (bairro); os mais longe entram se couberem, senão ficam na legenda «fora do mapa»
 
 // Converte os aprovados para o formato de `pois_distancias.resultados` do estudo.
 export function resultadosDosAprovados(dados) {
@@ -153,7 +163,7 @@ export function resultadosDosAprovados(dados) {
     .filter((p) => p.estado === 'validado' && p.carro?.s != null)
     .map((p) => ({
       categoria: p.nome, icone: '📍', seccao: SECCAO[p.grupo] || 'comercio', endereco: p.endereco || p.nome,
-      tipo_local: p.categoria_label, lat: p.lat, lng: p.lng, fora_do_mapa: (p.linha_reta_m ?? 0) > LIMITE_MAPA_M,
+      tipo_local: p.categoria_label, lat: p.lat, lng: p.lng, fora_do_mapa: false,
       distancia_metros: p.carro.m, distancia_texto: fmtDist(p.carro.m), duracao_segundos: p.carro.s, duracao_texto: fmtMin(p.carro.s), status: 'OK',
       pe: p.pe ? { status: 'OK', distancia_metros: p.pe.m, distancia_texto: fmtDist(p.pe.m), duracao_segundos: p.pe.s, duracao_texto: fmtMin(p.pe.s) } : null,
       bicicleta: p.bicicleta ? { distancia_metros: p.bicicleta.m, duracao_segundos: p.bicicleta.s } : null,
@@ -205,11 +215,12 @@ export async function gerarEstudoPNG({ dados, imovel, highlights = [], destaque 
   aoProgresso?.('A preparar o mapa de satélite…')
   // Todos numerados como na legenda; rotas só para os 8 mais próximos (evita um novelo de linhas).
   const destinos = resultados.map((r, i) => ({
-    lat: r.lat, lng: r.lng, numero: i + 1, fora: r.fora_do_mapa,
-    perfil: (r.pe?.distancia_metros ?? Infinity) <= 1500 ? 'pe' : 'carro', rota: i < 8 && !r.fora_do_mapa,
+    lat: r.lat, lng: r.lng, numero: i + 1,
+    perfil: (r.pe?.distancia_metros ?? Infinity) <= 1500 ? 'pe' : 'carro', rota: i < 8,
     destaque: !!destaque && r.categoria.toLowerCase().includes(String(destaque).toLowerCase()),
-  })).filter((d) => !d.fora)
-  const mapaSvg = await mapaOSMSvg({ centro, destinos })
+  })).filter((d) => d.lat != null && metros(centro, d) <= 20000)
+  const { svg: mapaSvg, desenhados } = await mapaOSMSvg({ centro, destinos, focoM: FOCO_MAPA_M })
+  resultados.forEach((r, i) => { r.fora_do_mapa = !desenhados.has(i + 1) })
   aoProgresso?.('A compor a imagem…')
   const regiao = imovel.regiao || 'Coimbra'
   let svg = composeEstudoSvg({

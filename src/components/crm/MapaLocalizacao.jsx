@@ -5,7 +5,8 @@ import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
-const COR = { validado: '#16a34a', proposto: '#ca8a04', excluido: '#9ca3af' }
+// Verde fica reservado ao imóvel; aprovados a azul.
+const COR = { validado: '#2563eb', proposto: '#ca8a04', excluido: '#9ca3af' }
 const ROTULO = { validado: 'Aprovado', proposto: 'Por aprovar', excluido: 'Excluído' }
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const min = s => (s == null ? '—' : `${Math.max(1, Math.round(s / 60))} min`)
@@ -55,7 +56,7 @@ export default function MapaLocalizacao({ origem, pois, onDecidir }) {
     const casa = L.marker([origem.lat, origem.lng], {
       icon: L.divIcon({
         className: '',
-        html: '<div style="width:30px;height:30px;border-radius:50%;background:#C9A84C;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font:800 14px Inter,sans-serif;color:#0d0d0d">I</div>',
+        html: '<div style="width:30px;height:30px;border-radius:50%;background:#16a34a;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font:800 14px Inter,sans-serif;color:#fff">I</div>',
         iconSize: [30, 30], iconAnchor: [15, 15],
       }),
       zIndexOffset: 1000,
@@ -77,7 +78,7 @@ export default function MapaLocalizacao({ origem, pois, onDecidir }) {
           ${p.linhas ? `<div style="font-size:11px;margin-bottom:4px">Linhas ${esc(p.linhas)}</div>` : ''}
           <div style="font-size:11px;margin-bottom:8px">A pé ${min(p.pe?.s)} · Bicicleta ${min(p.bicicleta?.s)} · Carro ${min(p.carro?.s)}</div>
           <div style="display:flex;gap:6px">
-            <button data-e="validado" style="flex:1;padding:4px 6px;border-radius:6px;border:1px solid #16a34a;background:${p.estado === 'validado' ? '#16a34a' : '#fff'};color:${p.estado === 'validado' ? '#fff' : '#16a34a'};font-size:11px;font-weight:600;cursor:pointer">Aprovar</button>
+            <button data-e="validado" style="flex:1;padding:4px 6px;border-radius:6px;border:1px solid #2563eb;background:${p.estado === 'validado' ? '#2563eb' : '#fff'};color:${p.estado === 'validado' ? '#fff' : '#2563eb'};font-size:11px;font-weight:600;cursor:pointer">Aprovar</button>
             <button data-e="excluido" style="flex:1;padding:4px 6px;border-radius:6px;border:1px solid #e11d48;background:${p.estado === 'excluido' ? '#e11d48' : '#fff'};color:${p.estado === 'excluido' ? '#fff' : '#e11d48'};font-size:11px;font-weight:600;cursor:pointer">Excluir</button>
           </div>`
         el.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {

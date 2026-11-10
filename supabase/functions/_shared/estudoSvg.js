@@ -107,7 +107,7 @@ const FOOTER_H = 80
 const T = {
   bg: '#f7f6f2', body: '#0d0d0d', muted: '#888888',
   border: '#e0ddd5', light: '#f0efe9', gold: '#C9A84C', goldDark: '#B8923D',
-  green: '#2d6a2d', red: '#8b2020', white: '#FFFFFF',
+  green: '#16a34a', red: '#8b2020', white: '#FFFFFF',
 }
 
 // Mapeia região → distrito mostrado nos PDFs/imagens. Default Coimbra para
@@ -408,8 +408,8 @@ export function composeEstudoSvg({
     <!-- Marcador do imóvel: pill branca com pin gold -->
     <g transform="translate(14, ${mapH - 38})">
       <rect width="180" height="26" rx="13" fill="${T.white}" opacity="0.94" stroke="${T.border}" stroke-width="0.5"/>
-      <circle cx="20" cy="13" r="9" fill="${T.gold}" stroke="${T.white}" stroke-width="1.5"/>
-      <text x="20" y="17" text-anchor="middle" font-size="10" fill="${T.body}" font-weight="800">I</text>
+      <circle cx="20" cy="13" r="9" fill="${T.green}" stroke="${T.white}" stroke-width="1.5"/>
+      <text x="20" y="17" text-anchor="middle" font-size="10" fill="${T.white}" font-weight="800">I</text>
       <text x="36" y="17.5" font-size="11" fill="${T.body}" font-weight="700">Imóvel</text>
     </g>
   </g>
