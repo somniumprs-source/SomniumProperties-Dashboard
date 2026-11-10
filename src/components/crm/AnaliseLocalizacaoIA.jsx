@@ -213,7 +213,7 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onEstudo
     const metro = /metro/i.test(tp.categoria || '')
     setHl(prev => [{
       titulo: metro ? 'Metrobus à porta' : 'Autocarro à porta',
-      descricao: `Paragem ${tp.nome} a ${minutos} min a pé${tp.linhas ? `, com as linhas ${tp.linhas}` : ''}${tp.rede ? ` (${tp.rede})` : ''}`,
+      descricao: `${tp.nome} a ${minutos} min a pé${tp.linhas ? `, com as linhas ${tp.linhas}` : ''}`,
       subtitulo: 'Sem necessidade de carro para o dia a dia',
       badge: tp.linhas ? tp.linhas.split(/,\s*/).slice(0, 6).join(', ') : '',
     }, prev[1]])
@@ -278,7 +278,7 @@ export default function AnaliseLocalizacaoIA({ imovel, toast, onUpdate, onEstudo
               Procura no OpenStreetMap, gratuitamente, tudo o que existe à volta do imóvel (saúde, educação, comércio, restauração, transportes, desporto, lazer e serviços), com os tempos a pé e de carro. Tudo fica por aprovar: escolhe os pontos que entram no estudo de localização e na análise dos pontos fortes e fracos.
             </p>
             <div className="flex flex-col sm:flex-row gap-2">
-              <input value={origem} onChange={e => setOrigem(e.target.value)} placeholder="Morada do imóvel"
+              <input value={origem} onChange={e => setOrigem(e.target.value)} placeholder="Morada do imóvel ou coordenadas (ex.: 40.20078, -8.41838)"
                 className="flex-1 px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
               <button type="button" onClick={pesquisar} disabled={pesquisando}
                 className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-brand-dark text-white text-sm font-semibold disabled:opacity-50">

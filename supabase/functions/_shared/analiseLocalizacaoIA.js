@@ -47,10 +47,19 @@ const SAUDE_PRIMARIA = 'centro de sa[uú]de|\\busf\\b|\\bucsp\\b|unidade de sa[u
 export const CATEGORIAS = [
   // Acessos e transportes
   { id: 'autocarros', grupo: 'transportes', label: 'Paragem de autocarro', raio: 800, max: 1, semNome: 'Paragem de autocarro',
-    osm: ['[highway=bus_stop]', '[amenity=bus_station]'], ok: (t) => (t.highway === 'bus_stop' || t.amenity === 'bus_station') && !temRede(t, 'metrobus|metro mondego') },
+    osm: ['[highway=bus_stop]', '[amenity=bus_station]'], ok: (t) => (t.highway === 'bus_stop' || t.amenity === 'bus_station') && !temRede(t, 'metrobus|metro mondego'),
+    // Ex.: «Paragem SMTUC Rua do Brasil (Colégios)».
+    nomeDe: (t) => (t.name ? `${t.amenity === 'bus_station' ? 'Terminal' : 'Paragem'}${t.network ? ` ${t.network}` : ''} ${t.name}` : 'Paragem de autocarro') },
   { id: 'metro', grupo: 'transportes', label: 'Metro e Metrobus', raio: 2500, max: 1,
     osm: ['[station~"^(subway|light_rail)$"]', '[public_transport][network~"metro",i]', '[highway=bus_stop][name~"metrobus",i]'],
-    ok: (t) => ['subway', 'light_rail'].includes(t.station) || (!!(t.public_transport || t.highway === 'bus_stop') && temRede(t, 'metrobus|metro mondego|metropolitano|metro do porto')) },
+    ok: (t) => ['subway', 'light_rail'].includes(t.station) || (!!(t.public_transport || t.highway === 'bus_stop') && temRede(t, 'metrobus|metro mondego|metropolitano|metro do porto')),
+    // Ex.: «Estação Arregaça (Metro Mondego)».
+    nomeDe: (t) => {
+      const nome = String(t.name || '').trim()
+      const base = re('^esta[cç][aã]o').test(nome) ? nome : `Estação ${nome}`
+      const rede = t.network || t.operator || ''
+      return rede && !base.toLowerCase().includes(rede.toLowerCase()) ? `${base} (${rede})` : base
+    } },
   { id: 'comboio', grupo: 'transportes', label: 'Estações de comboio', raio: 12000, max: 2,
     osm: ['[railway=station]'], ok: (t) => t.railway === 'station' && !['subway', 'light_rail'].includes(t.station) && !!t.name,
     nomeDe: (t) => (re('^esta[cç][aã]o').test(t.name) ? t.name : `Estação ${t.name}`) },
@@ -197,7 +206,9 @@ function bbox(c, raio) {
 async function overpass(centro, aoTentar) {
   const partes = []
   for (const cat of CATEGORIAS) for (const f of cat.osm || []) partes.push(`${f.startsWith('[') ? 'nwr' + f : f}(${bbox(centro, cat.raio)});`)
-  return consultaOverpass(`[out:json][timeout:60];(${partes.join('')});out center tags;`, aoTentar)
+  // Relações (conjuntos de edifícios) saem com o retângulo envolvente: as dispersas (ex.: o «CHUC» ou a
+  // «Universidade de Coimbra», com 5–8 km) são ignoradas, porque o centro delas não é nenhum sítio real.
+  return consultaOverpass(`[out:json][timeout:60];(${partes.join('')})->.t;(.t; - rel.t;);out center tags;rel.t;out bb tags;`, aoTentar)
 }
 
 async function consultaOverpass(query, aoTentar) {
@@ -289,6 +300,9 @@ export async function pesquisarPOIs({ origemTexto, centro: centroDado, aoProgres
   const progresso = (passo, texto) => aoProgresso?.({ passo, total, texto })
   progresso(0, 'A localizar a morada…')
   let origem
+  // Coordenadas escritas no campo da morada (ex.: «40.20078, -8.41838», como na Caderneta convertida).
+  const coords = String(origemTexto || '').match(/^\s*(-?\d{1,2}[.,]\d+)\s*[,;\s]\s*(-?\d{1,3}[.,]\d+)\s*$/)
+  if (coords) centroDado = { lat: Number(coords[1].replace(',', '.')), lng: Number(coords[2].replace(',', '.')) }
   if (centroDado?.lat && centroDado?.lng) origem = { lat: Number(centroDado.lat), lng: Number(centroDado.lng), resolvida: origemTexto || '', fonte: 'coordenadas' }
   else {
     if (!origemTexto?.trim()) throw new Error('Imóvel sem morada nem coordenadas')
@@ -304,7 +318,12 @@ export async function pesquisarPOIs({ origemTexto, centro: centroDado, aoProgres
   const vistos = new Set()
   for (const el of elementos) {
     const t = el.tags || {}
-    const lat = el.lat ?? el.center?.lat, lng = el.lon ?? el.center?.lon
+    let lat = el.lat ?? el.center?.lat, lng = el.lon ?? el.center?.lon
+    if (el.type === 'relation') {
+      const b = el.bounds
+      if (!b || linhaReta({ lat: b.minlat, lng: b.minlon }, { lat: b.maxlat, lng: b.maxlon }) > 1000) continue
+      lat = (b.minlat + b.maxlat) / 2; lng = (b.minlon + b.maxlon) / 2
+    }
     const id = `osm:${el.type}/${el.id}`
     if (lat == null || vistos.has(id) || t.disused || t['disused:amenity']) continue
     const cat = CATEGORIAS.find((c) => c.ok?.(t))
@@ -443,7 +462,8 @@ export async function guardarPesquisa(pool, imovelId, r) {
   const decisoes = new Map((anterior.pois || []).filter((p) => p.estado !== 'proposto').map((p) => [p.id, p.estado]))
   for (const p of pois) if (decisoes.has(p.id)) p.estado = decisoes.get(p.id)
   // Os aprovados (e os acrescentados à mão) mantêm-se numa nova pesquisa, mesmo que não voltem a aparecer.
-  for (const p of anterior.pois || []) if ((p.manual || p.estado === 'validado') && !pois.some((x) => x.id === p.id)) pois.push(p)
+  // Exceção: relações antigas (conjuntos dispersos com coordenadas erradas) não se mantêm.
+  for (const p of anterior.pois || []) if ((p.manual || (p.estado === 'validado' && !String(p.id).startsWith('osm:relation/'))) && !pois.some((x) => x.id === p.id)) pois.push(p)
   return gravar(pool, imovelId, {
     ...anterior, versao: 1, fonte_dados: 'OpenStreetMap', pesquisado_em: new Date().toISOString(), pois,
     origem: { texto: txt(r.origem.texto), resolvida: txt(r.origem.resolvida), lat: num(r.origem.lat), lng: num(r.origem.lng), fonte: txt(r.origem.fonte, 20) },

@@ -226,7 +226,8 @@ export async function gerarEstudoPNG({ dados, imovel, highlights = [], destaque 
   aoProgresso?.('A compor a imagem…')
   const regiao = imovel.regiao || 'Coimbra'
   let svg = composeEstudoSvg({
-    imovelNome: imovel.nome, morada: dados.origem.texto || imovel.morada || '',
+    // Se a pesquisa partiu de coordenadas, no cabeçalho mostra-se a morada da ficha.
+    imovelNome: imovel.nome, morada: (/^\s*-?\d{1,2}[.,]\d+/.test(dados.origem.texto || '') ? imovel.morada : dados.origem.texto) || imovel.morada || '',
     freguesia: imovel.freguesia ? `${regiao === 'AMP' ? 'Porto/Gaia' : 'Coimbra'} · ${imovel.freguesia}` : null,
     regiao, resultados, highlights, destaque, modo: 'driving', mapaSvgPronto: mapaSvg,
   })
