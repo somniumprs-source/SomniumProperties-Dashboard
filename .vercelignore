@@ -14,6 +14,7 @@ supabase/functions/_shared/*
 # Regras do Dashboard partilhadas entre o site e os backends (importadas pelo frontend).
 !supabase/functions/_shared/regrasDashboard.js
 !supabase/functions/_shared/rubricasAnalise.js
+!supabase/functions/_shared/analiseLocalizacaoIA.js
 server.js
 docs
 tmp
