@@ -150,20 +150,28 @@ export function composeEstudoSvg({
   const pinsLegenda = tresMeios ? ok : ok.slice(0, 9)
   const COLS_LEG = 3, LEG_ROW = 22
   const legendaH = tresMeios ? Math.ceil(ok.length / COLS_LEG) * LEG_ROW + 30 : 0
-  const yAposMapa = HEADER_H + 33 + MAP_H + 20 + legendaH
+  const yAposMapa = HEADER_H + 33 + MAP_H + 20 + legendaH + (tresMeios ? 16 : 0)
+  // Legenda: primeiro os números do mapa; depois, com um ponto e sem número, os que ficam fora do mapa.
+  const noMapa = ok.filter(r => r.numero != null).sort((a, b) => a.numero - b.numero)
+  const foraMapa = ok.filter(r => r.numero == null)
+  const legendaItens = [...noMapa, ...foraMapa]
   const legendaAbaixoSvg = !tresMeios ? '' : `
     <g transform="translate(50, ${HEADER_H + 33 + MAP_H + 16})">
       <rect width="1100" height="${legendaH - 10}" rx="6" fill="${T.white}" stroke="${T.border}" stroke-width="1"/>
       <g transform="translate(14, 0)">
-        ${ok.map((r, i) => {
-          const col = Math.floor(i / Math.ceil(ok.length / COLS_LEG)), lin = i % Math.ceil(ok.length / COLS_LEG)
+        ${legendaItens.map((r, i) => {
+          const porCol = Math.ceil(legendaItens.length / COLS_LEG)
+          const col = Math.floor(i / porCol), lin = i % porCol
           const x = col * 360, y = 22 + lin * LEG_ROW
           const isDest = destaque && r.categoria && r.categoria.toLowerCase().includes(destaque.toLowerCase())
+          const marca = r.numero != null
+            ? `<circle cx="9" cy="-4" r="9" fill="${isDest ? T.gold : '#1a1a1a'}"/>
+               <text x="9" y="-0.5" text-anchor="middle" font-size="${r.numero > 9 ? 8.5 : 10}" fill="${isDest ? T.body : T.white}" font-weight="800">${r.numero}</text>`
+            : `<circle cx="9" cy="-4" r="4.5" fill="${isDest ? T.gold : SECCOES[categorizar(r)]?.cor || T.muted}"/>`
           return `<g transform="translate(${x}, ${y})">
-            <circle cx="9" cy="-4" r="9" fill="${isDest ? T.gold : '#1a1a1a'}"/>
-            <text x="9" y="-0.5" text-anchor="middle" font-size="${i + 1 > 9 ? 8.5 : 10}" fill="${isDest ? T.body : T.white}" font-weight="800">${i + 1}</text>
-            <text x="25" y="0" font-size="11" fill="${T.body}" font-weight="600">${escapeXml(ellide(r.categoria || '', 30))}</text>
-            ${r.fora_do_mapa ? `<text x="330" y="0" font-size="9" fill="${T.muted}" font-style="italic" text-anchor="end">fora do mapa</text>` : ''}
+            ${marca}
+            <text x="25" y="0" font-size="11" fill="${r.numero != null ? T.body : '#555'}" font-weight="600">${escapeXml(ellide(r.categoria || '', 30))}</text>
+            ${r.numero == null ? `<text x="330" y="0" font-size="9" fill="${T.muted}" font-style="italic" text-anchor="end">fora do mapa</text>` : ''}
           </g>`
         }).join('')}
       </g>
@@ -281,7 +289,7 @@ export function composeEstudoSvg({
           const peTxt = peDentro5km ? `${fmtKm(pe.distancia_metros)} · ${fmtMin(pe.duracao_segundos)}` : '—'
           if (tresMeios) {
             return `<rect x="0" y="${yRow}" width="540" height="34" fill="${fill}"/>
-                  <text x="18" y="${yRow + 22}" font-weight="700">${i + 1}</text>
+                  ${r.numero != null ? `<text x="18" y="${yRow + 22}" font-weight="700">${r.numero}</text>` : `<circle cx="22" cy="${yRow + 17}" r="4" fill="${T.muted}"/>`}
                   <text x="44" y="${yRow + 22}" font-weight="600">${escapeXml(ellide(r.categoria || r.endereco || '', 24))}</text>
                   <text x="300" y="${yRow + 22}" text-anchor="end" font-weight="500" fill="${T.muted}">${escapeXml(fmtKm(pe?.distancia_metros ?? r.distancia_metros))}</text>
                   <text x="380" y="${yRow + 22}" text-anchor="end" font-weight="700">${escapeXml(peDentro5km ? fmtMin(pe.duracao_segundos) : '—')}</text>

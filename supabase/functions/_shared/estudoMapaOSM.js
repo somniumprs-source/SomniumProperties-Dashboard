@@ -94,7 +94,8 @@ export async function mapaOSMSvg({ centro, destinos = [], w = 1100, h = 640, foc
   const foco = focoM ? destinos.filter((d) => metros(centro, d) <= focoM) : destinos
   let z = 17
   for (; z > 13; z--) if (foco.every((p) => cabeEm(p, z))) break
-  destinos = destinos.filter((p) => cabeEm(p, z))
+  // Só os que cabem no enquadramento ficam no mapa, numerados 1, 2, 3… pela ordem recebida.
+  destinos = destinos.filter((p) => cabeEm(p, z)).map((d, i) => ({ ...d, numero: i + 1 }))
   const c0 = px(centro.lat, centro.lng, z)
   const ox = c0.x - w / 2, oy = c0.y - h / 2
   const local = (lat, lng) => { const p = px(lat, lng, z); return { x: p.x - ox, y: p.y - oy } }
@@ -147,7 +148,7 @@ export async function mapaOSMSvg({ centro, destinos = [], w = 1100, h = 640, foc
     </g>
     <rect x="${w - 312}" y="${h - 24}" width="306" height="18" rx="3" fill="#000000" opacity="0.55"/>
     <text x="${w - 14}" y="${h - 10}" font-size="10" fill="#FFFFFF" text-anchor="end" font-weight="600">${esc(satelite ? 'Imagem: DGT, OrtoSat 2023 · Dados: © OpenStreetMap' : 'Mapa: © contribuidores do OpenStreetMap')}</text>`
-  return { svg, desenhados: new Set(destinos.map((d, i) => d.numero ?? i + 1)) }
+  return { svg, numeros: new Map(destinos.map((d) => [d.idx, d.numero])) }
 }
 
 // ── Estudo a partir dos pontos de interesse aprovados (corre no browser) ──
@@ -215,12 +216,13 @@ export async function gerarEstudoPNG({ dados, imovel, highlights = [], destaque 
   aoProgresso?.('A preparar o mapa de satélite…')
   // Todos numerados como na legenda; rotas só para os 8 mais próximos (evita um novelo de linhas).
   const destinos = resultados.map((r, i) => ({
-    lat: r.lat, lng: r.lng, numero: i + 1,
+    lat: r.lat, lng: r.lng, idx: i,
     perfil: (r.pe?.distancia_metros ?? Infinity) <= 1500 ? 'pe' : 'carro', rota: i < 8,
     destaque: !!destaque && r.categoria.toLowerCase().includes(String(destaque).toLowerCase()),
   })).filter((d) => d.lat != null && metros(centro, d) <= 20000)
-  const { svg: mapaSvg, desenhados } = await mapaOSMSvg({ centro, destinos, focoM: FOCO_MAPA_M })
-  resultados.forEach((r, i) => { r.fora_do_mapa = !desenhados.has(i + 1) })
+  const { svg: mapaSvg, numeros } = await mapaOSMSvg({ centro, destinos, focoM: FOCO_MAPA_M })
+  // Número só para quem aparece no mapa; os outros ficam na legenda com um ponto, sem número.
+  resultados.forEach((r, i) => { r.numero = numeros.get(i) ?? null; r.fora_do_mapa = r.numero == null })
   aoProgresso?.('A compor a imagem…')
   const regiao = imovel.regiao || 'Coimbra'
   let svg = composeEstudoSvg({
