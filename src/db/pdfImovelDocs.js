@@ -520,6 +520,25 @@ function patchPDFKitNaNGuard() {
     // qualquer Float/Integer Array que vai serializar. Cobertura via annotate
     // acima resolve o caso pratico.
   } catch {}
+  patchPDFKitCacheImagens(PDFDocument.prototype)
+}
+// O PDFKit só reutiliza imagens passadas por caminho (string); um Buffer é
+// descodificado e embebido de novo a cada doc.image(). O logótipo (PNG RGBA)
+// aparece em todas as páginas e cada cópia obrigava a descomprimir e separar o
+// canal alfa outra vez: no dossier de investimento eram 12 cópias, o que
+// estourava o limite de CPU da Edge Function (546). Cache por documento e por
+// Buffer: a mesma imagem é embebida uma vez e referenciada nas outras páginas.
+function patchPDFKitCacheImagens(proto) {
+  if (typeof proto.openImage !== 'function' || proto.__cacheImagens) return
+  proto.__cacheImagens = true
+  const orig = proto.openImage
+  proto.openImage = function (src) {
+    if (!src || typeof src !== 'object') return orig.call(this, src)
+    if (!this.__imgCache) this.__imgCache = new WeakMap()
+    let img = this.__imgCache.get(src)
+    if (!img) { img = orig.call(this, src); this.__imgCache.set(src, img) }
+    return img
+  }
 }
 patchPDFKitNaNGuard()
 
