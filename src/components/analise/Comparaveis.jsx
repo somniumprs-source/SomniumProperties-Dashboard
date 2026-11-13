@@ -616,6 +616,97 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
           onChange={e => { const f = e.target.files?.[0]; if (f) uploadAlfredo(f) }} />
       </div>
 
+      {/* Avaliações externas — Casafari, Alfredo AI, Alexandre Cotrim */}
+      <div className="rounded-xl border border-line overflow-hidden bg-surface">
+        <div className="px-4 py-3 border-b border-line">
+          <h3 className="text-sm font-semibold text-ink">Avaliações Externas do Valor de Venda</h3>
+          <p className="text-[11px] text-ink-muted mt-0.5">Valor estimado para o imóvel completo, já reabilitado. Cruza-se com os comparáveis para validar o VVR e aparece no PDF do estudo.</p>
+        </div>
+        <div className="p-4 space-y-2">
+          <div className="hidden md:grid grid-cols-12 gap-2 text-[10px] text-ink-muted uppercase tracking-wide">
+            <span className="col-span-3">Fonte</span>
+            <span className="col-span-3">Valor estimado (€)</span>
+            <span className="col-span-2">Data</span>
+            <span className="col-span-4">Notas</span>
+          </div>
+          {FONTES_AVALIACAO.map(f => {
+            const av = normalizeAvaliacoes(meta.avaliacoes_externas)[f.key]
+            const delta = triangulacao?.vvrAdotado > 0 && av.valor > 0 ? ((triangulacao.vvrAdotado / av.valor) - 1) * 100 : null
+            return (
+              <div key={f.key} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center text-xs">
+                <div className="md:col-span-3">
+                  <p className="font-semibold text-ink">{f.label}</p>
+                  <p className="text-[10px] text-ink-muted">{f.hint}</p>
+                </div>
+                <div className="md:col-span-3">
+                  <input type="number" step="any" value={av.valor || ''} placeholder="€"
+                    onChange={e => updateAvaliacao(f.key, 'valor', parseFloat(e.target.value) || 0)}
+                    onWheel={e => e.target.blur()}
+                    className="w-full border rounded px-2 py-1 num" />
+                  {delta != null && (
+                    <p className="text-[10px] text-ink-muted mt-0.5 num">VVR adotado {delta >= 0 ? '+' : ''}{delta.toFixed(1)}% face a esta avaliação</p>
+                  )}
+                </div>
+                <div className="md:col-span-2">
+                  <input type="date" value={av.data || ''} onChange={e => updateAvaliacao(f.key, 'data', e.target.value)}
+                    className="w-full border rounded px-2 py-1 num" />
+                </div>
+                <div className="md:col-span-4">
+                  <input type="text" value={av.notas || ''} onChange={e => updateAvaliacao(f.key, 'notas', e.target.value)}
+                    placeholder="Intervalo, pressupostos, observações..."
+                    className="w-full border rounded px-2 py-1" />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {triangulacao && triangulacao.fontes.length >= 2 && (
+          <div className="border-t border-line">
+            <div className="px-4 py-3 bg-brand-dark text-white">
+              <h4 className="text-sm font-semibold">Triangulação do VVR</h4>
+              <p className="text-xs text-ink-muted">{triangulacao.fontes.length} fontes independentes: {triangulacao.fontes.map(f => f.label).join(', ')}</p>
+            </div>
+            <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+              <div>
+                <p className="text-xs text-ink-muted uppercase">Valor de consenso</p>
+                <p className="text-lg num font-semibold">{EUR(triangulacao.media)}</p>
+                <p className="text-[10px] text-ink-muted">média das fontes</p>
+              </div>
+              <div>
+                <p className="text-xs text-ink-muted uppercase">Intervalo</p>
+                <p className="text-sm num font-semibold">{EUR(triangulacao.min)}</p>
+                <p className="text-sm num font-semibold">a {EUR(triangulacao.max)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-ink-muted uppercase">Dispersão</p>
+                <p className="text-lg num font-semibold">{triangulacao.dispersao.toFixed(1)}%</p>
+                <p className="text-[10px] text-ink-muted">(máx. − mín.) / média</p>
+              </div>
+              <div>
+                <p className="text-xs text-ink-muted uppercase">VVR adotado</p>
+                <p className="text-lg num font-semibold">{triangulacao.vvrAdotado > 0 ? EUR(triangulacao.vvrAdotado) : '—'}</p>
+                {triangulacao.delta != null && (
+                  <p className={`text-[10px] num font-semibold ${triangulacao.delta < -5 ? 'text-success' : triangulacao.delta > 5 ? 'text-danger' : 'text-brand-gold'}`}>
+                    {triangulacao.delta >= 0 ? '+' : ''}{triangulacao.delta.toFixed(1)}% vs. consenso
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="px-4 pb-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+              <p className="text-[11px] text-ink-muted">O VVR define-se na Calculadora. Aqui confirma-se se está suportado pelas várias fontes.</p>
+              {triangulacao.convergencia && (
+                <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
+                  triangulacao.convergencia.cor === 'verde' ? 'bg-success/10 text-success border border-success/30'
+                  : triangulacao.convergencia.cor === 'vermelho' ? 'bg-danger/10 text-danger border border-danger/30'
+                  : 'bg-warning/10 text-warning border border-warning/30'
+                }`}>{triangulacao.convergencia.texto}</span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Barra de acções */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -922,97 +1013,6 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
           )}
         </div>
       )}
-
-      {/* Avaliações externas — Casafari, Alfredo AI, Alexandre Cotrim */}
-      <div className="rounded-xl border border-line overflow-hidden bg-surface">
-        <div className="px-4 py-3 border-b border-line">
-          <h3 className="text-sm font-semibold text-ink">Avaliações Externas do Valor de Venda</h3>
-          <p className="text-[11px] text-ink-muted mt-0.5">Valor estimado para o imóvel completo, já reabilitado. Cruza-se com os comparáveis para validar o VVR e aparece no PDF do estudo.</p>
-        </div>
-        <div className="p-4 space-y-2">
-          <div className="hidden md:grid grid-cols-12 gap-2 text-[10px] text-ink-muted uppercase tracking-wide">
-            <span className="col-span-3">Fonte</span>
-            <span className="col-span-3">Valor estimado (€)</span>
-            <span className="col-span-2">Data</span>
-            <span className="col-span-4">Notas</span>
-          </div>
-          {FONTES_AVALIACAO.map(f => {
-            const av = normalizeAvaliacoes(meta.avaliacoes_externas)[f.key]
-            const delta = triangulacao?.vvrAdotado > 0 && av.valor > 0 ? ((triangulacao.vvrAdotado / av.valor) - 1) * 100 : null
-            return (
-              <div key={f.key} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center text-xs">
-                <div className="md:col-span-3">
-                  <p className="font-semibold text-ink">{f.label}</p>
-                  <p className="text-[10px] text-ink-muted">{f.hint}</p>
-                </div>
-                <div className="md:col-span-3">
-                  <input type="number" step="any" value={av.valor || ''} placeholder="€"
-                    onChange={e => updateAvaliacao(f.key, 'valor', parseFloat(e.target.value) || 0)}
-                    onWheel={e => e.target.blur()}
-                    className="w-full border rounded px-2 py-1 num" />
-                  {delta != null && (
-                    <p className="text-[10px] text-ink-muted mt-0.5 num">VVR adotado {delta >= 0 ? '+' : ''}{delta.toFixed(1)}% face a esta avaliação</p>
-                  )}
-                </div>
-                <div className="md:col-span-2">
-                  <input type="date" value={av.data || ''} onChange={e => updateAvaliacao(f.key, 'data', e.target.value)}
-                    className="w-full border rounded px-2 py-1 num" />
-                </div>
-                <div className="md:col-span-4">
-                  <input type="text" value={av.notas || ''} onChange={e => updateAvaliacao(f.key, 'notas', e.target.value)}
-                    placeholder="Intervalo, pressupostos, observações..."
-                    className="w-full border rounded px-2 py-1" />
-                </div>
-              </div>
-            )
-          })}
-        </div>
-
-        {triangulacao && triangulacao.fontes.length >= 2 && (
-          <div className="border-t border-line">
-            <div className="px-4 py-3 bg-brand-dark text-white">
-              <h4 className="text-sm font-semibold">Triangulação do VVR</h4>
-              <p className="text-xs text-ink-muted">{triangulacao.fontes.length} fontes independentes: {triangulacao.fontes.map(f => f.label).join(', ')}</p>
-            </div>
-            <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
-              <div>
-                <p className="text-xs text-ink-muted uppercase">Valor de consenso</p>
-                <p className="text-lg num font-semibold">{EUR(triangulacao.media)}</p>
-                <p className="text-[10px] text-ink-muted">média das fontes</p>
-              </div>
-              <div>
-                <p className="text-xs text-ink-muted uppercase">Intervalo</p>
-                <p className="text-sm num font-semibold">{EUR(triangulacao.min)}</p>
-                <p className="text-sm num font-semibold">a {EUR(triangulacao.max)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-ink-muted uppercase">Dispersão</p>
-                <p className="text-lg num font-semibold">{triangulacao.dispersao.toFixed(1)}%</p>
-                <p className="text-[10px] text-ink-muted">(máx. − mín.) / média</p>
-              </div>
-              <div>
-                <p className="text-xs text-ink-muted uppercase">VVR adotado</p>
-                <p className="text-lg num font-semibold">{triangulacao.vvrAdotado > 0 ? EUR(triangulacao.vvrAdotado) : '—'}</p>
-                {triangulacao.delta != null && (
-                  <p className={`text-[10px] num font-semibold ${triangulacao.delta < -5 ? 'text-success' : triangulacao.delta > 5 ? 'text-danger' : 'text-brand-gold'}`}>
-                    {triangulacao.delta >= 0 ? '+' : ''}{triangulacao.delta.toFixed(1)}% vs. consenso
-                  </p>
-                )}
-              </div>
-            </div>
-            <div className="px-4 pb-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-              <p className="text-[11px] text-ink-muted">O VVR define-se na Calculadora. Aqui confirma-se se está suportado pelas várias fontes.</p>
-              {triangulacao.convergencia && (
-                <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
-                  triangulacao.convergencia.cor === 'verde' ? 'bg-success/10 text-success border border-success/30'
-                  : triangulacao.convergencia.cor === 'vermelho' ? 'bg-danger/10 text-danger border border-danger/30'
-                  : 'bg-warning/10 text-warning border border-warning/30'
-                }`}>{triangulacao.convergencia.texto}</span>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   )
 }
