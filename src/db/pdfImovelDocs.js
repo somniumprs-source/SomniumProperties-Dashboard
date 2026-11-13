@@ -2428,6 +2428,60 @@ function computeTipologiaStats(tip, areaAlvo, descontoNeg, vvrAdoptado) {
   }
 }
 
+// Avaliações externas (Casafari, Alfredo AI, Alexandre Cotrim) + triangulação com
+// a mediana dos comparáveis. Valores referem-se ao imóvel completo após obra.
+const FONTES_AVALIACAO_PDF = [
+  ['casafari', 'Casafari'],
+  ['alfredo', 'Alfredo AI'],
+  ['alexandre_cotrim', 'Alexandre Cotrim (consultor parceiro)'],
+]
+function renderAvaliacoesExternas(b, meta, groups) {
+  const av = (meta && meta.avaliacoes_externas) || {}
+  const externas = FONTES_AVALIACAO_PDF
+    .map(([k, label]) => ({ label, valor: parseFloat(av[k]?.valor) || 0, data: av[k]?.data || '', notas: av[k]?.notas || '' }))
+    .filter(f => f.valor > 0)
+  if (externas.length === 0) return
+  const valorComparaveis = groups.reduce((s, g) => s + (g.medianaVvr || 0), 0)
+  const vvrAdotado = groups.reduce((s, g) => s + (g.vvrAdoptado || 0), 0)
+  const fontes = [
+    ...(valorComparaveis > 0 ? [{ label: 'Comparáveis (mediana ajustada)', valor: valorComparaveis, data: meta.data_recolha || '', notas: '' }] : []),
+    ...externas,
+  ]
+  const valores = fontes.map(f => f.valor)
+  const media = valores.reduce((a, v) => a + v, 0) / valores.length
+  const min = Math.min(...valores)
+  const max = Math.max(...valores)
+  const dispersao = fontes.length >= 2 && media > 0 ? ((max - min) / media) * 100 : null
+  const delta = media > 0 && vvrAdotado > 0 ? ((vvrAdotado / media) - 1) * 100 : null
+  let conv = '—'
+  if (dispersao != null) {
+    conv = dispersao <= 5 ? 'Convergência forte' : dispersao <= 10 ? 'Convergência boa' : dispersao <= 20 ? 'Convergência moderada' : 'Fontes divergentes'
+  }
+  const pct = (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
+
+  b.ensure(160)
+  b.subheader('Avaliações Externas e Triangulação do VVR')
+  b.colTable(
+    [['Fonte', 150], ['Valor Estimado', 75], ['Data', 60], ['VVR vs. Fonte', 65], ['Notas', 115]],
+    [
+      ...fontes.map(f => {
+        const d = vvrAdotado > 0 && f.valor > 0 ? ((vvrAdotado / f.valor) - 1) * 100 : null
+        return { _values: [f.label, EUR(f.valor), f.data ? FDATE(f.data) : '—', d != null ? { value: pct(d), color: Math.abs(d) <= 5 ? C.gold : (d < 0 ? C.green : C.red) } : '—', f.notas || '—'] }
+      }),
+      { _total: true, _values: ['VALOR DE CONSENSO (média)', EUR(media), '—', delta != null ? pct(delta) : '—', `Intervalo ${EUR(min)} a ${EUR(max)}`] },
+    ]
+  )
+  b.space(2)
+  b.bigNumbers([
+    { label: 'Valor de Consenso', value: EUR(media), sub: `(Média de ${fontes.length} fontes independentes)` },
+    { label: 'Dispersão entre Fontes', value: dispersao != null ? `${dispersao.toFixed(1)}%` : '—', sub: `(${conv})` },
+    { label: 'VVR Adotado', value: vvrAdotado > 0 ? EUR(vvrAdotado) : '—', sub: delta != null ? `${pct(delta)} face ao consenso` : '(Valor de Venda de Referência)' },
+  ])
+  b.space(2)
+  b.note('As avaliações externas referem-se ao imóvel completo após a intervenção e servem para validar, de forma independente, o VVR obtido pelo método comparativo.')
+  b.space(4)
+}
+
 function renderEstudoComparaveis(b, im, a, opts = {}) {
   // Leitura tolerante: array legacy ou objecto novo {meta, tipologias}
   let comps = a.comparaveis || []
@@ -2478,6 +2532,8 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
     } else {
       b.note('Sem comparáveis registados nesta análise.')
     }
+
+    renderAvaliacoesExternas(b, meta, groups)
 
     // Imagem Alfredo (estudo de mercado externo) — validação independente
     if (a._alfredoImgData) {
@@ -2629,6 +2685,9 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
         ]
       )
       b.space(4)
+
+      // Avaliações externas + triangulação do VVR
+      renderAvaliacoesExternas(b, meta, groups)
 
       // Estudo de Mercado de Referencia (Alfredo) — fonte externa
       if (a._alfredoImgData) {

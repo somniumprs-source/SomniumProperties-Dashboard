@@ -24,6 +24,29 @@ const PISO_OPCOES = ['Cave', 'R/C', '1.º Andar', '2.º Andar', '3.º Andar', '4
 const ESTADO_OPCOES = ['Novo / Excelente estado', 'Reabilitado / Remodelado', 'Bom estado (usado)', 'Estado razoável (precisa de pequenas obras)', 'Degradado (precisa de obras de fundo)', 'Ruína / Para demolir']
 const TIPO_PRECO_OPCOES = ['Preço de Oferta (anúncio)', 'Preço de Transacção Efectiva (escritura)', 'Misto (oferta + transacção)']
 
+// Avaliações externas do valor de venda (imóvel completo, após obra) — servem para
+// triangular o VVR com o resultado dos comparáveis. Guardadas em meta.avaliacoes_externas.
+export const FONTES_AVALIACAO = [
+  { key: 'casafari', label: 'Casafari', hint: 'Avaliação automática (AVM) da Casafari' },
+  { key: 'alfredo', label: 'Alfredo AI', hint: 'Valor estimado no estudo do Alfredo AI' },
+  { key: 'alexandre_cotrim', label: 'Alexandre Cotrim', hint: 'Opinião de valor do consultor parceiro' },
+]
+const EMPTY_AVALIACAO = { valor: 0, data: '', notas: '' }
+
+function normalizeAvaliacoes(av) {
+  const out = {}
+  FONTES_AVALIACAO.forEach(f => { out[f.key] = { ...EMPTY_AVALIACAO, ...(av?.[f.key] || {}) } })
+  return out
+}
+
+function grauConvergencia(dispersaoPct) {
+  if (dispersaoPct == null) return null
+  if (dispersaoPct <= 5) return { texto: 'Convergência forte', cor: 'verde' }
+  if (dispersaoPct <= 10) return { texto: 'Convergência boa', cor: 'verde' }
+  if (dispersaoPct <= 20) return { texto: 'Convergência moderada', cor: 'dourado' }
+  return { texto: 'Fontes divergentes — rever', cor: 'vermelho' }
+}
+
 const DEFAULT_META = {
   fonte_dados: 'Idealista / Imovirtual',
   tipo_preco: 'Preço de Oferta (anúncio)',
@@ -33,6 +56,7 @@ const DEFAULT_META = {
   metodologia: '',
   conclusao_estudo: '',
   alvo_atributos: { estado: 'Reabilitado (após obra)', piso: 'R/C', elevador: false, garagem: false },
+  avaliacoes_externas: normalizeAvaliacoes(null),
 }
 
 const EMPTY_COMP = {
@@ -84,7 +108,7 @@ function parseAndMigrate(raw) {
   if (parsed && typeof parsed === 'object') {
     return {
       _version: 2,
-      meta: { ...DEFAULT_META, ...(parsed.meta || {}), alvo_atributos: { ...DEFAULT_META.alvo_atributos, ...(parsed.meta?.alvo_atributos || {}) } },
+      meta: { ...DEFAULT_META, ...(parsed.meta || {}), alvo_atributos: { ...DEFAULT_META.alvo_atributos, ...(parsed.meta?.alvo_atributos || {}) }, avaliacoes_externas: normalizeAvaliacoes(parsed.meta?.avaliacoes_externas) },
       tipologias: Array.isArray(parsed.tipologias) ? parsed.tipologias.map(normalizeTip) : [],
     }
   }
@@ -190,6 +214,12 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
       persist(nextMeta, nextTipologias)
       return
     }
+    persist(nextMeta, tipologias)
+  }
+
+  const updateAvaliacao = (fonte, field, value) => {
+    const atual = normalizeAvaliacoes(meta.avaliacoes_externas)
+    const nextMeta = { ...meta, avaliacoes_externas: { ...atual, [fonte]: { ...atual[fonte], [field]: value } } }
     persist(nextMeta, tipologias)
   }
 
@@ -316,6 +346,35 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
     }
     return { n, media, mediana, min, max, vvrAdoptado, delta, posicionamento }
   }, [tipologias, analise?.vvr])
+
+  // Triangulação: valor dos comparáveis (soma das medianas por tipologia) + avaliações externas.
+  const triangulacao = useMemo(() => {
+    let valorComparaveis = 0
+    tipologias.forEach(t => {
+      if (!t.area) return
+      const vs = t.comparaveis.filter(c => c.preco > 0 && c.area > 0).map(c => {
+        const aj = Object.values(c.ajustes || {}).reduce((s, v) => s + (parseFloat(v) || 0), 0)
+        return (c.preco / c.area) * (1 + aj / 100) * t.area
+      }).sort((a, b) => a - b)
+      const n = vs.length
+      if (n) valorComparaveis += n % 2 === 0 ? (vs[n / 2 - 1] + vs[n / 2]) / 2 : vs[Math.floor(n / 2)]
+    })
+    const av = normalizeAvaliacoes(meta.avaliacoes_externas)
+    const fontes = [
+      ...(valorComparaveis > 0 ? [{ key: 'comparaveis', label: 'Comparáveis (mediana)', valor: valorComparaveis }] : []),
+      ...FONTES_AVALIACAO.map(f => ({ key: f.key, label: f.label, valor: parseFloat(av[f.key].valor) || 0 })).filter(f => f.valor > 0),
+    ]
+    if (fontes.length === 0) return null
+    const valores = fontes.map(f => f.valor)
+    const media = valores.reduce((a, b) => a + b, 0) / valores.length
+    const min = Math.min(...valores)
+    const max = Math.max(...valores)
+    const dispersao = fontes.length >= 2 && media > 0 ? ((max - min) / media) * 100 : null
+    const vvrAdotado = parseFloat(analise?.vvr) || 0
+    const delta = media > 0 && vvrAdotado > 0 ? ((vvrAdotado / media) - 1) * 100 : null
+    const externas = fontes.filter(f => f.key !== 'comparaveis').length
+    return { fontes, media, min, max, dispersao, convergencia: grauConvergencia(dispersao), vvrAdotado, delta, externas }
+  }, [tipologias, meta.avaliacoes_externas, analise?.vvr])
 
   const AJUSTE_LABELS = { neg: 'Neg.', area: 'Área', loc: 'Loc.', idade: 'Idade', conserv: 'Conserv.', outros: 'Outros' }
   const AUTO_FIELDS = new Set(['neg', 'area'])
@@ -863,6 +922,97 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
           )}
         </div>
       )}
+
+      {/* Avaliações externas — Casafari, Alfredo AI, Alexandre Cotrim */}
+      <div className="rounded-xl border border-line overflow-hidden bg-surface">
+        <div className="px-4 py-3 border-b border-line">
+          <h3 className="text-sm font-semibold text-ink">Avaliações Externas do Valor de Venda</h3>
+          <p className="text-[11px] text-ink-muted mt-0.5">Valor estimado para o imóvel completo, já reabilitado. Cruza-se com os comparáveis para validar o VVR e aparece no PDF do estudo.</p>
+        </div>
+        <div className="p-4 space-y-2">
+          <div className="hidden md:grid grid-cols-12 gap-2 text-[10px] text-ink-muted uppercase tracking-wide">
+            <span className="col-span-3">Fonte</span>
+            <span className="col-span-3">Valor estimado (€)</span>
+            <span className="col-span-2">Data</span>
+            <span className="col-span-4">Notas</span>
+          </div>
+          {FONTES_AVALIACAO.map(f => {
+            const av = normalizeAvaliacoes(meta.avaliacoes_externas)[f.key]
+            const delta = triangulacao?.vvrAdotado > 0 && av.valor > 0 ? ((triangulacao.vvrAdotado / av.valor) - 1) * 100 : null
+            return (
+              <div key={f.key} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center text-xs">
+                <div className="md:col-span-3">
+                  <p className="font-semibold text-ink">{f.label}</p>
+                  <p className="text-[10px] text-ink-muted">{f.hint}</p>
+                </div>
+                <div className="md:col-span-3">
+                  <input type="number" step="any" value={av.valor || ''} placeholder="€"
+                    onChange={e => updateAvaliacao(f.key, 'valor', parseFloat(e.target.value) || 0)}
+                    onWheel={e => e.target.blur()}
+                    className="w-full border rounded px-2 py-1 num" />
+                  {delta != null && (
+                    <p className="text-[10px] text-ink-muted mt-0.5 num">VVR adotado {delta >= 0 ? '+' : ''}{delta.toFixed(1)}% face a esta avaliação</p>
+                  )}
+                </div>
+                <div className="md:col-span-2">
+                  <input type="date" value={av.data || ''} onChange={e => updateAvaliacao(f.key, 'data', e.target.value)}
+                    className="w-full border rounded px-2 py-1 num" />
+                </div>
+                <div className="md:col-span-4">
+                  <input type="text" value={av.notas || ''} onChange={e => updateAvaliacao(f.key, 'notas', e.target.value)}
+                    placeholder="Intervalo, pressupostos, observações..."
+                    className="w-full border rounded px-2 py-1" />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {triangulacao && triangulacao.fontes.length >= 2 && (
+          <div className="border-t border-line">
+            <div className="px-4 py-3 bg-brand-dark text-white">
+              <h4 className="text-sm font-semibold">Triangulação do VVR</h4>
+              <p className="text-xs text-ink-muted">{triangulacao.fontes.length} fontes independentes: {triangulacao.fontes.map(f => f.label).join(', ')}</p>
+            </div>
+            <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+              <div>
+                <p className="text-xs text-ink-muted uppercase">Valor de consenso</p>
+                <p className="text-lg num font-semibold">{EUR(triangulacao.media)}</p>
+                <p className="text-[10px] text-ink-muted">média das fontes</p>
+              </div>
+              <div>
+                <p className="text-xs text-ink-muted uppercase">Intervalo</p>
+                <p className="text-sm num font-semibold">{EUR(triangulacao.min)}</p>
+                <p className="text-sm num font-semibold">a {EUR(triangulacao.max)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-ink-muted uppercase">Dispersão</p>
+                <p className="text-lg num font-semibold">{triangulacao.dispersao.toFixed(1)}%</p>
+                <p className="text-[10px] text-ink-muted">(máx. − mín.) / média</p>
+              </div>
+              <div>
+                <p className="text-xs text-ink-muted uppercase">VVR adotado</p>
+                <p className="text-lg num font-semibold">{triangulacao.vvrAdotado > 0 ? EUR(triangulacao.vvrAdotado) : '—'}</p>
+                {triangulacao.delta != null && (
+                  <p className={`text-[10px] num font-semibold ${triangulacao.delta < -5 ? 'text-success' : triangulacao.delta > 5 ? 'text-danger' : 'text-brand-gold'}`}>
+                    {triangulacao.delta >= 0 ? '+' : ''}{triangulacao.delta.toFixed(1)}% vs. consenso
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="px-4 pb-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+              <p className="text-[11px] text-ink-muted">O VVR define-se na Calculadora. Aqui confirma-se se está suportado pelas várias fontes.</p>
+              {triangulacao.convergencia && (
+                <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
+                  triangulacao.convergencia.cor === 'verde' ? 'bg-success/10 text-success border border-success/30'
+                  : triangulacao.convergencia.cor === 'vermelho' ? 'bg-danger/10 text-danger border border-danger/30'
+                  : 'bg-warning/10 text-warning border border-warning/30'
+                }`}>{triangulacao.convergencia.texto}</span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
