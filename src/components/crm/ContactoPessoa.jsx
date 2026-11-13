@@ -12,7 +12,8 @@
  * No contacto feito com um consultor regista-se também, sem sair daqui, o que
  * ele enviou a seguir à chamada: cada oportunidade cria o imóvel em
  * «Pré-aprovação», já ligado a ele como referência, e fica como assunto do
- * contacto. A gravação da conversa, se houver, anexa-se no mesmo passo.
+ * contacto. A gravação da conversa, se houver, anexa-se no mesmo passo — também
+ * no contacto feito com um investidor, onde entra nas chamadas (SOP 4).
  */
 import { useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -374,6 +375,8 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
   const [saving, setSaving] = useState(false)
   const [erro, setErro] = useState('')
   const comExtras = feito && tipo === 'consultor'
+  // Gravação da conversa: consultor (gravações, SOP 2) e investidor (chamadas, SOP 4).
+  const comAudio = feito && (tipo === 'consultor' || tipo === 'investidor')
 
   // Cria em «Pré-aprovação» os imóveis das oportunidades e devolve-os como assuntos.
   async function criarOportunidades() {
@@ -421,14 +424,17 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo),
       })
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao guardar')
-      // Gravação da conversa: fica nas gravações do consultor, transcrita e analisada.
-      if (comExtras && audio) {
+      // Gravação da conversa: fica nas gravações do consultor ou nas chamadas do
+      // investidor, transcrita e analisada (SOP 2 / SOP 4).
+      if (comAudio && audio) {
         const fd = new FormData()
         fd.append('audio', audio)
-        fd.append('titulo', notas.trim().slice(0, 80) || `Contacto ${fmtDia(String(quando || '').slice(0, 10) || emDias(0))}`)
         fd.append('data_chamada', String(quando || '').slice(0, 10) || emDias(0))
-        const ru = await apiFetch(`/api/crm/consultores/${pessoaId}/gravacoes`, { method: 'POST', body: fd }).catch(() => null)
-        if (!ru?.ok) toast('O contacto ficou registado, mas a gravação não foi carregada. Tenta carregá-la de novo nas gravações.', 'error')
+        if (tipo === 'consultor') fd.append('titulo', notas.trim().slice(0, 80) || `Contacto ${fmtDia(String(quando || '').slice(0, 10) || emDias(0))}`)
+        else fd.append('tipo_chamada', finalidade === 'follow_up' ? 'follow_up' : 'cold_call')
+        const url = tipo === 'consultor' ? `/api/crm/consultores/${pessoaId}/gravacoes` : `/api/crm/investidores/${pessoaId}/chamadas`
+        const ru = await apiFetch(url, { method: 'POST', body: fd }).catch(() => null)
+        if (!ru?.ok) toast(`O contacto ficou registado, mas a gravação não foi carregada. Tenta carregá-la de novo nas ${tipo === 'consultor' ? 'gravações' : 'chamadas'}.`, 'error')
       }
       onDone?.()
     } catch (err) {
@@ -498,7 +504,7 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
         </>
       )}
 
-      {comExtras && (
+      {comAudio && (
         <div>
           <input type="file" id={`audio-contacto-${pessoaId}`} className="hidden"
             accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg,.opus,.flac,.mp4,.webm"
