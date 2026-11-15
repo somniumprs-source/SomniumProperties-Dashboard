@@ -14,7 +14,7 @@ import { TabKPIs } from '../components/crm/TabKPIs.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { EmptyState } from '../components/ui/EmptyState.jsx'
 import { ErrorState } from '../components/ui/ErrorState.jsx'
-import { Building2, UserCheck, HardHat, ChevronLeft, ChevronRight, Phone, MessageCircle, Wallet, AlertTriangle, Clock as Clock3, Plus, RefreshCw, HandCoins, Radar, Handshake } from 'lucide-react'
+import { Building2, UserCheck, HardHat, ChevronLeft, ChevronRight, Phone, MessageCircle, Wallet, AlertTriangle, Clock as Clock3, Plus, RefreshCw, HandCoins, Radar, Handshake, CalendarClock } from 'lucide-react'
 import { OportunidadesPanel } from '../components/crm/OportunidadesPanel.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { Button } from '../components/ui/Button.jsx'
@@ -747,6 +747,12 @@ export function CRM() {
         const proxIso = (item.data_proxima_acao || '').slice(0, 10)
         const today = new Date().toISOString().slice(0, 10)
         const atrasado = proxIso && proxIso < today
+        // Contacto agendado: dd/mm (ou "hoje"/"amanhã") para ver logo quando é o próximo
+        const amanha = new Date(Date.now() + 86400000).toISOString().slice(0, 10)
+        const proxLabel = !proxIso ? null
+          : proxIso === today ? 'hoje'
+          : proxIso === amanha ? 'amanhã'
+          : `${proxIso.slice(8, 10)}/${proxIso.slice(5, 7)}${proxIso.slice(0, 4) !== today.slice(0, 4) ? '/' + proxIso.slice(2, 4) : ''}`
         // Telefone para WhatsApp
         const tel = (item.telemovel || '').replace(/\s+/g, '')
         const phoneIntl = tel.startsWith('+') ? tel : (tel.startsWith('00') ? '+' + tel.slice(2) : (tel.length === 9 ? '+351' + tel : tel))
@@ -782,11 +788,16 @@ export function CRM() {
                 </span>
               )}
               {atrasado && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-danger/10 text-danger font-medium inline-flex items-center gap-1">
-                  <AlertTriangle className="w-2.5 h-2.5" /> atrasado
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-danger/10 text-danger font-medium inline-flex items-center gap-1" title="Contacto agendado já passou">
+                  <AlertTriangle className="w-2.5 h-2.5" /> atrasado · {proxLabel}
                 </span>
               )}
-              {!atrasado && diasParado != null && diasParado >= 14 && (
+              {!atrasado && proxLabel && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium inline-flex items-center gap-1 num" title="Próximo contacto agendado">
+                  <CalendarClock className="w-2.5 h-2.5" /> {proxLabel}
+                </span>
+              )}
+              {!proxLabel && diasParado != null && diasParado >= 14 && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-warning/10 text-warning font-medium inline-flex items-center gap-1">
                   <Clock3 className="w-2.5 h-2.5" /> {diasParado}d
                 </span>
