@@ -145,6 +145,17 @@ async function afinarTarefa(pool, p, tarefaId, data, tipoContacto = null) {
   }
 }
 
+// Tipo da call calculado pelo histórico (preparação das calls, preparacaoCall):
+// muda a categoria e o título da tarefa aberta da pessoa, pelo mesmo caminho
+// do agendamento, para o Google Calendar receber o título certo.
+export async function definirTipoContacto(pool, tipo, id, tarefaId, tipoContacto) {
+  if (!TIPOS_CONTACTO[tipoContacto]) return false
+  const p = await carregarPessoa(pool, tipo, id)
+  if (!p) return false
+  await afinarTarefa(pool, p, tarefaId, null, tipoContacto)
+  return true
+}
+
 // ── Contacto feito → tarefa concluída na agenda ─────────────
 // Cada contacto feito fica como tarefa concluída à hora em que aconteceu
 // (origem_campo = "contacto:<id da interação>", como "visita:<id>" nas

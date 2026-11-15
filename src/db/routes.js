@@ -37,6 +37,11 @@ import { aplicarRelatorioSemanal } from './relatorioSemanalAggregator.js'
 import { generateMeetingPDF } from './pdfMeetingReport.js'
 import { generateChamadasInvestidoresPDF } from './pdfChamadasInvestidores.js'
 import {
+  prepararCall, lerPreparacao, preparacoesDoInvestidor, preparacoesSemana, corrigirTipoCall, tipoChamadaSugerido,
+  aplicarResumoReuniao, aplicarPreparacao, TIPO_FILA_PREPARACAO, TIPO_FILA_RESUMO,
+} from './preparacaoCall.js'
+import { generatePreparacaoCallsPDF } from './pdfPreparacaoCalls.js'
+import {
   ensureInvestidorGravacoesTable, tabelaDaGravacao, sanitizeRegistoInvestidor, relatorioChamadasInvestidores, TIPOS_CHAMADA_INV,
   pedirAnaliseInvestidor, investidorGravacoesPorAnalisar, passoAnaliseInvestidor, falhaAnaliseInvestidor,
   lerSinteseInvestidores, pedirSinteseInvestidores, sintesesInvestidoresPorGerar, passoSinteseInvestidores, falhaSinteseInvestidores,
@@ -1942,6 +1947,8 @@ router.post('/gravacoes/:id/analise-consultor', async (req, res) => {
 const APLICADORES_IA = {
   reuniao_investidor: aplicarAnaliseReuniao,
   reuniao_consultor: aplicarAnaliseReuniao,
+  [TIPO_FILA_RESUMO]: (p, t) => aplicarResumoReuniao(pool, p, t),
+  [TIPO_FILA_PREPARACAO]: (p, t) => aplicarPreparacao(pool, p, t),
   relatorio_semanal: aplicarRelatorioSemanal,
   resumo_projeto: aplicarResumoProjeto,
   documento_imovel: (p, t) => aplicarDocumentoImovel(p, t),
@@ -2547,6 +2554,68 @@ router.get('/consultores/:id/interacoes', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// ── Preparação das calls com investidores (SOP 4) ───────────
+// Port de supabase/functions/crm/index.ts. Lógica em preparacaoCall.js.
+async function prepararProximaCall(investidorId) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id FROM tarefas WHERE origem_tipo = 'investidor' AND origem_id = $1 AND origem_campo = 'proximo_contacto'
+         AND status NOT IN ('Concluída', 'Concluida') AND COALESCE(arquivada, false) = false`, [investidorId])
+    for (const t of rows) await prepararCall(pool, t.id, { gerar: true })
+  } catch (e) { console.error('[preparacao]', e.message) }
+}
+const semPortalInvestidor = (req, res, next) => (req.appUser?.role === 'investidor' ? res.status(403).json({ error: 'Sem acesso' }) : next())
+const diaQ = (v, fb) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : fb)
+function semanaAtual() {
+  const d = new Date(); const dow = (d.getUTCDay() + 6) % 7
+  const seg = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - dow))
+  const dom = new Date(seg.getTime() + 6 * 86400000)
+  return { desde: seg.toISOString().slice(0, 10), ate: dom.toISOString().slice(0, 10) }
+}
+router.get('/preparacao-calls', semPortalInvestidor, async (req, res) => {
+  try {
+    const s = semanaAtual()
+    res.json(await preparacoesSemana(pool, { desde: diaQ(req.query.desde, s.desde), ate: diaQ(req.query.ate, s.ate) }))
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+router.get('/preparacao-calls/pdf', semPortalInvestidor, async (req, res) => {
+  try {
+    const s = semanaAtual()
+    const periodo = { desde: diaQ(req.query.desde, s.desde), ate: diaQ(req.query.ate, s.ate) }
+    const dados = await preparacoesSemana(pool, periodo)
+    if (req.query.tarefa) dados.preparacoes = dados.preparacoes.filter(p => p.tarefa_id === req.query.tarefa)
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', pdfDisposition(req, `Preparacao_Calls_Investidores_${periodo.desde}_${periodo.ate}.pdf`))
+    generatePreparacaoCallsPDF(dados, { preparadoPara: req.appUser?.nome || null }).pipe(res)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+router.get('/preparacao-calls/tarefa/:tarefaId', semPortalInvestidor, async (req, res) => {
+  try {
+    const p = await lerPreparacao(pool, req.params.tarefaId)
+    if (!p) return res.status(404).json({ error: 'Esta tarefa não é uma call com investidor' })
+    res.json(p)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+router.post('/preparacao-calls/tarefa/:tarefaId/regenerar', semPortalInvestidor, async (req, res) => {
+  try {
+    const p = await prepararCall(pool, req.params.tarefaId, { gerar: true, forcar: true })
+    if (!p) return res.status(404).json({ error: 'Esta tarefa não é uma call com investidor' })
+    res.json(await lerPreparacao(pool, req.params.tarefaId, { criar: false }))
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+router.patch('/preparacao-calls/tarefa/:tarefaId/tipo', semPortalInvestidor, async (req, res) => {
+  try {
+    await corrigirTipoCall(pool, req.params.tarefaId, req.body?.tipo)
+    res.json(await lerPreparacao(pool, req.params.tarefaId, { criar: false }))
+  } catch (e) { res.status(400).json({ error: e.message }) }
+})
+router.get('/investidores/:id/preparacoes', semPortalInvestidor, async (req, res) => {
+  try { res.json(await preparacoesDoInvestidor(pool, req.params.id)) } catch (e) { res.status(500).json({ error: e.message }) }
+})
+router.get('/investidores/:id/tipo-chamada-sugerido', semPortalInvestidor, async (req, res) => {
+  try { res.json(await tipoChamadaSugerido(pool, req.params.id)) } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 // ── Chamadas gravadas com investidores (SOP 4) ───────────────
 // Mesmo fluxo das gravacoes dos consultores (bucket "Gravacoes", worker
 // Whisper local), mas avaliadas contra o SOP 4. Logica em chamadasInvestidor.js.
@@ -2767,6 +2836,8 @@ for (const [rota, tipo] of [['consultores', 'consultor'], ['investidores', 'inve
       const { data, quando, assuntos, tipo_contacto } = req.body || {}
       const tarefaId = await agendarContactoPessoa(pool, tipo, req.params.id, { data, quando: quando || null, assuntos, tipoContacto: tipo_contacto || null, user: req.user || null })
       if (!tarefaId) return res.status(404).json({ error: 'Não encontrado' })
+      // Call com investidor: tipo pelo histórico + preparação (fila IA no Mac).
+      if (tipo === 'investidor') await prepararCall(pool, tarefaId, { gerar: true }).catch(e => console.error('[preparacao]', e.message))
       res.json({ ok: true, tarefa_id: tarefaId })
     } catch (e) { res.status(400).json({ error: e.message }) }
   })
@@ -2774,6 +2845,7 @@ for (const [rota, tipo] of [['consultores', 'consultor'], ['investidores', 'inve
     try {
       const r = await registarContactoPessoa(pool, tipo, req.params.id, { ...(req.body || {}), user: req.user || null })
       if (!r) return res.status(404).json({ error: 'Não encontrado' })
+      if (tipo === 'investidor') await prepararProximaCall(req.params.id)
       res.json({ ok: true, ...r })
     } catch (e) { res.status(400).json({ error: e.message }) }
   })

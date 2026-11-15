@@ -4433,6 +4433,18 @@ app.put('/api/tarefas/:id', async (req, res) => {
       `UPDATE tarefas SET ${sets.join(', ')} WHERE id = $${params.length}`, params
     )
     if (!rowCount) return res.status(404).json({ error: 'Não encontrada' })
+    // Call com investidor: reprogramada => refaz a preparação; categoria mudada à mão => correção manual do tipo.
+    {
+      const { prepararCall, ehCallInvestidor, corrigirTipoCall, CATEGORIAS_CALL_INV } = await import('./src/db/preparacaoCall.js')
+      const novaCategoria = categoria ?? atual.categoria
+      if (ehCallInvestidor({ ...atual, categoria: novaCategoria })) {
+        if (categoria !== undefined && categoria !== atual.categoria && CATEGORIAS_CALL_INV[atual.categoria]) {
+          await corrigirTipoCall(pgPool, atual.id, CATEGORIAS_CALL_INV[categoria]).catch(e => console.error('[preparacao]', e.message))
+        } else if ((inicio !== undefined && inicio !== atual.inicio) || (categoria !== undefined && categoria !== atual.categoria)) {
+          await prepararCall(pgPool, atual.id, { gerar: true }).catch(e => console.error('[preparacao]', e.message))
+        }
+      }
+    }
     // Sync com GCal
     const { rows: [updated] } = await pgPool.query('SELECT * FROM tarefas WHERE id = $1', [req.params.id])
     if (updated && !updated.por_aprovar) {

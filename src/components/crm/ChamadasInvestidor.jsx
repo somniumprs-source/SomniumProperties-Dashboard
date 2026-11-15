@@ -359,6 +359,19 @@ export function ChamadasInvestidor({ investidorId }) {
   }, [investidorId])
   useEffect(() => { load() }, [load])
 
+  // Tipo pré-selecionado pela preparação da call (calculado pelo histórico),
+  // para a análise usar o guião certo do SOP 4.
+  const [sugerido, setSugerido] = useState(null)
+  useEffect(() => {
+    let vivo = true
+    apiFetch(`/api/crm/investidores/${investidorId}/tipo-chamada-sugerido`).then(r => r.json()).then(d => {
+      if (!vivo || !d?.tipo) return
+      setSugerido(d)
+      setNova(n => ({ ...n, tipo_chamada: d.tipo }))
+    }).catch(() => {})
+    return () => { vivo = false }
+  }, [investidorId])
+
   const temPendentes = chamadas.some(g => EM_PROCESSAMENTO.includes(g.estado))
   useEffect(() => {
     if (!temPendentes) return
@@ -380,7 +393,7 @@ export function ChamadasInvestidor({ investidorId }) {
       if (!r.ok) throw new Error(d.error || 'Falha ao carregar a chamada')
       setChamadas(p => [d, ...p])
       setAdding(false)
-      setNova({ tipo_chamada: 'cold_call', data_chamada: hojeISO(), file: null })
+      setNova({ tipo_chamada: sugerido?.tipo || 'cold_call', data_chamada: hojeISO(), file: null })
       toast('Chamada carregada. Fica em fila para transcrever e analisar.', 'success')
     } catch (err) { toast(friendlyError(err.message || 'Falha ao carregar a chamada'), 'error') }
     setEnviando(false)
@@ -451,6 +464,9 @@ export function ChamadasInvestidor({ investidorId }) {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Select label="Tipo de chamada" value={nova.tipo_chamada} options={TIPO_CHAMADA_INV_LABEL}
               onChange={v => setNova(n => ({ ...n, tipo_chamada: v || 'cold_call' }))} />
+            {sugerido?.motivo && nova.tipo_chamada === sugerido.tipo && (
+              <p className="sm:col-span-3 -mt-1 text-[11px] text-ink-muted order-last">Pré-selecionado pelo histórico: {sugerido.motivo}</p>
+            )}
             <label className="block text-xs text-ink-muted">Data da chamada
               <input type="date" required value={nova.data_chamada} onChange={e => setNova(n => ({ ...n, data_chamada: e.target.value }))} className={`mt-1 ${inputClass}`} />
             </label>

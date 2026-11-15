@@ -1,6 +1,7 @@
 // Edge Function "dashboard" — port READ-ONLY (GET) dos handlers do dashboard do server.js Express.
 // Traducao mecanica: logica de negocio identica; so muda a camada wrapper (Express req/res -> Hono).
 import { createApp } from "../_shared/hono.ts";
+import { prepararCall, ehCallInvestidor, corrigirTipoCall, CATEGORIAS_CALL_INV } from "../_shared/preparacaoCall.ts";
 import { requireAuth } from "../_shared/auth.ts";
 import { RECORD_RESTRICTED_ROLES } from "../_shared/roles.ts";
 import { resolveOrProvisionUser } from "../_shared/userResolve.ts";
@@ -3294,6 +3295,17 @@ app.put("/tarefas/:id", async (c: any) => {
       params,
     );
     if (!rowCount) return c.json({ error: "Não encontrada" }, 404);
+    // Call com investidor reprogramada: refaz a preparação (tipo + documento).
+    // Mudar a categoria entre Cold Call / Follow-up / Discovery à mão é uma
+    // correção manual do tipo (nunca mais recalculada).
+    const novaCategoria = categoria ?? atual.categoria;
+    if (ehCallInvestidor({ ...atual, categoria: novaCategoria })) {
+      if (categoria !== undefined && categoria !== atual.categoria && CATEGORIAS_CALL_INV[atual.categoria]) {
+        await corrigirTipoCall(pool, atual.id, CATEGORIAS_CALL_INV[categoria]).catch((e: any) => console.error("[preparacao]", e.message));
+      } else if ((inicio !== undefined && inicio !== atual.inicio) || (categoria !== undefined && categoria !== atual.categoria)) {
+        await prepararCall(pool, atual.id, { gerar: true }).catch((e: any) => console.error("[preparacao]", e.message));
+      }
+    }
     return c.json({ ok: true });
   } catch (e: any) {
     return c.json({ error: e.message }, 500);

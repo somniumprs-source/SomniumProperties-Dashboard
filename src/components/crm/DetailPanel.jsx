@@ -4,7 +4,7 @@
  * (Tarefas, Auditoria, aba Reuniões): a ficha não os repete.
  */
 import { useState, useEffect, useCallback, useMemo, useRef, memo, lazy, Suspense } from 'react'
-import { FileDown, ChevronDown, ChevronUp, ClipboardList, Home, Euro, Repeat, BarChart3, Lightbulb, Phone, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users, MapPin, Eye, Trash2, ThumbsUp, TrendingDown, Shield, Building2, UserRound, FolderOpen, Calculator, Hammer, Scale, DoorOpen, FileBarChart, ListChecks, Building, CalendarCheck, Star, Gauge, History, Briefcase, ShieldCheck, Timer } from 'lucide-react'
+import { FileDown, ChevronDown, ChevronUp, ClipboardList, Home, Euro, Repeat, BarChart3, Lightbulb, Phone, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users, MapPin, Eye, Trash2, ThumbsUp, TrendingDown, Shield, Building2, UserRound, FolderOpen, Calculator, Hammer, Scale, DoorOpen, FileBarChart, ListChecks, Building, CalendarCheck, Star, Gauge, History, Briefcase, ShieldCheck, Timer, NotebookPen } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { BrandLoader } from '../ui/BrandLoader.jsx'
 import { TabTransition, useTabDirection } from '../ui/PageTransition.jsx'
@@ -45,6 +45,7 @@ const FicheirosTab = lazy(() => import('./FicheirosTab.jsx').then(m => ({ defaul
 const ChecklistTab = lazy(() => import('./ChecklistTab.jsx').then(m => ({ default: m.ChecklistTab })))
 const VisitasTab = lazy(() => import('./VisitasTab.jsx').then(m => ({ default: m.VisitasTab })))
 const DocumentosInvestidorTab = lazy(() => import('./DocumentosInvestidorTab.jsx').then(m => ({ default: m.DocumentosInvestidorTab })))
+const PreparacaoInvestidorTab = lazy(() => import('./PreparacaoCall.jsx').then(m => ({ default: m.PreparacaoInvestidorTab })))
 const DadosEmpresaInvestidorTab = lazy(() => import('./DadosEmpresaInvestidorTab.jsx').then(m => ({ default: m.DadosEmpresaInvestidorTab })))
 
 function TabFallback() {
@@ -52,7 +53,7 @@ function TabFallback() {
 }
 
 // Ordem de todas as abas possíveis (para saber de que lado entra o conteúdo).
-const ORDEM_ABAS = ['detalhe', 'registo_chamadas', 'ficheiros', 'analise', 'obra', 'localizacao', 'pontos_riscos', 'visitas', 'matching', 'relatorios_imovel', 'checklist', 'documentos', 'dados_empresa', 'documentos_consultor', 'relatorios', 'avaliacao']
+const ORDEM_ABAS = ['detalhe', 'registo_chamadas', 'ficheiros', 'analise', 'obra', 'localizacao', 'pontos_riscos', 'visitas', 'matching', 'relatorios_imovel', 'checklist', 'preparacao', 'documentos', 'dados_empresa', 'documentos_consultor', 'relatorios', 'avaliacao']
 import { Combobox } from '../ui/Combobox.jsx'
 import coimbraFreguesiasData from '../../constants/coimbra-freguesias.json'
 import ampFreguesiasData from '../../constants/amp-freguesias.json'
@@ -469,7 +470,10 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
 export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit = false }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('detalhe')
+  // ?ficha=preparacao (link do Google Calendar) abre logo a preparação da call.
+  const [activeTab, setActiveTab] = useState(() => {
+    try { return type === 'Investidores' && new URLSearchParams(window.location.search).get('ficha') === 'preparacao' ? 'preparacao' : 'detalhe' } catch { return 'detalhe' }
+  })
   const direcaoAba = useTabDirection(activeTab, ORDEM_ABAS)
   const [reunioes, setReunioes] = useState([])
   const [editing, setEditing] = useState(false)
@@ -695,6 +699,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
     { key: 'matching', label: 'Matching investidores', icon: Link2, show: type === 'Imóveis' },
     { key: 'relatorios_imovel', label: 'Relatórios', icon: FileBarChart, show: type === 'Imóveis' },
     { key: 'checklist', label: 'Checklist', icon: ListChecks, show: type === 'Imóveis' },
+    { key: 'preparacao', label: 'Preparação', icon: NotebookPen, show: type === 'Investidores' },
     { key: 'documentos', label: `Documentos (${data?.documentos?.length ?? 0})`, icon: FolderOpen, show: type === 'Investidores' },
     { key: 'dados_empresa', label: 'Dados Legais', icon: Building, show: type === 'Investidores' },
     { key: 'documentos_consultor', label: 'Documentos', icon: FolderOpen, show: type === 'Consultores' },
@@ -853,6 +858,12 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       ) : type === 'Imóveis' && activeTab === 'relatorios_imovel' ? (
         <div className="p-4 sm:p-6">
           <RelatoriosImovelTab imovelId={data.id} estado={data.estado} driveFolderId={data.drive_folder_id} imovelNome={data.nome} />
+        </div>
+
+      /* Preparação das calls (SOP 4) */
+      ) : type === 'Investidores' && activeTab === 'preparacao' ? (
+        <div className="p-4 sm:p-6">
+          <Suspense fallback={null}><PreparacaoInvestidorTab investidorId={data.id} /></Suspense>
         </div>
 
       /* Documentos enviados a investidor */

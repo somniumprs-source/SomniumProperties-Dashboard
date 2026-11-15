@@ -417,6 +417,14 @@ function normaliseDateTime(v) {
   return s
 }
 
+// Calls com investidores: link para o documento de preparação na ficha.
+const CATEGORIAS_CALL_INV = ['Cold Call a Investidores', 'Follow-up de Investidores', 'Discovery Call a Investidores']
+function linkPreparacao(tarefa) {
+  if (tarefa.origem_tipo !== 'investidor' || !tarefa.origem_id || !CATEGORIAS_CALL_INV.includes(tarefa.categoria)) return ''
+  const base = (process.env.PUBLIC_URL || 'https://somnium-properties-dashboard.vercel.app').replace(/\/$/, '')
+  return `Preparação da call: ${base}/crm?tab=Investidores&detail=${encodeURIComponent(tarefa.origem_id)}&ficha=preparacao`
+}
+
 function buildEvent(tarefa) {
   const inicioStr = tarefa.inicio instanceof Date
     ? tarefa.inicio.toISOString()
@@ -425,7 +433,8 @@ function buildEvent(tarefa) {
 
   const event = {
     summary: tarefa.tarefa,
-    description: tarefa.funcionario ? `Funcionário: ${tarefa.funcionario}` : '',
+    // A linha "Funcionário:" tem de ficar em primeiro: o pull lê-a daqui.
+    description: [tarefa.funcionario ? `Funcionário: ${tarefa.funcionario}` : '', linkPreparacao(tarefa)].filter(Boolean).join('\n'),
   }
 
   if (isDiaInteiro) {

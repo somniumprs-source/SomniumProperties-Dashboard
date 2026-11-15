@@ -366,13 +366,22 @@ function normaliseDateTime(v: any): string | null {
   return s;
 }
 
+// Calls com investidores: link para o documento de preparação na ficha.
+const CATEGORIAS_CALL_INV = ["Cold Call a Investidores", "Follow-up de Investidores", "Discovery Call a Investidores"];
+function linkPreparacao(tarefa: any): string {
+  if (tarefa.origem_tipo !== "investidor" || !tarefa.origem_id || !CATEGORIAS_CALL_INV.includes(tarefa.categoria)) return "";
+  const base = (Deno.env.get("PUBLIC_URL") || "https://somnium-properties-dashboard.vercel.app").replace(/\/$/, "");
+  return `Preparação da call: ${base}/crm?tab=Investidores&detail=${encodeURIComponent(tarefa.origem_id)}&ficha=preparacao`;
+}
+
 function buildEvent(tarefa: any): any {
   const inicioStr = tarefa.inicio instanceof Date ? tarefa.inicio.toISOString() : String(tarefa.inicio || "");
   const isDiaInteiro = /^\d{4}-\d{2}-\d{2}$/.test(inicioStr);
 
   const event: any = {
     summary: tarefa.tarefa,
-    description: tarefa.funcionario ? `Funcionário: ${tarefa.funcionario}` : "",
+    // A linha "Funcionário:" tem de ficar em primeiro: o pull lê-a daqui.
+    description: [tarefa.funcionario ? `Funcionário: ${tarefa.funcionario}` : "", linkPreparacao(tarefa)].filter(Boolean).join("\n"),
   };
 
   if (isDiaInteiro) {

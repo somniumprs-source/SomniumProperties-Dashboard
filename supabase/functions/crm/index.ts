@@ -36,6 +36,11 @@ import {
   lerSinteseInvestidores, pedirSinteseInvestidores, sintesesInvestidoresPorGerar, passoSinteseInvestidores, falhaSinteseInvestidores,
 } from "../_shared/chamadasInvestidor.ts";
 import { analyzeReuniao, pedirAnaliseReuniao, aplicarAnaliseReuniao } from "../_shared/meetingAnalysis.ts";
+import {
+  prepararCall, lerPreparacao, preparacoesDoInvestidor, preparacoesSemana, corrigirTipoCall, tipoChamadaSugerido,
+  aplicarResumoReuniao, aplicarPreparacao, TIPO_FILA_PREPARACAO, TIPO_FILA_RESUMO,
+} from "../_shared/preparacaoCall.ts";
+import { generatePreparacaoCallsPDF } from "../_shared/pdfPreparacaoCalls.ts";
 import { estadoIA, emFilaIA, enfileirarIA, jsonDaResposta, pedidosIAPendentes, iniciarIA, concluirIA, falharIA } from "../_shared/filaIA.ts";
 import { isConfigured as firefliesConfigured, syncFireflies } from "../_shared/firefliesSync.ts";
 import { TIPO_FILA_LOCALIZACAO, registarEstudo, lerAnaliseLocalizacao, guardarPesquisa, atualizarDecisoes, construirPedidoAnalise, marcarAnalisePedida, aplicarAnaliseLocalizacao, aplicarAFicha } from "../_shared/analiseLocalizacaoIA.js";
@@ -2906,6 +2911,8 @@ app.post("/gravacoes/:id/analise-investidor", async (c: any) => {
 const APLICADORES_IA: Record<string, (pedido: any, texto: string) => Promise<any>> = {
   reuniao_investidor: aplicarAnaliseReuniao,
   reuniao_consultor: aplicarAnaliseReuniao,
+  [TIPO_FILA_RESUMO]: (p: any, t: string) => aplicarResumoReuniao(pool, p, t),
+  [TIPO_FILA_PREPARACAO]: (p: any, t: string) => aplicarPreparacao(pool, p, t),
   relatorio_semanal: aplicarRelatorioSemanal,
   resumo_projeto: aplicarResumoProjeto,
   documento_imovel: aplicarDocumentoImovel,
@@ -3422,6 +3429,86 @@ app.get("/gravacoes", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
+// ── Preparação das calls com investidores (SOP 4) ───────────
+// Documento de preparação por tarefa de call; tipo calculado pelo histórico.
+// Lógica em _shared/preparacaoCall.ts; texto gerado no Mac (fila IA).
+async function prepararProximaCall(investidorId: string) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id FROM tarefas WHERE origem_tipo = 'investidor' AND origem_id = $1 AND origem_campo = 'proximo_contacto'
+         AND status NOT IN ('Concluída', 'Concluida') AND COALESCE(arquivada, false) = false`, [investidorId]);
+    for (const t of rows) await prepararCall(pool, t.id, { gerar: true });
+  } catch (e) { console.error("[preparacao]", (e as Error).message); }
+}
+const semPortalInvestidor = async (c: any, next: any) =>
+  (await resolveCrmUser(c))?.role === "investidor" ? c.json({ error: "Sem acesso" }, 403) : next();
+app.use("/preparacao-calls", requireModule("crm.investidores"));
+app.use("/preparacao-calls/*", requireModule("crm.investidores"));
+const diaQ = (v: any, fb: string) => (/^\d{4}-\d{2}-\d{2}$/.test(v || "") ? v : fb);
+function semanaAtual() {
+  const d = new Date(); const dow = (d.getUTCDay() + 6) % 7;
+  const seg = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - dow));
+  const dom = new Date(seg.getTime() + 6 * 86400000);
+  return { desde: seg.toISOString().slice(0, 10), ate: dom.toISOString().slice(0, 10) };
+}
+
+app.get("/preparacao-calls", async (c: any) => {
+  try {
+    const s = semanaAtual();
+    return c.json(await preparacoesSemana(pool, { desde: diaQ(c.req.query("desde"), s.desde), ate: diaQ(c.req.query("ate"), s.ate) }));
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.get("/preparacao-calls/pdf", async (c: any) => {
+  try {
+    const s = semanaAtual();
+    const periodo = { desde: diaQ(c.req.query("desde"), s.desde), ate: diaQ(c.req.query("ate"), s.ate) };
+    const dados = await preparacoesSemana(pool, periodo);
+    const tarefa = c.req.query("tarefa");
+    if (tarefa) dados.preparacoes = dados.preparacoes.filter((p: any) => p.tarefa_id === tarefa);
+    const u = await resolveCrmUser(c);
+    const buffer = await streamToBuffer(generatePreparacaoCallsPDF(dados, { preparadoPara: u?.nome || null }));
+    return c.body(buffer, 200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": pdfDisposition(c, `Preparacao_Calls_Investidores_${periodo.desde}_${periodo.ate}.pdf`),
+    });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.get("/preparacao-calls/tarefa/:tarefaId", async (c: any) => {
+  try {
+    const p = await lerPreparacao(pool, c.req.param("tarefaId"));
+    if (!p) return c.json({ error: "Esta tarefa não é uma call com investidor" }, 404);
+    return c.json(p);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/preparacao-calls/tarefa/:tarefaId/regenerar", async (c: any) => {
+  try {
+    const p = await prepararCall(pool, c.req.param("tarefaId"), { gerar: true, forcar: true });
+    if (!p) return c.json({ error: "Esta tarefa não é uma call com investidor" }, 404);
+    return c.json(await lerPreparacao(pool, c.req.param("tarefaId"), { criar: false }));
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.patch("/preparacao-calls/tarefa/:tarefaId/tipo", async (c: any) => {
+  try {
+    const { tipo } = await c.req.json().catch(() => ({}));
+    await corrigirTipoCall(pool, c.req.param("tarefaId"), tipo);
+    return c.json(await lerPreparacao(pool, c.req.param("tarefaId"), { criar: false }));
+  } catch (e) { return c.json({ error: (e as Error).message }, 400); }
+});
+
+app.get("/investidores/:id/preparacoes", semPortalInvestidor, async (c: any) => {
+  try { return c.json(await preparacoesDoInvestidor(pool, c.req.param("id"))); }
+  catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.get("/investidores/:id/tipo-chamada-sugerido", semPortalInvestidor, async (c: any) => {
+  try { return c.json(await tipoChamadaSugerido(pool, c.req.param("id"))); }
+  catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
 // ── Chamadas gravadas com investidores (SOP 4) ───────────────
 // Mesmo fluxo das gravacoes dos consultores (bucket "Gravacoes", worker
 // Whisper local), mas avaliadas contra o SOP 4. Logica em chamadasInvestidor.ts.
@@ -3653,6 +3740,8 @@ for (const [rota, tipo] of [["consultores", "consultor"], ["investidores", "inve
       const { data, quando, assuntos, tipo_contacto } = await c.req.json().catch(() => ({}));
       const tarefaId = await agendarContactoPessoa(pool, tipo, c.req.param("id"), { data, quando: quando || null, assuntos, tipoContacto: tipo_contacto || null, user: await resolveCrmUser(c) });
       if (!tarefaId) return c.json({ error: "Não encontrado" }, 404);
+      // Call com investidor: tipo pelo histórico + preparação (fila IA no Mac).
+      if (tipo === "investidor") await prepararCall(pool, tarefaId, { gerar: true }).catch((e: any) => console.error("[preparacao]", e.message));
       return c.json({ ok: true, tarefa_id: tarefaId });
     } catch (e) { return c.json({ error: (e as Error).message }, 400); }
   });
@@ -3661,6 +3750,7 @@ for (const [rota, tipo] of [["consultores", "consultor"], ["investidores", "inve
       const body = await c.req.json().catch(() => ({}));
       const r = await registarContactoPessoa(pool, tipo, c.req.param("id"), { ...body, user: await resolveCrmUser(c) });
       if (!r) return c.json({ error: "Não encontrado" }, 404);
+      if (tipo === "investidor") await prepararProximaCall(c.req.param("id"));
       return c.json({ ok: true, ...r });
     } catch (e) { return c.json({ error: (e as Error).message }, 400); }
   });

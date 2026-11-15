@@ -18,7 +18,7 @@
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
-  CalendarClock, ListChecks, ChevronLeft, ChevronRight, RefreshCw, Plus, Trash2, Check, Inbox, ExternalLink, ShieldCheck, X,
+  CalendarClock, ListChecks, ChevronLeft, ChevronRight, RefreshCw, Plus, Trash2, Check, Inbox, ExternalLink, ShieldCheck, X, NotebookPen,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { PageSkeleton } from '../components/ui/Skeleton.jsx'
@@ -27,6 +27,7 @@ import { Tabs } from '../components/ui/Tabs.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { Modal } from '../components/ui/Modal.jsx'
 import { DocumentosTarefa } from '../components/crm/DocumentosConsultor.jsx'
+import { PreparacaoTarefa, PreparacaoSemana } from '../components/crm/PreparacaoCall.jsx'
 import { ScrollableTable } from '../components/ui/ScrollableTable.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { useUrlState } from '../hooks/useUrlState.js'
@@ -37,6 +38,9 @@ import { useResponsaveisRegiao } from '../hooks/useResponsaveisRegiao.js'
 import { ESTADOS_TAREFA, tarefaAtrasada, faltaNaTarefa } from '../constants/regrasTarefas.js'
 
 const FUNCIONARIOS = ['João Abreu', 'Alexandre Mendes']
+// Calls com investidores: têm documento de preparação (SOP 4).
+const CATEGORIAS_CALL_INV = ['Cold Call a Investidores', 'Follow-up de Investidores', 'Discovery Call a Investidores']
+const ehCallInvestidor = (t) => t?.origem_tipo === 'investidor' && !!t?.origem_id && CATEGORIAS_CALL_INV.includes(t?.categoria) && !String(t?.origem_campo || '').startsWith('contacto:')
 const AMBOS = 'João Abreu, Alexandre Mendes'
 // Categorias por departamento. Região só nas que estão amarradas a um imóvel.
 const GRUPOS_CATEGORIAS = [
@@ -202,6 +206,7 @@ export function Agenda({ embutido = false }) {
             items={[
               { key: 'calendario', label: 'Calendário', icon: CalendarClock },
               { key: 'tarefas', label: 'Tarefas', icon: ListChecks },
+              { key: 'preparacao', label: 'Preparação da semana', icon: NotebookPen },
             ]}
             value={tab}
             onChange={setTab}
@@ -215,11 +220,11 @@ export function Agenda({ embutido = false }) {
           </div>
         </div>
 
-        {!loading && porAprovar.length > 0 && (
+        {!loading && porAprovar.length > 0 && tab !== 'preparacao' && (
           <PorAprovar lista={porAprovar} agenda={daAgenda} aprovar={aprovar} eliminar={eliminar} eliminarVarias={eliminarVarias} accao={accao} abrir={setModal} />
         )}
 
-        {loading ? <PageSkeleton /> : tab === 'calendario'
+        {tab === 'preparacao' ? <PreparacaoSemana /> : loading ? <PageSkeleton /> : tab === 'calendario'
           ? <CalendarioTab tarefas={daAgenda} todas={tarefas} guardar={guardar} accao={accao} abrir={setModal} sincronizar={sincronizar} />
           : <TarefasTab tarefas={daAgenda} guardar={guardar} eliminarVarias={eliminarVarias} eliminar={eliminar} accao={accao} abrir={setModal} />}
       </div>
@@ -329,6 +334,12 @@ function TarefaModal({ modal, saving, onClose, onSave, onDelete }) {
         </div>
         <p className="text-xs text-ink-muted self-end pb-2">Sem início, a tarefa fica em "Sem hora marcada" e não aparece no Google Calendar.</p>
         {t?.id && <DocumentosTarefa tarefaId={t.id} />}
+        {t?.id && ehCallInvestidor(t) && (
+          <details className="sm:col-span-2" open>
+            <summary className="cursor-pointer text-sm font-medium text-ink mb-2">Preparação da call</summary>
+            <PreparacaoTarefa tarefaId={t.id} />
+          </details>
+        )}
       </div>
     </Modal>
   )
