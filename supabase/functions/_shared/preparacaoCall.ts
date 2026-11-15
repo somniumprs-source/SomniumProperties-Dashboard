@@ -33,7 +33,7 @@ export const TIPO_CALL_LABEL = { cold_call: 'Cold Call', follow_up: 'Follow-up',
 export const TIPOS_CALL = ['cold_call', 'follow_up', 'discovery_call']
 export const TIPO_FILA_PREPARACAO = 'preparacao_call'
 export const TIPO_FILA_RESUMO = 'resumo_reuniao'
-const VERSAO_PROMPT = 'v1'
+const VERSAO_PROMPT = 'v2'
 const MIN_TRANSCRICAO_RESUMO = 1500
 const DIAS_JANELA = 14
 
@@ -456,7 +456,8 @@ REGRAS OBRIGATÓRIAS
 - Num follow-up, a abertura faz referência ao último contacto e ao que ficou combinado. Numa cold call com lead quente, a abertura faz referência ao formulário/landing page que ele preencheu (e, se passou muito tempo, assume a demora). Numa cold call fria, apresenta a Somnium em uma frase.
 - ${objetivoPadrao}
 - Follow-up estratégico, nunca repetitivo: traz um motivo real (o que mudou na Somnium).
-- "correcoes_crm": incoerências entre a ficha e o que foi dito nas reuniões/notas (ex.: ficha diz Coimbra, a pessoa vive na Maia), valores mal registados e reuniões sem notas.
+- "correcoes_crm": só valores errados ou incoerentes (ex.: ficha diz Coimbra, a pessoa vive na Maia; capital "30,0005 €") e reuniões sem notas. NÃO incluas campos vazios: esses já vão para "perguntas".
+- No "historial", o canal é o que está nos dados: o primeiro contacto usa a origem da ficha (Skool, Landing Page, Grupos Whatsapp...). Não inventes canais nem contactos.
 - Português de Portugal, direto, frases curtas. Sem emojis. Sem travessões longos.
 
 DADOS DO CRM (JSON)
