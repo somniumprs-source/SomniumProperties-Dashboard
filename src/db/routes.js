@@ -2566,6 +2566,12 @@ async function prepararProximaCall(investidorId) {
 }
 const semPortalInvestidor = (req, res, next) => (req.appUser?.role === 'investidor' ? res.status(403).json({ error: 'Sem acesso' }) : next())
 const diaQ = (v, fb) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : fb)
+// Preparação da semana: cada um vê as calls que agendou; admin pode pedir ?todas=1.
+function agendadoPorDe(req) {
+  const u = req.appUser || req.user || null
+  if (req.query.todas === '1' && (!u || u.role === 'admin')) return null
+  return u?.id || null
+}
 function semanaAtual() {
   const d = new Date(); const dow = (d.getUTCDay() + 6) % 7
   const seg = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - dow))
@@ -2575,14 +2581,14 @@ function semanaAtual() {
 router.get('/preparacao-calls', semPortalInvestidor, async (req, res) => {
   try {
     const s = semanaAtual()
-    res.json(await preparacoesSemana(pool, { desde: diaQ(req.query.desde, s.desde), ate: diaQ(req.query.ate, s.ate) }))
+    res.json(await preparacoesSemana(pool, { desde: diaQ(req.query.desde, s.desde), ate: diaQ(req.query.ate, s.ate), agendadoPor: agendadoPorDe(req) }))
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 router.get('/preparacao-calls/pdf', semPortalInvestidor, async (req, res) => {
   try {
     const s = semanaAtual()
     const periodo = { desde: diaQ(req.query.desde, s.desde), ate: diaQ(req.query.ate, s.ate) }
-    const dados = await preparacoesSemana(pool, periodo)
+    const dados = await preparacoesSemana(pool, { ...periodo, agendadoPor: req.query.tarefa ? null : agendadoPorDe(req) })
     if (req.query.tarefa) dados.preparacoes = dados.preparacoes.filter(p => p.tarefa_id === req.query.tarefa)
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', pdfDisposition(req, `Preparacao_Calls_Investidores_${periodo.desde}_${periodo.ate}.pdf`))

@@ -667,13 +667,16 @@ export async function preparacoesDoInvestidor(pool, investidorId) {
 }
 
 // Calls de investidores entre duas datas (vista da semana e PDF).
-export async function preparacoesSemana(pool, { desde, ate }) {
+// agendadoPor: só as calls que esse utilizador agendou (tarefas.user_id); as
+// tarefas sem autor registado aparecem a todos. Sem ele: todas.
+export async function preparacoesSemana(pool, { desde, ate, agendadoPor = null }) {
   await ensurePreparacaoTables(pool)
   const { rows: tarefas } = await pool.query(
     `SELECT id FROM tarefas WHERE origem_tipo = 'investidor' AND categoria = ANY($1)
        AND COALESCE(arquivada, false) = false AND tarefa NOT LIKE 'Cancelada:%'
-       AND left(COALESCE(inicio, data_limite), 10) BETWEEN $2 AND $3`,
-    [Object.keys(CATEGORIAS_CALL_INV), desde, ate])
+       AND left(COALESCE(inicio, data_limite), 10) BETWEEN $2 AND $3
+       ${agendadoPor ? 'AND (user_id = $4 OR user_id IS NULL)' : ''}`,
+    agendadoPor ? [Object.keys(CATEGORIAS_CALL_INV), desde, ate, agendadoPor] : [Object.keys(CATEGORIAS_CALL_INV), desde, ate])
   for (const t of tarefas) {
     const p = await lerPrep(pool, t.id)
     if (!p) await prepararCall(pool, t.id, { gerar: true }).catch(e => console.error('[preparacao]', e.message))
@@ -689,7 +692,7 @@ export async function preparacoesSemana(pool, { desde, ate }) {
   // "O que mudou" da semana: desde o último contacto mais antigo dos follow-ups.
   const desdes = lista.filter(p => p.tipo_final !== 'cold_call').map(p => p.secoes_base?.mudou_somnium?.desde).filter(Boolean).sort()
   const mudou = desdes.length ? { desde: desdes[0], itens: await mudancasSomnium(pool, desdes[0]) } : { desde: null, itens: [] }
-  return { periodo: { desde, ate }, preparacoes: lista, mudou_somnium: mudou }
+  return { periodo: { desde, ate }, filtro: agendadoPor ? 'minhas' : 'todas', preparacoes: lista, mudou_somnium: mudou }
 }
 
 // Correção manual do tipo (nunca mais é recalculado).

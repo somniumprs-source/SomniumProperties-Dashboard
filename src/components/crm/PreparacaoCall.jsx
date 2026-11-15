@@ -15,6 +15,7 @@ import { apiFetch } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { Button } from '../ui/Button.jsx'
 import { Badge } from '../ui/Badge.jsx'
+import { useAuth } from '../../contexts/AuthContext.jsx'
 
 export const TIPO_CALL_LABEL = { cold_call: 'Cold Call', follow_up: 'Follow-up', discovery_call: 'Discovery Call', a_confirmar: 'A confirmar' }
 const EM_CURSO = ['a_gerar', 'aguarda_resumos', 'pendente']
@@ -280,16 +281,20 @@ export function PreparacaoSemana() {
   })
   const [dados, setDados] = useState(null)
   const [erro, setErro] = useState(null)
+  // Cada um vê as calls que agendou; administradores podem ver todas.
+  const { role } = useAuth() || {}
+  const [todas, setTodas] = useState(false)
   const desde = isoDia(seg)
   const ate = isoDia(new Date(seg.getTime() + 6 * 86400000))
+  const filtroQs = todas ? '&todas=1' : ''
   const carregar = useCallback(async () => {
     try {
-      const r = await apiFetch(`/api/crm/preparacao-calls?desde=${desde}&ate=${ate}`, { timeoutMs: 120_000 })
+      const r = await apiFetch(`/api/crm/preparacao-calls?desde=${desde}&ate=${ate}${filtroQs}`, { timeoutMs: 120_000 })
       const j = await r.json()
       if (!r.ok || j.error) throw new Error(j.error || 'Falha ao carregar')
       setDados(j); setErro(null)
     } catch (e) { setErro(e.message) }
-  }, [desde, ate])
+  }, [desde, ate, filtroQs])
   useEffect(() => { setDados(null); carregar() }, [carregar])
   usePolling(!!dados?.preparacoes?.some(p => EM_CURSO.includes(p.estado)), carregar, 20000)
 
@@ -311,9 +316,17 @@ export function PreparacaoSemana() {
         <Button size="sm" variant="secondary" icon={ChevronLeft} onClick={() => setSeg(s => new Date(s.getTime() - 7 * 86400000))} aria-label="Semana anterior" />
         <span className="text-sm font-medium text-ink">{fmtData(desde)} a {fmtData(ate)}</span>
         <Button size="sm" variant="secondary" icon={ChevronRight} onClick={() => setSeg(s => new Date(s.getTime() + 7 * 86400000))} aria-label="Semana seguinte" />
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex flex-wrap gap-2">
+          {role === 'admin' && (
+            <div className="inline-flex rounded-md border border-line overflow-hidden text-xs">
+              {[[false, 'Minhas'], [true, 'Todas']].map(([v, l]) => (
+                <button key={l} type="button" onClick={() => setTodas(v)}
+                  className={`px-3 py-1.5 ${todas === v ? 'bg-[#0D0D0D] text-[#C9A84C]' : 'bg-surface-raised text-ink-muted hover:text-ink'}`}>{l}</button>
+              ))}
+            </div>
+          )}
           <Button size="sm" variant="secondary" icon={RefreshCw} onClick={carregar}>Atualizar</Button>
-          <Button size="sm" icon={FileDown} disabled={!preps.length} onClick={() => descarregarPdf(`desde=${desde}&ate=${ate}`, toast)}>Exportar PDF</Button>
+          <Button size="sm" icon={FileDown} disabled={!preps.length} onClick={() => descarregarPdf(`desde=${desde}&ate=${ate}${filtroQs}`, toast)}>Exportar PDF</Button>
         </div>
       </div>
 
@@ -338,7 +351,7 @@ export function PreparacaoSemana() {
             </div>
           )}
 
-          {preps.length === 0 ? <p className="text-sm text-ink-muted">Sem calls com investidores nesta semana.</p> : (
+          {preps.length === 0 ? <p className="text-sm text-ink-muted">{todas ? 'Sem calls com investidores nesta semana.' : 'Sem calls com investidores agendadas por ti nesta semana.'}</p> : (
             <div className="overflow-x-auto rounded-lg border border-line">
               <table className="w-full text-sm">
                 <thead className="bg-[#0D0D0D] text-[#C9A84C] text-[10px] tracking-widest uppercase">

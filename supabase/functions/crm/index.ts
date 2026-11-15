@@ -3445,6 +3445,12 @@ const semPortalInvestidor = async (c: any, next: any) =>
 app.use("/preparacao-calls", requireModule("crm.investidores"));
 app.use("/preparacao-calls/*", requireModule("crm.investidores"));
 const diaQ = (v: any, fb: string) => (/^\d{4}-\d{2}-\d{2}$/.test(v || "") ? v : fb);
+// Preparação da semana: cada um vê as calls que agendou; admin pode pedir ?todas=1.
+async function agendadoPorDe(c: any) {
+  const u = await resolveCrmUser(c);
+  if (c.req.query("todas") === "1" && (!u || u.role === "admin")) return null;
+  return u?.id || null;
+}
 function semanaAtual() {
   const d = new Date(); const dow = (d.getUTCDay() + 6) % 7;
   const seg = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - dow));
@@ -3455,7 +3461,7 @@ function semanaAtual() {
 app.get("/preparacao-calls", async (c: any) => {
   try {
     const s = semanaAtual();
-    return c.json(await preparacoesSemana(pool, { desde: diaQ(c.req.query("desde"), s.desde), ate: diaQ(c.req.query("ate"), s.ate) }));
+    return c.json(await preparacoesSemana(pool, { desde: diaQ(c.req.query("desde"), s.desde), ate: diaQ(c.req.query("ate"), s.ate), agendadoPor: await agendadoPorDe(c) }));
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
@@ -3463,8 +3469,9 @@ app.get("/preparacao-calls/pdf", async (c: any) => {
   try {
     const s = semanaAtual();
     const periodo = { desde: diaQ(c.req.query("desde"), s.desde), ate: diaQ(c.req.query("ate"), s.ate) };
-    const dados = await preparacoesSemana(pool, periodo);
     const tarefa = c.req.query("tarefa");
+    // PDF de uma só call (botão no documento): sem filtro de quem agendou.
+    const dados = await preparacoesSemana(pool, { ...periodo, agendadoPor: tarefa ? null : await agendadoPorDe(c) });
     if (tarefa) dados.preparacoes = dados.preparacoes.filter((p: any) => p.tarefa_id === tarefa);
     const u = await resolveCrmUser(c);
     const buffer = await streamToBuffer(generatePreparacaoCallsPDF(dados, { preparadoPara: u?.nome || null }));
