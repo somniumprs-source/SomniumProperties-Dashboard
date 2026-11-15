@@ -115,18 +115,7 @@ export function Sidebar() {
         <div className="px-3 py-3 flex flex-col gap-2.5 border-t border-white/5">
           <PerfilActivoSelector />
           <div className="flex items-center gap-2 px-1">
-            {profile && (
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <div className="w-7 h-7 rounded-full flex items-center justify-center text-overline font-semibold text-white shrink-0"
-                  style={{ backgroundColor: profile.cor }}>
-                  {profile.iniciais}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-caption font-medium text-white truncate">{profile.nome}</p>
-                  {profile.role && <p className="text-overline uppercase text-neutral-500 truncate">{profile.role}</p>}
-                </div>
-              </div>
-            )}
+            {profile && <CartaoPerfil profile={profile} />}
             <div className="flex items-center shrink-0">
               <VoiceButton className={FOOTER_BTN} />
               <NotificationsBell />
@@ -138,6 +127,36 @@ export function Sidebar() {
         </div>
       </aside>
     </>
+  )
+}
+
+// Cartão do rodapé: em sessão partilhada mostra quem está a operar (perfil
+// escolhido no seletor) e, por baixo, a conta da sessão. Sessão própria: o dono.
+function CartaoPerfil({ profile }) {
+  const [activeId, setActiveId] = useState(lerPerfilAtivo)
+  useEffect(() => {
+    const mudou = () => setActiveId(lerPerfilAtivo())
+    window.addEventListener(EVENTO_PERFIL_MUDOU, mudou)
+    return () => window.removeEventListener(EVENTO_PERFIL_MUDOU, mudou)
+  }, [])
+  const ativo = (profile.perfis || []).find(p => p.id === activeId)
+  const outro = ativo && ativo.id !== profile.id
+  const nome = outro ? ativo.nome : profile.nome
+  const iniciais = outro
+    ? (ativo.nome || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]?.toUpperCase()).join('')
+    : profile.iniciais
+  const sub = outro ? `Conta: ${profile.nome}` : profile.role
+  return (
+    <div className="flex items-center gap-2 flex-1 min-w-0" title={outro ? `A operar como ${ativo.nome} na conta de ${profile.nome}` : undefined}>
+      <div className="w-7 h-7 rounded-full flex items-center justify-center text-overline font-semibold text-white shrink-0"
+        style={{ backgroundColor: outro ? '#C9A84C' : profile.cor }}>
+        {iniciais}
+      </div>
+      <div className="min-w-0">
+        <p className="text-caption font-medium text-white truncate">{nome}</p>
+        {sub && <p className={`text-overline text-neutral-500 truncate ${outro ? '' : 'uppercase'}`}>{sub}</p>}
+      </div>
+    </div>
   )
 }
 
