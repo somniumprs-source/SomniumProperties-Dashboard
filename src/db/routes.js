@@ -63,7 +63,7 @@ import {
   atualizarCompromisso, lerParametros, guardarParametros, painelRede, apagarDadosGravacoes, atualizarQualificacao, corrigirQualificacao,
   sugestoesConsultores, sugestoesTrimestrais, gerarTarefasSugestao, limparAudiosAntigos,
 } from './classificacaoConsultor.js'
-import { getAuditUser } from './audit.js'
+import { getAuditUser, perfisDaSessao } from './audit.js'
 import { resolveAppUser, RECORD_RESTRICTED_ROLES } from './userRoutes.js'
 import {
   generateFichaAcompanhamento,
@@ -172,7 +172,18 @@ async function resolveCrmUser(req) {
     const { data: { user }, error } = await _supabaseCrm.auth.getUser(token)
     if (error || !user) return null
     req.user = user
-    return await resolveAppUser(req)
+    const u = await resolveAppUser(req)
+    // Sessão partilhada: o utilizador é o perfil escolhido (X-User-Id), como no
+    // histórico de alterações (audit.js). Só perfis desta sessão. Espelha a Edge Function crm.
+    const pedido = req.headers['x-user-id']
+    if (pedido && pedido !== u?.id && user.email) {
+      const perfis = await perfisDaSessao(user.email).catch(() => [])
+      if (perfis.length > 1 && perfis.some(p => p.id === pedido)) {
+        const { rows: [o] } = await pool.query('SELECT * FROM users WHERE id = $1 AND ativo', [pedido])
+        if (o) return o
+      }
+    }
+    return u
   } catch { return null }
 }
 

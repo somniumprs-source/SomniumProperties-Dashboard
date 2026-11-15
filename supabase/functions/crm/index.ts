@@ -16,7 +16,7 @@ import { assertSafeUpload, AUDIO_ALLOWED_EXT, OFFICE_ALLOWED_EXT, checkUploadRat
 import { ROLE_MODULES, RECORD_RESTRICTED_ROLES, NON_ID_SEGS } from "../_shared/roles.ts";
 import { resolveOrProvisionUser } from "../_shared/userResolve.ts";
 import pool from "../_shared/pg.ts";
-import { auditMiddleware, getAuditUser } from "../_shared/audit.ts";
+import { auditMiddleware, getAuditUser, perfisDaSessao } from "../_shared/audit.ts";
 import {
   Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas,
   ConsultorInteracoes, InvestidorInteracoes, DocumentosInvestidor, Visitas,
@@ -176,8 +176,22 @@ async function resolveCrmUserUncached(c: any): Promise<any | null> {
   try {
     const { data: { user }, error } = await _crmAuthClient.auth.getUser(token);
     if (error || !user?.email) return null;
-    return await resolveOrProvisionUser({ id: user.id, email: user.email });
+    const u = await resolveOrProvisionUser({ id: user.id, email: user.email });
+    return (await perfilEscolhido(c, user.email, u)) || u;
   } catch { return null; }
+}
+
+// Sessão partilhada pela equipa: o utilizador do pedido é o perfil escolhido
+// no seletor (X-User-Id), não o dono da sessão. Assim "realizada por", o autor
+// dos contactos e o funcionário das tarefas batem com o histórico de alterações
+// (auditMiddleware usa a mesma regra). Só aceita perfis desta sessão.
+async function perfilEscolhido(c: any, email: string, u: any): Promise<any | null> {
+  const pedido = c.req.header("x-user-id");
+  if (!pedido || pedido === u?.id) return null;
+  const perfis = await perfisDaSessao(email).catch(() => []);
+  if (perfis.length < 2 || !perfis.some((p) => p.id === pedido)) return null;
+  const { rows: [o] } = await pool.query("SELECT * FROM users WHERE id = $1 AND ativo", [pedido]);
+  return o || null;
 }
 
 // Aplica o rate limit de upload (por utilizador, ou por IP sem sessão) —
