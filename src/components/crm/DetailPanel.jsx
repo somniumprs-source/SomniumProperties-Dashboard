@@ -4,7 +4,7 @@
  * (Tarefas, Auditoria, aba Reuniões): a ficha não os repete.
  */
 import { useState, useEffect, useCallback, useMemo, useRef, memo, lazy, Suspense } from 'react'
-import { FileDown, ChevronDown, ChevronUp, ClipboardList, Home, Euro, Repeat, BarChart3, Lightbulb, Phone, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users, MapPin, Eye, Trash2, ThumbsUp, TrendingDown, Shield, Building2, UserRound, FolderOpen, Calculator, Hammer, Scale, DoorOpen, FileBarChart, ListChecks, Building, CalendarCheck, Star, Gauge, History, Briefcase, ShieldCheck, Timer, NotebookPen } from 'lucide-react'
+import { FileDown, ChevronDown, ChevronUp, ClipboardList, Home, Euro, Repeat, BarChart3, Lightbulb, Phone, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users, MapPin, Eye, Trash2, ThumbsUp, TrendingDown, Shield, Building2, UserRound, FolderOpen, Calculator, Hammer, Scale, DoorOpen, FileBarChart, ListChecks, Building, CalendarCheck, Star, Gauge, History, Briefcase, ShieldCheck, Timer, NotebookPen, MessagesSquare } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { BrandLoader } from '../ui/BrandLoader.jsx'
 import { TabTransition, useTabDirection } from '../ui/PageTransition.jsx'
@@ -18,6 +18,7 @@ import { GravacoesConsultor } from './GravacoesConsultor.jsx'
 import { DocumentosConsultor } from './DocumentosConsultor.jsx'
 import { RegistoChamadasTab } from './RegistoChamadasTab.jsx'
 import { ChamadasInvestidor } from './ChamadasInvestidor.jsx'
+import { useCamposIA, SugestoesIA, MarcaIA } from './RevisaoCallInvestidor.jsx'
 import { ChamadasConsultor } from './ChamadasConsultor.jsx'
 import { AvaliacaoConsultor } from './AvaliacaoConsultor.jsx'
 import { isWholesaling } from '../../lib/modelos.js'
@@ -476,6 +477,8 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
   })
   const direcaoAba = useTabDirection(activeTab, ORDEM_ABAS)
   const [reunioes, setReunioes] = useState([])
+  // Preenchimento automático (calls e reuniões): sugestões pendentes e marca "preenchido por IA".
+  const ia = useCamposIA(type === 'Investidores' ? id : null)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
@@ -593,7 +596,9 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       // sobrescrever com um valor potencialmente desactualizado.
       // dados_empresa e titular_capital editam-se no separador Dados Legais: enviar
       // aqui o valor de quando a ficha abriu apagava o que lá se acabou de gravar.
-      const { negocios, consultores, imoveis, tarefas, timeline, analises, documentos, checklist, interacoes, montante_investido, dados_empresa, titular_capital, ...rest } = form
+      // objecoes, compromissos e investimentos_atuais (listas JSONB) são geridos pela
+      // IA e pelas sugestões: não voltam no PUT (o pg não serializa arrays de objetos para JSONB).
+      const { negocios, consultores, imoveis, tarefas, timeline, analises, documentos, checklist, interacoes, montante_investido, dados_empresa, titular_capital, objecoes, compromissos, investimentos_atuais, ...rest } = form
       // Remover campos virtuais (prefixo _) que vêm da lista enriquecida e não existem na BD
       const cleanForm = { ...Object.fromEntries(Object.entries(rest).filter(([k]) => !k.startsWith('_'))), ...extra }
       // Entrada numa fase de follow-up: a fase, o motivo e a tarefa vão pela
@@ -1001,9 +1006,10 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
             </>}
             {type === 'Investidores' && <>
               {!editing && <InvestidorHero data={data} />}
+              {!editing && <SugestoesIA investidorId={data.id} pendentes={ia.pendentes} onAlterado={async () => { await ia.recarregar(); await loadData() }} />}
               {editing
                 ? <InvestidorEditSections data={data} form={form} setField={setField} />
-                : <InvestidorReadSections data={data} />}
+                : <InvestidorReadSections data={data} ia={ia.preenchidos} />}
             </>}
             {type === 'Parceiros' && <>
               {editing ? <>
@@ -2271,7 +2277,7 @@ const roiOptsFor = (tipo) => (parseJsonArray(tipo).includes('Ativo') ? INV_ROI_O
 const INV_EXPERIENCIA_OPTS = ['Nenhuma', '1–2 negócios', '3–10 negócios', '>10 negócios']
 const INV_TIPO_IMOVEL_OPTS = ['T0', 'T1', 'T2', 'T3+', 'Apartamento', 'Moradia', 'Edifício', 'Comercial', 'Terreno', 'Ruína', 'Indiferente']
 const INV_DISTRITOS_OPTS = ['Aveiro','Beja','Braga','Bragança','Castelo Branco','Coimbra','Évora','Faro','Guarda','Leiria','Lisboa','Portalegre','Porto','Santarém','Setúbal','Viana do Castelo','Vila Real','Viseu','Açores','Madeira']
-const INV_REGIOES_OPTS = ['Norte','Centro','Lisboa e Vale do Tejo','Alentejo','Algarve','Açores','Madeira','Coimbra','Porto','AMP','AML']
+const INV_REGIOES_OPTS = ['Norte','Centro','Lisboa e Vale do Tejo','Alentejo','Algarve','Açores','Madeira','Coimbra','Porto','Gaia','Aveiro','AMP','AML']
 const INV_EQUIPA_OBRAS_OPTS = ['Própria', 'Da Somnium', 'Indiferente', 'Sem opinião']
 const INV_ESTRATEGIA_OPTS = ['Wholesaling', 'CAEP', 'Fix and Flip', 'Mediação Imobiliária', 'Cedência de posição', 'Arrendamento']
 const INV_PERFIL_RISCO_OPTS = ['Conservador', 'Moderado', 'Agressivo']
@@ -2285,8 +2291,10 @@ function parseJsonArray(raw) {
 }
 
 // Multi-select por chips. Guarda como JSON array.
-function MultiChips({ label, field, form, set, options }) {
+function MultiChips({ label, field, form, set, options: base }) {
   const selected = parseJsonArray(form[field])
+  // Valores que vieram de fora da lista (ex.: zona dita numa call) continuam visíveis.
+  const options = [...base, ...selected.filter(x => !base.includes(x))]
   const toggle = (v) => {
     const next = selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]
     set(field, JSON.stringify(next))
@@ -2672,6 +2680,29 @@ function InvestidorEditSections({ data, form, setField }) {
       )}
     </Section>
 
+    {/* Perfil da conversa (preenchido pelas calls e reuniões; editável à mão) */}
+    <Section icon={MessagesSquare} title="Perfil da conversa" fields={PERFIL_CONVERSA_CAMPOS} form={form}>
+      <EF label="Profissão" field="profissao" form={form} set={setField} />
+      <EF label="Zona de residência" field="zona_residencia" form={form} set={setField} />
+      <EF label="Horário de contacto" field="horario_contacto" form={form} set={setField} />
+      <EF label="Capital disponível em" field="capital_disponivel_em" form={form} set={setField} />
+      <EF label="Capital próprio ou financiado" field="capital_proprio_ou_financiado" form={form} set={setField} type="select" options={CAPITAL_PROPRIO_OPTS} />
+      <EF label="Ticket por operação (€)" field="ticket_por_operacao" form={form} set={setField} type="number" />
+      <EF label="Prazo máx. retenção (meses)" field="prazo_maximo_retencao_meses" form={form} set={setField} type="number" />
+      <EF label="ROI mínimo aceitável" field="roi_minimo_aceitavel" form={form} set={setField} />
+      <EF label="Horizonte de investimento" field="horizonte_investimento" form={form} set={setField} />
+      <EF label="Tolerância a imprevistos" field="tolerancia_imprevistos" form={form} set={setField} type="select" options={TOLERANCIA_OPTS} />
+      <EF label="Tolerância (nota)" field="tolerancia_imprevistos_nota" form={form} set={setField} />
+      <EF label="Grau de interferência" field="grau_interferencia" form={form} set={setField} type="select" options={INTERFERENCIA_OPTS} />
+      <EF label="Negócios concluídos" field="negocios_concluidos" form={form} set={setField} type="number" />
+      <EF label="Negócios concluídos (detalhe)" field="negocios_concluidos_nota" form={form} set={setField} />
+      <EF label="Motivação" field="motivacao" form={form} set={setField} />
+      <EF label="Decisores" field="decisores" form={form} set={setField} />
+      <EF label="Contexto relacional" field="contexto_relacional" form={form} set={setField} />
+      <EF label="Entrevista Estratégica" field="data_entrevista_estrategica" form={form} set={setField} type="date" />
+      <p className="col-span-2 md:col-span-3 text-xs text-ink-muted">Objeções, compromissos e investimentos atuais vêm das calls e reuniões e geram-se nas sugestões da IA.</p>
+    </Section>
+
     {/* 8. Bloqueios — só se já tem dados ou se status sugere */}
     {(temBloqueios || form.motivo_nao_aprovacao || form.motivo_inatividade) && (
       <Section icon={AlertTriangle} title="Bloqueios / Excepções" fields={sec.bloqueios} form={form} defaultOpen>
@@ -2680,6 +2711,62 @@ function InvestidorEditSections({ data, form, setField }) {
       </Section>
     )}
   </>
+}
+
+// ── Perfil da conversa (migração 0102: preenchido pelas calls e reuniões) ──
+const PERFIL_CONVERSA_CAMPOS = ['profissao','zona_residencia','horario_contacto','capital_disponivel_em','capital_proprio_ou_financiado',
+  'ticket_por_operacao','prazo_maximo_retencao_meses','roi_minimo_aceitavel','horizonte_investimento','tolerancia_imprevistos',
+  'grau_interferencia','negocios_concluidos','motivacao','decisores','contexto_relacional','data_entrevista_estrategica']
+const CAPITAL_PROPRIO_OPTS = [{ v: 'proprio', l: 'Próprio' }, { v: 'financiamento', l: 'Financiamento' }, { v: 'misto', l: 'Misto' }, { v: 'nao_sabe', l: 'Não sabe' }]
+const TOLERANCIA_OPTS = [{ v: 'baixa', l: 'Baixa' }, { v: 'media', l: 'Média' }, { v: 'alta', l: 'Alta' }]
+const INTERFERENCIA_OPTS = [{ v: 'nenhum', l: 'Nenhum' }, { v: 'acompanha', l: 'Acompanha' }, { v: 'quer_decidir', l: 'Quer decidir' }]
+const rotuloOpt = (opts, v) => opts.find(o => o.v === v)?.l || v
+function listaJson(v) {
+  if (Array.isArray(v)) return v
+  if (typeof v === 'string' && v.trim().startsWith('[')) { try { return JSON.parse(v) } catch { return [] } }
+  return []
+}
+function FieldIA({ label, value, info }) {
+  return (
+    <div>
+      <p className="text-xs text-ink-muted">{label}<MarcaIA info={info} /></p>
+      <p className="text-sm font-medium text-ink">{value || '—'}</p>
+    </div>
+  )
+}
+function PerfilConversaRead({ data, ia = {} }) {
+  const objecoes = listaJson(data.objecoes)
+  const compromissos = listaJson(data.compromissos)
+  const investimentos = listaJson(data.investimentos_atuais)
+  const eur = (v) => (Number(v) > 0 ? `€${Number(v).toLocaleString('pt-PT')}` : null)
+  return (
+    <Section icon={MessagesSquare} title="Perfil da conversa" fields={PERFIL_CONVERSA_CAMPOS} form={data} defaultOpen>
+      <FieldIA label="Profissão" value={data.profissao} info={ia.profissao} />
+      <FieldIA label="Zona de residência" value={data.zona_residencia} info={ia.zona_residencia} />
+      <FieldIA label="Horário de contacto" value={data.horario_contacto} info={ia.horario_contacto} />
+      <FieldIA label="Capital disponível em" value={data.capital_disponivel_em} info={ia.capital_disponivel_em} />
+      <FieldIA label="Capital próprio ou financiado" value={rotuloOpt(CAPITAL_PROPRIO_OPTS, data.capital_proprio_ou_financiado)} info={ia.capital_proprio_ou_financiado} />
+      <FieldIA label="Ticket por operação" value={eur(data.ticket_por_operacao)} info={ia.ticket_por_operacao} />
+      <FieldIA label="Prazo máx. retenção" value={data.prazo_maximo_retencao_meses ? `${data.prazo_maximo_retencao_meses} meses` : null} info={ia.prazo_maximo_retencao_meses} />
+      <FieldIA label="ROI mínimo aceitável" value={data.roi_minimo_aceitavel} info={ia.roi_minimo_aceitavel} />
+      <FieldIA label="Horizonte" value={data.horizonte_investimento} info={ia.horizonte_investimento} />
+      <FieldIA label="Tolerância a imprevistos" value={[rotuloOpt(TOLERANCIA_OPTS, data.tolerancia_imprevistos), data.tolerancia_imprevistos_nota].filter(Boolean).join(' · ')} info={ia.tolerancia_imprevistos} />
+      <FieldIA label="Grau de interferência" value={rotuloOpt(INTERFERENCIA_OPTS, data.grau_interferencia)} info={ia.grau_interferencia} />
+      <FieldIA label="Negócios concluídos" value={[data.negocios_concluidos, data.negocios_concluidos_nota].filter(x => x != null && x !== '').join(' · ')} info={ia.negocios_concluidos} />
+      <FieldIA label="Motivação" value={data.motivacao} info={ia.motivacao} />
+      <FieldIA label="Decisores" value={data.decisores} info={ia.decisores} />
+      <FieldIA label="Contexto relacional" value={data.contexto_relacional} info={ia.contexto_relacional} />
+      <FieldIA label="Entrevista Estratégica" value={data.data_entrevista_estrategica ? fmtDate(data.data_entrevista_estrategica) : null} info={ia.data_entrevista_estrategica} />
+      {[['Investimentos atuais', investimentos.map(x => `${x.descricao}${x.valor ? ` (~${eur(x.valor)})` : ''}`), ia.investimentos_atuais],
+        ['Compromissos', compromissos.map(x => `${x.cumprido ? '✓ ' : ''}${x.quem === 'somnium' ? 'Somnium' : 'Investidor'}: ${x.o_que}${x.ate_quando ? ` (até ${x.ate_quando})` : ''}`), ia.compromissos],
+        ['Objeções', objecoes.map(x => `${x.resolvida ? '✓ resolvida: ' : ''}${x.objecao}`), ia.objecoes]].map(([label, itens, info]) => (
+        <div key={label} className="col-span-2 md:col-span-3">
+          <p className="text-xs text-ink-muted mb-1">{label}<MarcaIA info={info} /></p>
+          {itens.length ? <ul className="text-sm text-ink space-y-0.5">{itens.map((t, i) => <li key={i}>· {t}</li>)}</ul> : <p className="text-sm text-ink-muted">—</p>}
+        </div>
+      ))}
+    </Section>
+  )
 }
 
 // Bloco de leitura — espelho das 6 secções.
@@ -2692,7 +2779,7 @@ function textoConfirmacao(data) {
   return v.valida ? `${valor} · válido até ${ate}` : `${valor} · caducou a ${ate} (mais de ${VALIDADE_CONFIRMACAO_DIAS} dias)`
 }
 
-function InvestidorReadSections({ data }) {
+function InvestidorReadSections({ data, ia = {} }) {
   const estrategia = parseJsonArray(data.estrategia)
   const tipoImovel = parseJsonArray(data.tipo_imovel_preferido)
   const localizacao = parseJsonArray(data.localizacao_preferida)
@@ -2787,6 +2874,9 @@ function InvestidorReadSections({ data }) {
     <Section icon={Calendar} title="Datas" fields={sec.timeline} form={data} defaultOpen>
       <InvestidorTimeline data={data} />
     </Section>
+
+    {/* Perfil da conversa (preenchido pelas calls e reuniões) */}
+    <PerfilConversaRead data={data} ia={ia} />
 
     {/* 7. Bloqueios — só se preenchido */}
     {(data.motivo_nao_aprovacao || data.motivo_inatividade) && (

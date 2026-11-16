@@ -8,8 +8,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Mic, Upload, Loader2, Trash2, RefreshCw, Sparkles, ChevronDown, ChevronRight,
-  AlertTriangle, ThumbsUp, ThumbsDown, CheckCircle2, XCircle, FileText, Check,
+  AlertTriangle, ThumbsUp, ThumbsDown, CheckCircle2, XCircle, FileText, Check, ClipboardCheck,
 } from 'lucide-react'
+import { RevisaoCallModal } from './RevisaoCallInvestidor.jsx'
 import { apiFetch } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { friendlyError } from '../../lib/friendlyError.js'
@@ -98,7 +99,7 @@ function RegistoManual({ g, onGuardar }) {
         <p className="text-xs font-semibold text-ink">Registo da chamada</p>
         {g.registo_fonte && (
           <span className="text-[11px] text-ink-muted">
-            {g.registo_fonte === 'ia_sugestao_confirmada' ? 'Sugestão da IA confirmada' : 'Preenchido manualmente'}
+            {g.registo_fonte === 'ia_sugestao_confirmada' ? 'Sugestão da IA confirmada' : g.registo_fonte === 'ia' ? 'Registado pela IA (por confirmar)' : 'Preenchido manualmente'}
           </span>
         )}
       </div>
@@ -270,7 +271,7 @@ function Analise({ g }) {
   )
 }
 
-function ChamadaCard({ g, busy, onAnalisar, onRetomar, onApagar, onGuardarRegisto }) {
+function ChamadaCard({ g, busy, onAnalisar, onRetomar, onApagar, onGuardarRegisto, onRever }) {
   const [aberto, setAberto] = useState(false)
   const [verTranscricao, setVerTranscricao] = useState(false)
   const em = ESTADO_META[g.estado] || ESTADO_META.pendente
@@ -311,6 +312,12 @@ function ChamadaCard({ g, busy, onAnalisar, onRetomar, onApagar, onGuardarRegist
               {busy === 'analisar' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
             </button>
           )}
+          {g.estado === 'analisado' && (
+            <button type="button" onClick={() => onRever(g.id)} title="Rever call: o que foi preenchido na ficha e o que falta decidir"
+              className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${g.registo_confirmado_em ? 'text-ink-muted hover:text-ink hover:bg-surface-muted' : 'bg-accent/15 text-accent-ink hover:bg-accent/25'}`}>
+              <ClipboardCheck className="w-3.5 h-3.5" /> {g.registo_confirmado_em ? 'Revista' : 'Rever call'}
+            </button>
+          )}
           <button type="button" onClick={() => onApagar(g.id)} disabled={!!busy} title="Apagar"
             className="p-1.5 rounded text-red-400 hover:text-danger hover:bg-danger/10 disabled:opacity-50">
             <Trash2 className="w-3.5 h-3.5" />
@@ -348,6 +355,7 @@ export function ChamadasInvestidor({ investidorId }) {
   const [nova, setNova] = useState({ tipo_chamada: 'cold_call', data_chamada: hojeISO(), file: null })
   const [enviando, setEnviando] = useState(false)
   const [busy, setBusy] = useState({})
+  const [rever, setRever] = useState(null) // id da gravação no ecrã "Rever call"
 
   const load = useCallback(async () => {
     try {
@@ -495,10 +503,11 @@ export function ChamadasInvestidor({ investidorId }) {
         <div className="space-y-2">
           {chamadas.map(g => (
             <ChamadaCard key={g.id} g={g} busy={busy[g.id]} onAnalisar={analisar} onRetomar={retomar}
-              onApagar={apagar} onGuardarRegisto={guardarRegisto} />
+              onApagar={apagar} onGuardarRegisto={guardarRegisto} onRever={setRever} />
           ))}
         </div>
       )}
+      {rever && <RevisaoCallModal gravacaoId={rever} onClose={() => setRever(null)} onAlterado={load} />}
     </div>
   )
 }

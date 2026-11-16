@@ -42,6 +42,10 @@ import {
 } from './preparacaoCall.js'
 import { generatePreparacaoCallsPDF } from './pdfPreparacaoCalls.js'
 import {
+  TIPO_FILA_EXTRACAO, aplicarRespostaExtracao, camposIADoInvestidor, revisaoGravacao, confirmarRegistoGravacao,
+  aceitarSugestao, rejeitarSugestao, reverterCampo, pedirBackfill, relatorioBackfill, pedirExtracao,
+} from './autopreenchimento.js'
+import {
   ensureInvestidorGravacoesTable, tabelaDaGravacao, sanitizeRegistoInvestidor, relatorioChamadasInvestidores, TIPOS_CHAMADA_INV,
   pedirAnaliseInvestidor, investidorGravacoesPorAnalisar, passoAnaliseInvestidor, falhaAnaliseInvestidor,
   lerSinteseInvestidores, pedirSinteseInvestidores, sintesesInvestidoresPorGerar, passoSinteseInvestidores, falhaSinteseInvestidores,
@@ -1949,6 +1953,7 @@ const APLICADORES_IA = {
   reuniao_consultor: aplicarAnaliseReuniao,
   [TIPO_FILA_RESUMO]: (p, t) => aplicarResumoReuniao(pool, p, t),
   [TIPO_FILA_PREPARACAO]: (p, t) => aplicarPreparacao(pool, p, t),
+  [TIPO_FILA_EXTRACAO]: (p, t) => aplicarRespostaExtracao(pool, p, t),
   relatorio_semanal: aplicarRelatorioSemanal,
   resumo_projeto: aplicarResumoProjeto,
   documento_imovel: (p, t) => aplicarDocumentoImovel(p, t),
@@ -2620,6 +2625,47 @@ router.get('/investidores/:id/preparacoes', semPortalInvestidor, async (req, res
 })
 router.get('/investidores/:id/tipo-chamada-sugerido', semPortalInvestidor, async (req, res) => {
   try { res.json(await tipoChamadaSugerido(pool, req.params.id)) } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Preenchimento automático da ficha — port de crm/index.ts ──
+router.get('/investidores/:id/campos-ia', semPortalInvestidor, async (req, res) => {
+  try { res.json(await camposIADoInvestidor(pool, req.params.id)) } catch (e) { res.status(500).json({ error: e.message }) }
+})
+router.get('/chamadas-investidores/:id/revisao', semPortalInvestidor, async (req, res) => {
+  try {
+    const r = await revisaoGravacao(pool, req.params.id)
+    if (!r) return res.status(404).json({ error: 'Chamada nao encontrada' })
+    res.json(r)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+router.post('/chamadas-investidores/:id/confirmar-registo', semPortalInvestidor, async (req, res) => {
+  try {
+    const r = await confirmarRegistoGravacao(pool, req.params.id)
+    if (!r) return res.status(404).json({ error: 'Chamada nao encontrada' })
+    res.json(r)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+router.post('/chamadas-investidores/:id/extrair', semPortalInvestidor, async (req, res) => {
+  try {
+    const p = await pedirExtracao(pool, `gravacao:${req.params.id}`)
+    if (!p) return res.status(400).json({ error: 'Chamada sem transcrição' })
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+for (const [acao, fn] of [['aceitar', aceitarSugestao], ['rejeitar', rejeitarSugestao], ['reverter', reverterCampo]]) {
+  router.post(`/campos-ia/:id/${acao}`, semPortalInvestidor, async (req, res) => {
+    try { res.json(await fn(pool, req.params.id, req.appUser || req.user || null)) } catch (e) { res.status(400).json({ error: e.message }) }
+  })
+}
+router.post('/autopreenchimento/backfill', semPortalInvestidor, async (req, res) => {
+  try {
+    const u = req.appUser || req.user
+    if (u && u.role && u.role !== 'admin') return res.status(403).json({ error: 'Só administradores' })
+    res.json(await pedirBackfill(pool))
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+router.get('/autopreenchimento/relatorio', semPortalInvestidor, async (req, res) => {
+  try { res.json(await relatorioBackfill(pool)) } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 // ── Chamadas gravadas com investidores (SOP 4) ───────────────

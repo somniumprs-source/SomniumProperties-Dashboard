@@ -33,7 +33,7 @@ export const TIPO_CALL_LABEL = { cold_call: 'Cold Call', follow_up: 'Follow-up',
 export const TIPOS_CALL = ['cold_call', 'follow_up', 'discovery_call']
 export const TIPO_FILA_PREPARACAO = 'preparacao_call'
 export const TIPO_FILA_RESUMO = 'resumo_reuniao'
-const VERSAO_PROMPT = 'v2'
+const VERSAO_PROMPT = 'v3'
 const MIN_TRANSCRICAO_RESUMO = 1500
 const DIAS_JANELA = 14
 
@@ -274,6 +274,17 @@ const CAMPOS_FORMS = [
   ['perfil_risco', 'Perfil de risco'],
   ['origem_capital', 'Origem do capital'],
   ['profissao', 'Profissão'],
+  // Campos do autopreenchimento (migração 0102): o que a call ainda não respondeu.
+  ['zona_residencia', 'Onde vive'],
+  ['capital_disponivel_em', 'Quando o capital fica disponível (concreto)'],
+  ['capital_proprio_ou_financiado', 'Capital próprio ou financiado'],
+  ['ticket_por_operacao', 'Ticket por operação'],
+  ['prazo_maximo_retencao_meses', 'Prazo máximo de retenção'],
+  ['roi_minimo_aceitavel', 'ROI mínimo aceitável (depois de alinhar expectativas)'],
+  ['tolerancia_imprevistos', 'Tolerância a imprevistos'],
+  ['grau_interferencia', 'Grau de interferência que quer ter'],
+  ['motivacao', 'Motivação para investir'],
+  ['decisores', 'Quem decide'],
 ]
 
 function perfilDeclarado(inv) {
@@ -422,7 +433,11 @@ function promptPreparacao(ctx, base, transcricoesBrutas) {
   for (const k of ['nome', 'status', 'classificacao', 'pontuacao', 'origem', 'tipo_principal', 'tipo_investidor', 'estrategia', 'capital_min', 'capital_max',
     'capital_confirmado', 'perfil_risco', 'roi_pretendido', 'roi_anualizado_pretendido', 'experiencia_imobiliario', 'numero_negocios', 'regioes_preferidas',
     'localizacao_preferida', 'tipo_imovel_preferido', 'equipa_obras', 'preferencia_contacto', 'profissao', 'horizonte_investimento', 'origem_capital',
-    'data_primeiro_contacto', 'data_ultimo_contacto', 'data_reuniao', 'motivo_inatividade', 'motivo_nao_aprovacao', 'proxima_acao', 'notas']) {
+    'data_primeiro_contacto', 'data_ultimo_contacto', 'data_reuniao', 'motivo_inatividade', 'motivo_nao_aprovacao', 'proxima_acao', 'notas',
+    'zona_residencia', 'horario_contacto', 'capital_disponivel_em', 'capital_proprio_ou_financiado', 'ticket_por_operacao',
+    'prazo_maximo_retencao_meses', 'roi_minimo_aceitavel', 'tolerancia_imprevistos', 'tolerancia_imprevistos_nota', 'grau_interferencia',
+    'investimentos_atuais', 'negocios_concluidos', 'negocios_concluidos_nota', 'motivacao', 'objecoes', 'compromissos', 'decisores',
+    'contexto_relacional', 'data_entrevista_estrategica']) {
     if (!vazio(inv[k])) ficha[k] = inv[k]
   }
   const reunioes = ctx.reunioes.map(r => ({

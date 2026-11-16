@@ -14,6 +14,8 @@
  * o mesmo. Portar qualquer alteração para os dois.
  */
 
+import { aposAnaliseGravacao } from "./autopreenchimento.js"
+
 export const TIPOS_CHAMADA_INV = ['cold_call', 'follow_up']
 export const RESULTADOS_INV = ['atendeu', 'nao_atendeu', 'recusou', 'numero_errado']
 export const PROXIMOS_PASSOS_INV = ['entrevista_marcada', 'follow_up_agendado', 'enviar_forms', 'sem_interesse', 'nao_elegivel']
@@ -235,6 +237,8 @@ export async function passoAnaliseInvestidor(pool, id, resposta) {
     `UPDATE investidor_gravacoes SET analise = $2, nota_sop = $3, estado = 'analisado', erro = NULL, updated_at = $4 WHERE id = $1 RETURNING *`,
     [id, JSON.stringify(analise), notaSop(analise, g.tipo_chamada), agora()],
   )
+  // Registo automático da call + extração para a ficha (autopreenchimento).
+  await aposAnaliseGravacao(pool, id)
   return { concluido: true, gravacao: final }
 }
 

@@ -41,6 +41,10 @@ import {
   aplicarResumoReuniao, aplicarPreparacao, TIPO_FILA_PREPARACAO, TIPO_FILA_RESUMO,
 } from "../_shared/preparacaoCall.ts";
 import { generatePreparacaoCallsPDF } from "../_shared/pdfPreparacaoCalls.ts";
+import {
+  TIPO_FILA_EXTRACAO, aplicarRespostaExtracao, camposIADoInvestidor, revisaoGravacao, confirmarRegistoGravacao,
+  aceitarSugestao, rejeitarSugestao, reverterCampo, pedirBackfill, relatorioBackfill, pedirExtracao,
+} from "../_shared/autopreenchimento.ts";
 import { estadoIA, emFilaIA, enfileirarIA, jsonDaResposta, pedidosIAPendentes, iniciarIA, concluirIA, falharIA } from "../_shared/filaIA.ts";
 import { isConfigured as firefliesConfigured, syncFireflies } from "../_shared/firefliesSync.ts";
 import { TIPO_FILA_LOCALIZACAO, registarEstudo, lerAnaliseLocalizacao, guardarPesquisa, atualizarDecisoes, construirPedidoAnalise, marcarAnalisePedida, aplicarAnaliseLocalizacao, aplicarAFicha } from "../_shared/analiseLocalizacaoIA.js";
@@ -2913,6 +2917,7 @@ const APLICADORES_IA: Record<string, (pedido: any, texto: string) => Promise<any
   reuniao_consultor: aplicarAnaliseReuniao,
   [TIPO_FILA_RESUMO]: (p: any, t: string) => aplicarResumoReuniao(pool, p, t),
   [TIPO_FILA_PREPARACAO]: (p: any, t: string) => aplicarPreparacao(pool, p, t),
+  [TIPO_FILA_EXTRACAO]: (p: any, t: string) => aplicarRespostaExtracao(pool, p, t),
   relatorio_semanal: aplicarRelatorioSemanal,
   resumo_projeto: aplicarResumoProjeto,
   documento_imovel: aplicarDocumentoImovel,
@@ -3513,6 +3518,61 @@ app.get("/investidores/:id/preparacoes", semPortalInvestidor, async (c: any) => 
 
 app.get("/investidores/:id/tipo-chamada-sugerido", semPortalInvestidor, async (c: any) => {
   try { return c.json(await tipoChamadaSugerido(pool, c.req.param("id"))); }
+  catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ── Preenchimento automático da ficha (calls e reuniões) ─────
+// Lógica em _shared/autopreenchimento.ts; extração corrida no Mac (fila IA).
+const soCrmInvestidores = requireModule("crm.investidores");
+app.use("/campos-ia/*", soCrmInvestidores);
+app.use("/autopreenchimento/*", soCrmInvestidores);
+
+app.get("/investidores/:id/campos-ia", semPortalInvestidor, async (c: any) => {
+  try { return c.json(await camposIADoInvestidor(pool, c.req.param("id"))); }
+  catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.get("/chamadas-investidores/:id/revisao", soCrmInvestidores, async (c: any) => {
+  try {
+    const r = await revisaoGravacao(pool, c.req.param("id"));
+    if (!r) return c.json({ error: "Chamada nao encontrada" }, 404);
+    return c.json(r);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/chamadas-investidores/:id/confirmar-registo", soCrmInvestidores, async (c: any) => {
+  try {
+    const r = await confirmarRegistoGravacao(pool, c.req.param("id"));
+    if (!r) return c.json({ error: "Chamada nao encontrada" }, 404);
+    return c.json(r);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/chamadas-investidores/:id/extrair", soCrmInvestidores, async (c: any) => {
+  try {
+    const p = await pedirExtracao(pool, `gravacao:${c.req.param("id")}`);
+    if (!p) return c.json({ error: "Chamada sem transcrição" }, 400);
+    return c.json({ ok: true });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+for (const [acao, fn] of [["aceitar", aceitarSugestao], ["rejeitar", rejeitarSugestao], ["reverter", reverterCampo]] as const) {
+  app.post(`/campos-ia/:id/${acao}`, async (c: any) => {
+    try { return c.json(await (fn as any)(pool, c.req.param("id"), await resolveCrmUser(c))); }
+    catch (e) { return c.json({ error: (e as Error).message }, 400); }
+  });
+}
+
+app.post("/autopreenchimento/backfill", async (c: any) => {
+  try {
+    const u = await resolveCrmUser(c);
+    if (u && u.role !== "admin") return c.json({ error: "Só administradores" }, 403);
+    return c.json(await pedirBackfill(pool));
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.get("/autopreenchimento/relatorio", async (c: any) => {
+  try { return c.json(await relatorioBackfill(pool)); }
   catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 

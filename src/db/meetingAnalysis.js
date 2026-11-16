@@ -10,6 +10,7 @@
  */
 import pool from './pg.js'
 import { enfileirarIA, jsonDaResposta } from './filaIA.js'
+import { pedirExtracao } from './autopreenchimento.js'
 
 /**
  * Analisa uma reunião e retorna:
@@ -238,91 +239,12 @@ async function autoFillInvestidor(reuniaoId, analise) {
   const { rows: [inv] } = await pool.query('SELECT * FROM investidores WHERE id = $1', [reuniao.entidade_id])
   if (!inv) return { ...analise, autoFilled: false, reason: 'Investidor não encontrado' }
 
-  // Só preencher campos que estão vazios
+  // A ficha é preenchida pela extração com prova (autopreenchimento: campo a
+  // campo, com confiança e citação; nunca sobrescreve). Já não se escreve aqui
+  // nem se cria scorecard/classificação: a classe é validada pelos dois sócios.
+  try { await pedirExtracao(pool, `reuniao:${reuniaoId}`) } catch (e) { console.error('[meetingAnalysis] extração:', e.message) }
   const updates = {}
-  const dados = analise.investidor_dados || {}
-
-  if (!inv.capital_min && dados.capital_min) updates.capital_min = dados.capital_min
-  if (!inv.capital_max && dados.capital_max) updates.capital_max = dados.capital_max
-  if (!inv.perfil_risco && dados.perfil_risco) updates.perfil_risco = dados.perfil_risco
-  if (!inv.estrategia && dados.estrategia?.length) updates.estrategia = JSON.stringify(dados.estrategia)
-  if (!inv.tipo_investidor && dados.tipo_investidor?.length) updates.tipo_investidor = JSON.stringify(dados.tipo_investidor)
-  if (!inv.classificacao && analise.classificacao_sugerida) updates.classificacao = analise.classificacao_sugerida
-
-  // O resumo da reunião fica na aba Reuniões (não se copia para notas).
-
-  if (Object.keys(updates).length > 0) {
-    const sets = Object.entries(updates).map(([k], i) => `${k} = $${i + 1}`)
-    sets.push(`updated_at = $${Object.keys(updates).length + 1}`)
-    const params = [...Object.values(updates), new Date().toISOString(), inv.id]
-    await pool.query(
-      `UPDATE investidores SET ${sets.join(', ')} WHERE id = $${params.length}`,
-      params
-    )
-  }
-
-  // Auto-criar scorecard se a análise incluir dados de scorecard
-  let scorecardCreated = false
-  if (analise.scorecard) {
-    try {
-      const sc = analise.scorecard
-      const tipo = sc.tipo_investidor || 'Passivo'
-      const c1 = Math.max(1, Math.min(5, +sc.c1_score || 3))
-      const c2 = Math.max(1, Math.min(5, +sc.c2_score || 3))
-      const c3 = Math.max(1, Math.min(5, +sc.c3_score || 3))
-      const c4 = Math.max(1, Math.min(5, +sc.c4_score || 3))
-      const c5 = Math.max(1, Math.min(5, +sc.c5_score || 3))
-
-      // Pesos SOP 2
-      const pesos = tipo === 'Ativo'
-        ? { c1: 0.25, c2: 0.30, c3: 0.20, c4: 0.15, c5: 0.10 }
-        : { c1: 0.20, c2: 0.10, c3: 0.30, c4: 0.20, c5: 0.20 }
-
-      const total = c1 + c2 + c3 + c4 + c5
-      const ponderado = Math.round((c1 * pesos.c1 + c2 * pesos.c2 + c3 * pesos.c3 + c4 * pesos.c4 + c5 * pesos.c5) * 20 * 100) / 100
-      const classificacao = ponderado >= 88 ? 'A' : ponderado >= 72 ? 'B' : ponderado >= 56 ? 'C' : 'D'
-
-      const scId = crypto.randomUUID()
-      const now = new Date().toISOString()
-
-      await pool.query(
-        `INSERT INTO scorecards (id, investidor_id, reuniao_id, tipo_investidor,
-          c1_score, c2_score, c3_score, c4_score, c5_score,
-          c1_notas, c2_notas, c3_notas, c4_notas, c5_notas,
-          pontuacao_total, pontuacao_ponderada, classificacao,
-          avaliador, fonte, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$20)`,
-        [scId, inv.id, reuniaoId, tipo,
-          c1, c2, c3, c4, c5,
-          sc.c1_notas || null, sc.c2_notas || null, sc.c3_notas || null, sc.c4_notas || null, sc.c5_notas || null,
-          total, ponderado, classificacao,
-          'Claude AI', 'transcricao_automatica', now]
-      )
-
-      // Atualizar investidor com classificação do scorecard — excepto se a
-      // classificação foi definida pelo formulário de classificação (manual),
-      // que manda sobre a auto-avaliação da IA.
-      if (inv.classificacao_origem !== 'manual') {
-        await pool.query(
-          'UPDATE investidores SET classificacao = $1, pontuacao = $2, updated_at = $3 WHERE id = $4',
-          [classificacao, ponderado, now, inv.id]
-        )
-      }
-
-      // Registar no histórico
-      await pool.query(
-        `INSERT INTO classificacao_historico (id, investidor_id, classificacao_anterior, classificacao_nova,
-          pontuacao_anterior, pontuacao_nova, motivo, tipo, scorecard_id, created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [crypto.randomUUID(), inv.id, inv.classificacao || null, classificacao,
-          inv.pontuacao || 0, ponderado, 'Scorecard automático via transcrição de reunião', 'transcricao_automatica', scId, now]
-      )
-
-      scorecardCreated = true
-    } catch (scErr) {
-      console.error('[meetingAnalysis] Erro ao criar scorecard automático:', scErr.message)
-    }
-  }
+  const scorecardCreated = false
 
   // Persistir análise completa na reunião (para cache e sistema de alertas)
   try {
