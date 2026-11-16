@@ -195,7 +195,12 @@ export async function mudancasSomnium(pool, desde) {
     if (dia(n.data_venda) > desde) eventos.push({ data: dia(n.data_venda), texto: 'vendido' })
     for (const h of fases.filter(f => f.entidade_id === n.id)) {
       const alt = (Array.isArray(h.alteracoes) ? h.alteracoes : []).find(a => a.campo === 'fase')
-      if (alt?.depois) eventos.push({ data: dia(h.created_at), texto: `passou a "${alt.depois}"` })
+      if (!alt?.depois) continue
+      // Mudança de fase registada depois do facto (ex.: marcado "Vendido" em
+      // outubro, vendido em abril): vale a data real do negócio, não a do registo.
+      if (/vendid/i.test(alt.depois) && dia(n.data_venda)) continue
+      if (/obra/i.test(alt.depois) && dia(n.data_inicio_obra)) continue
+      eventos.push({ data: dia(h.created_at), texto: `passou a "${alt.depois}"` })
     }
     if (!eventos.length) continue
     out.push({
