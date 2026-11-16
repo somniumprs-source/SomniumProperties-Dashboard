@@ -1352,7 +1352,7 @@ const FUNIL_INVESTIDORES = [
   'Pendente de Aprovação',
   'Potencial Investidor', 'Potencial',
   'Marcar call', 'Marcar Call',
-  'Call marcada', 'Call Marcada',
+  'Discovery call marcada', 'Call marcada', 'Call Marcada',
   'Follow Up',
   'Investidor Qualificado em Carteira', 'Investidor em espera', 'Classificado',
   'Negociação de Deal',
@@ -1363,7 +1363,9 @@ const FUNIL_INVESTIDORES = [
 const FUNIL_INV_LABEL = {
   'Potencial Investidor':                'Potencial',
   'Marcar call':                         'Marcar Call',
-  'Call marcada':                        'Call Marcada',
+  'Discovery call marcada':              'Discovery Call Marcada',
+  'Call marcada':                        'Discovery Call Marcada',
+  'Call Marcada':                        'Discovery Call Marcada',
   'Investidor Qualificado em Carteira':  'Em Carteira',
   'Investidor em espera':                'Em Carteira',
   'Investidor em parceria':              'Em Parceria',
@@ -2741,7 +2743,7 @@ app.get('/api/metricas', async (req, res) => {
       'Pendente de Aprovação',
       'Potencial','Potencial Investidor',
       'Marcar Call','Marcar call',
-      'Call Marcada','Call marcada',
+      'Discovery call marcada','Call Marcada','Call marcada',
       'Follow Up','Classificado','Investidor em espera','Investidor Qualificado em Carteira',
     ])
 

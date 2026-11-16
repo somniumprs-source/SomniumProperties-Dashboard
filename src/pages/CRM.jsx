@@ -777,6 +777,9 @@ export function CRM() {
                   <ClassBadge cls={item.classificacao} />
                   <p className="text-[13px] font-semibold text-ink truncate">{item.nome}</p>
                 </div>
+                {item.classificacao_estado === 'proposta' && (
+                  <span className="inline-block mb-0.5 text-[10px] px-1.5 py-0.5 rounded bg-warning/15 text-warning font-medium">Classe {item.classificacao_proposta} por validar</span>
+                )}
                 <p className="text-[11px] text-ink-muted truncate" title={areaAtuacao.join(', ')}>{areaLabel || '—'}</p>
               </div>
             </div>

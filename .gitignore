@@ -32,3 +32,6 @@ AUTO_PUSH_FALHOU.txt
 
 # Estado local do Supabase CLI (inclui URL do pooler) — nunca commitar
 supabase/.temp/
+
+# Lista de revisão com dados pessoais de investidores (SOP 23): só local
+investidores_classe_legado.csv

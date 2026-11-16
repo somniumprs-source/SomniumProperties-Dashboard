@@ -83,14 +83,14 @@ export const IMOVEL_ESTADO_COLOR = Object.fromEntries(
 // ── Investidores — Status ────────────────────────────────────
 // Pipeline Passivo (capital em CAEP/Wholesaling — não opera deals)
 export const INV_STATUS_PASSIVO = [
-  'Pendente de Aprovação', 'Potencial Investidor', 'Marcar call', 'Call marcada',
+  'Pendente de Aprovação', 'Potencial Investidor', 'Marcar call', 'Discovery call marcada',
   'Follow Up', 'Investidor Qualificado em Carteira', 'Investidor em parceria',
   'Não qualificado', 'Inactivo',
 ]
 
 // Pipeline Activo (compra deals connosco)
 export const INV_STATUS_ATIVO = [
-  'Pendente de Aprovação', 'Potencial Investidor', 'Marcar call', 'Call marcada',
+  'Pendente de Aprovação', 'Potencial Investidor', 'Marcar call', 'Discovery call marcada',
   'Follow Up', 'Investidor Qualificado em Carteira', 'Negociação de Deal', 'Investidor Ativo',
   'Não qualificado', 'Inactivo',
 ]
@@ -117,7 +117,8 @@ export const INV_STATUS_COLOR = {
   'Pendente de Aprovação':              'bg-amber-100 text-amber-700',
   'Potencial Investidor':               'bg-gray-100 text-gray-600',
   'Marcar call':                        'bg-yellow-100 text-yellow-700',
-  'Call marcada':                       'bg-blue-100 text-blue-700',
+  'Discovery call marcada':             'bg-blue-100 text-blue-700',
+  'Call marcada':                       'bg-blue-100 text-blue-700', // nome antigo, até à migração 0104
   'Follow Up':                          'bg-orange-100 text-orange-700',
   'Investidor Qualificado em Carteira': 'bg-indigo-100 text-indigo-700',
   'Investidor em parceria':             'bg-green-100 text-green-700',

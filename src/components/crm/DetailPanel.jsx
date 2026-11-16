@@ -21,6 +21,7 @@ import { ChamadasInvestidor } from './ChamadasInvestidor.jsx'
 import { useCamposIA, SugestoesIA, MarcaIA } from './RevisaoCallInvestidor.jsx'
 import { ChamadasConsultor } from './ChamadasConsultor.jsx'
 import { AvaliacaoConsultor } from './AvaliacaoConsultor.jsx'
+import { ScorecardDiscovery, AvisoLegado } from './ScorecardDiscovery.jsx'
 import { isWholesaling } from '../../lib/modelos.js'
 import { fmtTempoMercado } from '../../lib/tempoMercado.js'
 import { DealBreakersPanel } from './DealBreakersPanel.jsx'
@@ -2411,6 +2412,12 @@ function InvestidorHero({ data }) {
                 <span className="text-[10px] px-2 py-0.5 rounded-full border font-semibold text-warning bg-warning/15 border-warning/30">Passivo</span>
               )}
               <InvClassBadge cls={data.classificacao} />
+              {data.classificacao_estado === 'proposta' && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-warning/15 text-warning font-medium">Classe {data.classificacao_proposta} por validar</span>
+              )}
+              {data.classificacao_origem === 'legado' && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-muted text-ink-muted font-medium" title="Classe anterior ao SOP 23 – reclassificar na próxima discovery">Legado</span>
+              )}
               <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${pillClass(INV_STATUS_COLOR[data.status])}`}><span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(INV_STATUS_COLOR[data.status])}`} aria-hidden="true" />{data.status || '—'}</span>
               {!!data.nda_assinado && (
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/15 text-success font-medium inline-flex items-center gap-1">
@@ -2611,8 +2618,9 @@ function InvestidorEditSections({ data, form, setField }) {
         <p className="text-xs text-ink-muted">Classificação</p>
         <div className="text-sm font-medium text-ink flex items-center gap-2">
           <InvClassBadge cls={data.classificacao} />
-          <span className="text-xs text-ink-muted">— definida no separador Scorecard</span>
+          <span className="text-xs text-ink-muted">: definida pelo scorecard da discovery (separador Avaliação)</span>
         </div>
+        <div className="mt-1"><AvisoLegado origem={data.classificacao_origem} /></div>
       </div>
       <EF label="Origem" field="origem" form={form} set={setField} type="select" options={ORIGENS_INVESTIDORES} />
       <EF label="1º Contacto" field="data_primeiro_contacto" form={form} set={setField} type="date" />
@@ -2803,8 +2811,10 @@ function InvestidorReadSections({ data, ia = {} }) {
         <p className="text-xs text-ink-muted">Classificação</p>
         <div className="text-sm font-medium text-ink flex items-center gap-2">
           <InvClassBadge cls={data.classificacao} />
-          {data.pontuacao > 0 && <span className="text-xs text-ink-muted">({data.pontuacao} pts)</span>}
+          {data.pontuacao_discovery != null && data.classificacao_origem === 'discovery' && <span className="text-xs text-ink-muted">({data.pontuacao_discovery}/12)</span>}
+          {data.classificacao_origem !== 'discovery' && data.pontuacao > 0 && <span className="text-xs text-ink-muted">({data.pontuacao} pts, escala antiga)</span>}
         </div>
+        <div className="mt-1"><AvisoLegado origem={data.classificacao_origem} /></div>
       </div>
       <Field label="Origem" value={data.origem} />
       <Field label="1º Contacto" value={data.data_primeiro_contacto ? fmtDate(data.data_primeiro_contacto) : '—'} />
@@ -3027,13 +3037,14 @@ const CLASSE_CORES = {
 // Wrapper que une Scorecard (avaliação SOP 2) e Histórico de Classificação numa
 // única tab, com sub-tabs internos.
 function AvaliacaoTab({ data, onUpdate }) {
-  const [sub, setSub] = useState('scorecard')
+  const [sub, setSub] = useState('discovery')
   const tipoInvestidor = (() => { try { const t = JSON.parse(data.tipo_investidor || '[]'); return t.includes('Ativo') ? 'Ativo' : 'Passivo' } catch { return 'Passivo' } })()
   return (
     <div>
       <div className="flex border-b border-line px-4 sm:px-6 pt-3 bg-surface" role="tablist">
         {[
-          { key: 'scorecard', label: 'Scorecard', icon: Gauge },
+          { key: 'discovery', label: 'Scorecard SOP 23', icon: Gauge },
+          { key: 'scorecard', label: 'Scorecard antigo', icon: Gauge },
           { key: 'historico',  label: 'Histórico', icon: History },
         ].map(s => (
           <button key={s.key} onClick={() => setSub(s.key)}
@@ -3045,7 +3056,9 @@ function AvaliacaoTab({ data, onUpdate }) {
         ))}
       </div>
       <div className="p-4 sm:p-6">
-        {sub === 'scorecard'
+        {sub === 'discovery'
+          ? <ScorecardDiscovery investidorId={data.id} onUpdate={onUpdate} />
+          : sub === 'scorecard'
           ? <ScorecardTab investidorId={data.id} investidorNome={data.nome} tipoInvestidor={tipoInvestidor} onUpdate={onUpdate} />
           : <ClassificacaoTab investidorId={data.id} investidorNome={data.nome} classificacaoActual={data.classificacao} pontuacaoActual={data.pontuacao} />}
       </div>
@@ -3112,20 +3125,14 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-bold text-ink">Scorecard Discovery Call</h3>
-          <p className="text-xs text-ink-muted">Avaliação SOP 2 — 5 critérios ponderados por tipo de investidor</p>
+          <h3 className="text-sm font-bold text-ink">Scorecard antigo (só leitura)</h3>
+          <p className="text-xs text-ink-muted">Avaliação SOP 2 de 5 critérios (0–100). Substituído pelo scorecard SOP 23; já não altera a classe.</p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => { setShowScript(!showScript); setScriptStep(0) }}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${showScript ? 'bg-brand-dark text-white' : 'bg-surface-muted text-ink-muted hover:bg-line'}`}>
             {showScript ? 'Fechar Script' : 'Script da Call'}
           </button>
-          {!creating && !showScript && (
-            <button onClick={() => setCreating(true)}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-accent text-accent-foreground hover:brightness-[1.04]">
-              + Novo Scorecard
-            </button>
-          )}
         </div>
       </div>
 

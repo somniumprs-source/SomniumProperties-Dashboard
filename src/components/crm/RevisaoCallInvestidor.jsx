@@ -83,7 +83,7 @@ function LinhaSugestao({ l, onDecidir, busy }) {
           <p className="text-[11px] text-ink-muted mt-0.5">{MOTIVO[l.motivo] || l.motivo} · {origemTxt(l)}{l.confianca ? ` · confiança ${l.confianca}` : ''}</p>
         </div>
         <div className="flex gap-1.5 shrink-0">
-          {l.campo !== 'classificacao' && <Button size="sm" variant="secondary" icon={Check} loading={busy === `${l.id}:aceitar`} onClick={() => onDecidir(l, 'aceitar')}>Aceitar</Button>}
+          {l.campo !== 'classificacao' && !String(l.campo).startsWith('scorecard_discovery.') && <Button size="sm" variant="secondary" icon={Check} loading={busy === `${l.id}:aceitar`} onClick={() => onDecidir(l, 'aceitar')}>Aceitar</Button>}
           <Button size="sm" variant="secondary" icon={X} loading={busy === `${l.id}:rejeitar`} onClick={() => onDecidir(l, 'rejeitar')}>{l.campo === 'classificacao' ? 'Dispensar' : 'Rejeitar'}</Button>
         </div>
       </div>
@@ -157,7 +157,7 @@ export function RevisaoCallModal({ gravacaoId, onClose, onAlterado }) {
   const g = dados?.gravacao
   return (
     <Modal open onClose={onClose} size="lg" title="Rever call"
-      subtitle={g ? `${g.tipo_chamada === 'follow_up' ? 'Follow-up' : 'Cold Call'} de ${fmtData(g.data_chamada)}` : ''}
+      subtitle={g ? `${g.tipo_chamada === 'follow_up' ? 'Follow-up' : g.tipo_chamada === 'discovery' ? 'Discovery Call' : 'Cold Call'} de ${fmtData(g.data_chamada)}` : ''}
       footer={
         <Modal.Footer>
           <Button variant="secondary" onClick={onClose}>Fechar</Button>

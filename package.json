@@ -29,7 +29,8 @@
     "test:dashboard": "node --test scripts/regras-dashboard.test.mjs",
     "generate:roles": "node scripts/generate-shared-roles.mjs",
     "check:roles": "node scripts/check-role-parity.mjs",
-    "check:endpoints": "node scripts/check-endpoint-parity.mjs"
+    "check:endpoints": "node scripts/check-endpoint-parity.mjs",
+    "test:classe": "node --test scripts/classe-investidor.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",

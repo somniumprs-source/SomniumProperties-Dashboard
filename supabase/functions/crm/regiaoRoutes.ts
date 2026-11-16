@@ -5,6 +5,7 @@
  * do pool — portados na íntegra.
  */
 import pool from "../_shared/pg.ts";
+import { podeSerApresentado } from "../_shared/classeInvestidor.js";
 
 const REGIOES = ["Coimbra", "AMP"];
 const CONCELHOS_POR_REGIAO: Record<string, string[]> = {
@@ -179,7 +180,10 @@ export function registerRegiaoRoutes(app: any) {
       const modelo = im.modelo_negocio || "";
       const regiao = im.regiao || "Coimbra";
 
-      const scored = invs.rows.map((inv: any) => {
+      // SOP 23, 4.10: só A e B com classe definitiva (ou legada) são apresentados.
+      const elegiveis = invs.rows.filter(podeSerApresentado);
+      const excluidos = invs.rows.length - elegiveis.length;
+      const scored = elegiveis.map((inv: any) => {
         let score = 0;
         const reasons: string[] = [];
 
@@ -241,9 +245,9 @@ export function registerRegiaoRoutes(app: any) {
           reasons,
           campos_em_falta: camposEmFalta,
         };
-      }).sort((a: any, b: any) => b.score - a.score);
+      }).sort((a: any, b: any) => (a.classificacao === "A" ? 0 : 1) - (b.classificacao === "A" ? 0 : 1) || b.score - a.score);
 
-      return c.json({ imovel_id: im.id, regiao, total: scored.length, top: scored });
+      return c.json({ imovel_id: im.id, regiao, total: scored.length, excluidos_por_classe: excluidos, top: scored });
     } catch (e) { return c.json({ error: (e as Error).message }, 500); }
   });
 

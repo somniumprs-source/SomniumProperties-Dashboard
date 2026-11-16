@@ -28,6 +28,7 @@ import { enfileirarIA, jsonDaResposta } from "./filaIA.ts"
 import { withAuditUser } from "./audit.ts"
 import { registarContactoPessoa, agendarContactoPessoa, definirTipoContacto } from "./contactoPessoa.ts"
 import { prepararCall } from "./preparacaoCall.ts"
+import { CRITERIOS_DISCOVERY, normalizarNota } from "./classeInvestidor.js"
 
 export const TIPO_FILA_EXTRACAO = 'extracao_investidor'
 const agora = () => new Date().toISOString()
@@ -208,7 +209,7 @@ export function promptExtracao({ investidor, transcricao, origem, formularios })
     .map(([k, d]) => `- ${k} (${d.tipo}${d.valores ? `: ${d.valores.join(' | ')}` : ''})${d.guia ? `: ${d.guia}` : ''}`).join('\n')
   const objecoes = parseLista(investidor.objecoes).map((o, i) => ({ i, objecao: o.objecao, resolvida: !!o.resolvida }))
   const compromissos = parseLista(investidor.compromissos).map((c, i) => ({ i, quem: c.quem, o_que: c.o_que, cumprido: !!c.cumprido }))
-  return `És analista da Somnium Properties (investimento imobiliário em Coimbra e no Grande Porto: CAEP, Fix and Flip, cedência de posição). Extrai da transcrição de uma ${origem.tipo === 'reuniao' ? 'reunião' : `chamada (${origem.tipo_chamada === 'follow_up' ? 'follow-up' : 'cold call'})`} de ${fmtData(origem.data)} com o investidor ${investidor.nome} os dados que servem para preencher a ficha dele no CRM.
+  return `És analista da Somnium Properties (investimento imobiliário em Coimbra e no Grande Porto: CAEP, Fix and Flip, cedência de posição). Extrai da transcrição de uma ${origem.tipo === 'reuniao' ? 'reunião' : `chamada (${origem.tipo_chamada === 'follow_up' ? 'follow-up' : origem.tipo_chamada === 'discovery' ? 'discovery call' : 'cold call'})`} de ${fmtData(origem.data)} com o investidor ${investidor.nome} os dados que servem para preencher a ficha dele no CRM.
 
 REGRAS
 - Só o que foi DITO pelo investidor sobre si próprio, ou combinado explicitamente entre os dois lados. Não infiras, não completes, não deduzas.
@@ -447,6 +448,21 @@ export async function aplicarRegistoCall(pool, gravacaoId) {
   const proximoPasso = g.proximo_passo || escolhe2(a.sugestao_proximo_passo, ['entrevista_marcada', 'follow_up_agendado', 'enviar_forms', 'sem_interesse', 'nao_elegivel'])
   const temperatura = g.temperatura || escolhe2(a.sugestao_temperatura, ['quente', 'intermedio', 'frio'])
   const dataCall = dia(g.data_chamada) || dia(g.created_at)
+  // 0. Scorecard da discovery (SOP 23): uma sugestão por critério, com evidência
+  // e minuto. Só sugestão: o comercial confirma no separador Avaliação e a
+  // classe é validada pelos dois CEO. Corre mesmo com o registo já feito à mão.
+  if (g.tipo_chamada === 'discovery' && a.scorecard_discovery && typeof a.scorecard_discovery === 'object') {
+    await pool.query(`DELETE FROM investidor_campos_ia WHERE origem_tipo = 'gravacao' AND origem_id = $1 AND campo LIKE 'scorecard_discovery.%' AND estado = 'pendente'`, [g.id])
+    for (const c of CRITERIOS_DISCOVERY) {
+      const s = a.scorecard_discovery[c.chave]
+      let nota = null
+      try { nota = normalizarNota(s?.nota, c.chave) } catch { nota = null }
+      if (nota == null) continue
+      await registar(pool, { investidor_id: g.investidor_id, campo: `scorecard_discovery.${c.chave}`, valor: { nota }, confianca: 'media',
+        evidencia: s?.evidencia || null, minuto: s?.minuto || null, origem_tipo: 'gravacao', origem_id: g.id, origem_data: dataCall,
+        modo: 'auto', estado: 'pendente', motivo: 'classificacao' })
+    }
+  }
   let dataFollow = g.data_follow_up || dia(a.sugestao_data_follow_up)
   if (!dataFollow && ['follow_up_agendado', 'enviar_forms'].includes(proximoPasso) && dataCall) dataFollow = somaDias(dataCall, DIAS_POR_TEMPERATURA[temperatura] || 60)
 
@@ -530,6 +546,7 @@ export async function aceitarSugestao(pool, id, user) {
   if (l.estado !== 'pendente') throw new Error('Esta sugestão já foi decidida')
   const { rows: [inv] } = await pool.query('SELECT * FROM investidores WHERE id = $1', [l.investidor_id])
   if (l.campo === 'classificacao') throw new Error('A classificação só muda pelo Scorecard: abre o separador Avaliação')
+  if (String(l.campo).startsWith('scorecard_discovery.')) throw new Error('Confirma esta nota no scorecard da discovery (separador Avaliação)')
   if (l.campo === 'proximo_contacto') {
     await agendarContactoPessoa(pool, 'investidor', l.investidor_id, { data: l.valor?.data, tipoContacto: l.valor?.tipo || 'follow_up', user })
   } else {
@@ -590,8 +607,9 @@ export async function reverterCampo(pool, id, user) {
 }
 
 // ── Leitura (ficha e ecrã Rever call) ─────────────────────────
-const comLabel = (l) => ({ ...l, label: CAMPOS_IA[l.campo]?.label || (l.campo === 'classificacao' ? 'Reclassificação (5 critérios)' : l.campo === 'proximo_contacto' ? 'Próximo contacto' : l.campo),
-  valor_txt: l.campo === 'classificacao' ? null : l.campo === 'proximo_contacto' ? `${fmtData(l.valor?.data)} (${l.valor?.tipo === 'discovery_call' ? 'Discovery Call' : 'Follow-up'})` : formatarValor(l.campo, l.valor),
+const ROTULO_DISCOVERY = Object.fromEntries(CRITERIOS_DISCOVERY.map(c => [`scorecard_discovery.${c.chave}`, `Scorecard discovery: ${c.label}`]))
+const comLabel = (l) => ({ ...l, label: CAMPOS_IA[l.campo]?.label || ROTULO_DISCOVERY[l.campo] || (l.campo === 'classificacao' ? 'Reclassificação (5 critérios)' : l.campo === 'proximo_contacto' ? 'Próximo contacto' : l.campo),
+  valor_txt: l.campo === 'classificacao' ? null : ROTULO_DISCOVERY[l.campo] ? `${l.valor?.nota ?? '—'}/2` : l.campo === 'proximo_contacto' ? `${fmtData(l.valor?.data)} (${l.valor?.tipo === 'discovery_call' ? 'Discovery Call' : 'Follow-up'})` : formatarValor(l.campo, l.valor),
   anterior_txt: l.campo === 'proximo_contacto' ? fmtData(l.valor_anterior?.data) : formatarValor(l.campo, l.valor_anterior) })
 
 export async function camposIADoInvestidor(pool, investidorId) {

@@ -753,7 +753,7 @@ export async function tipoChamadaSugerido(pool, investidorId) {
   const tresDias = new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10)
   const perto = rows.filter(r => dia(r.quando) >= tresDias).sort((a, b) => String(a.quando).localeCompare(String(b.quando)))
   const daCall = perto.find(r => dia(r.quando) <= hoje) || perto[0]
-  const mapa = (t) => (t === 'discovery_call' ? 'follow_up' : t)
+  const mapa = (t) => (t === 'discovery_call' ? 'discovery' : t)
   if (daCall && ['cold_call', 'follow_up', 'discovery_call'].includes(daCall.tipo_final)) return { tipo: mapa(daCall.tipo_final), motivo: daCall.motivo_classificacao, fonte: 'preparacao' }
   const ctx = await recolherContexto(pool, { id: '__nenhuma__', origem_id: investidorId, inicio: null })
   if (!ctx) return { tipo: 'cold_call', motivo: null, fonte: 'padrao' }

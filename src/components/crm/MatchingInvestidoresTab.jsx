@@ -40,8 +40,13 @@ export function MatchingInvestidoresTab({ imovelId, imovelNome }) {
           </h3>
           <p className="text-xs text-ink-muted mt-1">
             Algoritmo de score 0-100 baseado em capital disponível, região preferida, tipologia, ROI alvo e estratégia.
-            Região do imóvel: <strong>{data.regiao}</strong>.
+            Região do imóvel: <strong>{data.regiao}</strong>. Só entram investidores A e B com classe definitiva (SOP 23); A primeiro.
           </p>
+          {data.excluidos_por_classe > 0 && (
+            <p className="text-xs text-ink-muted mt-1">
+              {data.excluidos_por_classe} investidor(es) fora da partilha: classe C, D, sem classe ou por validar pelos dois CEO.
+            </p>
+          )}
         </div>
         <div className="text-right num">
           <p className="text-xs text-ink-muted">Encontrados</p>
@@ -51,7 +56,7 @@ export function MatchingInvestidoresTab({ imovelId, imovelNome }) {
 
       {data.top.length === 0 && (
         <div className="text-center py-8 text-sm text-ink-muted bg-surface  rounded-xl">
-          Nenhum investidor elegível encontrado (todos "Não qualificado" ou "Inactivo").
+          Nenhum investidor elegível encontrado (só A e B validados podem ser apresentados).
         </div>
       )}
 

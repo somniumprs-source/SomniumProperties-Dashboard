@@ -15,8 +15,9 @@
  */
 
 import { aposAnaliseGravacao } from "./autopreenchimento.js"
+import { CRITERIOS_DISCOVERY } from '../../supabase/functions/_shared/classeInvestidor.js'
 
-export const TIPOS_CHAMADA_INV = ['cold_call', 'follow_up']
+export const TIPOS_CHAMADA_INV = ['cold_call', 'follow_up', 'discovery']
 export const RESULTADOS_INV = ['atendeu', 'nao_atendeu', 'recusou', 'numero_errado']
 export const PROXIMOS_PASSOS_INV = ['entrevista_marcada', 'follow_up_agendado', 'enviar_forms', 'sem_interesse', 'nao_elegivel']
 export const TEMPERATURAS_INV = ['quente', 'intermedio', 'frio']
@@ -40,6 +41,15 @@ export const PASSOS_INV = {
     { chave: 'dados_em_falta', label: 'Recolha de dados em falta', guia: 'Completa a qualificação do Anexo 9 (capital, ROI, estratégia, tipo de imóvel, experiência, equipa de obras).' },
     { chave: 'objeccoes', label: 'Gestão de objecções', guia: 'Responde às dúvidas com clareza, sem pressionar nem prometer.' },
     { chave: 'fecho', label: 'Fecho e próximo passo', guia: 'Próximo passo com data. Se não avança, define a temperatura: quente (30 dias), intermédio (60) ou frio (90).' },
+  ],  // Discovery call (SOP 23): explorar os 6 critérios do scorecard e fechar.
+  discovery: [
+    { chave: 'capital', label: 'Capital', guia: 'Apura se o capital está disponível hoje, em breve com data, ou depende de algo sem data.' },
+    { chave: 'via', label: 'Via', guia: 'Apura a via de investimento (Passivo ou Ativo; CAEP, Fix and Flip, cedência de posição) e se é coerente com o que o investidor diz e faz.' },
+    { chave: 'objetivo', label: 'Objetivo', guia: 'Leva o investidor a um objetivo concreto e, se possível, com prazo.' },
+    { chave: 'urgencia', label: 'Urgência', guia: 'Identifica se há urgência e um gatilho concreto para investir agora.' },
+    { chave: 'experiencia', label: 'Experiência e confiança', guia: 'Apura experiência anterior e o grau de confiança no processo da Somnium, sem pressionar.' },
+    { chave: 'decisor', label: 'Decisor', guia: 'Confirma quem decide: sozinho, partilhado, e se os decisores estiveram na call.' },
+    { chave: 'fecho', label: 'Fecho e próximo passo', guia: 'Próximo passo concreto e datado. Não apresenta oportunidades antes da classe validada.' },
   ],
 }
 
@@ -143,7 +153,10 @@ function contextoInvestidor(inv) {
 
 function buildPrompt(tipo, investidor) {
   const passos = PASSOS_INV[tipo] || PASSOS_INV.cold_call
-  const nomeTipo = tipo === 'follow_up' ? 'FOLLOW-UP' : 'COLD CALL'
+  const nomeTipo = tipo === 'follow_up' ? 'FOLLOW-UP' : tipo === 'discovery' ? 'DISCOVERY CALL' : 'COLD CALL'
+  const discovery = tipo === 'discovery'
+  const scorecardTxt = CRITERIOS_DISCOVERY.map(c => `- ${c.chave} (${c.label}): 0 = ${c.niveis[0]}; 1 = ${c.niveis[1]}; 2 = ${c.niveis[2]}`).join('\n')
+  const scorecardJson = CRITERIOS_DISCOVERY.map(c => `    "${c.chave}": { "nota": 0-2 ou null, "evidencia": "frase exacta do investidor ou null", "minuto": "mm:ss ou null" }`).join(',\n')
   const passosTxt = passos.map((p, i) => `${i + 1}. ${p.chave} (${p.label}): ${p.guia}`).join('\n')
   const passosJson = passos.map(p => `    "${p.chave}": { "nota": 0-2, "evidencia": "citação curta da transcrição ou null", "comentario": "o que faltou e como fazer melhor" }`).join(',\n')
   return `És um analista comercial sénior da Somnium Properties (investimento imobiliário em Coimbra, Portugal: Fix and Flip, CAEP/Cedência de Posição Contratual, Parcerias). Recebes a transcrição de uma chamada de ${nomeTipo} entre a nossa equipa e um potencial investidor. Avalia-a contra o SOP 4 (Procura, registo e classificação de Investidores) com o objectivo de OPTIMIZAR as nossas cold calls e follow-ups e treinar a equipa.
@@ -176,7 +189,7 @@ ${passosJson}
   "objeccoes": [{ "objeccao": "dúvida ou objecção do investidor", "resposta_dada": "como respondemos", "eficaz": true|false, "sugestao": "como responder melhor" }],
   "melhorias_script": [{ "momento": "abertura | qualificacao | objeccao | fecho | outro", "em_vez_de": "o que foi dito", "dizer": "frase concreta a usar da próxima vez" }],
   "dados_recolhidos": { "tipo_investidor": "Ativo" | "Passivo" | null, "capital_min": numero ou null, "capital_max": numero ou null, "capital_disponivel_quando": "texto ou null", "roi_pretendido": "texto ou null", "estrategia": "texto ou null", "tipo_imovel": "texto ou null", "experiencia": "texto ou null", "equipa_obras": "texto ou null", "dados_em_falta": ["campos do Anexo 9 que ficaram por recolher"] },
-  "pre_classificacao": { "capacidade_financeira": 1-5 ou null, "experiencia": 1-5 ou null, "alinhamento": 1-5 ou null, "credibilidade": 1-5 ou null, "compromisso": 1-5 ou null, "justificacao": "1-2 frases" },
+${discovery ? `  "scorecard_discovery": {\n${scorecardJson}\n  },\n` : ''}  "pre_classificacao": { "capacidade_financeira": 1-5 ou null, "experiencia": 1-5 ou null, "alinhamento": 1-5 ou null, "credibilidade": 1-5 ou null, "compromisso": 1-5 ou null, "justificacao": "1-2 frases" },
   "proximo_passo": "acção recomendada concreta, com prazo",
   "sugestao_resultado": "atendeu" | "nao_atendeu" | "recusou" | "numero_errado" | null,
   "sugestao_proximo_passo": "entrevista_marcada" | "follow_up_agendado" | "enviar_forms" | "sem_interesse" | "nao_elegivel" | null,
@@ -185,7 +198,7 @@ ${passosJson}
   "sugestao_justificacao": "1-2 frases a justificar as sugestões"
 }
 
-A pre_classificacao é só indicativa (a classificação oficial é feita na Entrevista Estratégica). Escreve em português de Portugal, directo e profissional. Não inventes: se algo não aparece na transcrição, usa null.`
+${discovery ? `SCORECARD DA DISCOVERY (SOP 23, 4.10): dá uma nota de 0 a 2 por critério, com a frase do investidor que a justifica e o minuto. Se a transcrição não permite avaliar um critério, usa null (nunca adivinhes). Nesta call, "pre_classificacao" vai a null.\n${scorecardTxt}\nO scorecard é só sugestão: o comercial confirma cada nota e a classe é validada pelos dois CEO.\n\n` : ''}A pre_classificacao é só indicativa (a classe A–D sai do scorecard da discovery). Escreve em português de Portugal, directo e profissional. Não inventes: se algo não aparece na transcrição, usa null.`
 }
 
 function parseJson(texto) {

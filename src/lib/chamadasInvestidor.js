@@ -1,7 +1,7 @@
 // Labels das chamadas gravadas com investidores (SOP 4). Espelho dos valores
 // aceites em src/db/chamadasInvestidor.js (e no gémeo Deno).
 
-export const TIPO_CHAMADA_INV_LABEL = { cold_call: 'Cold Call', follow_up: 'Follow-up' }
+export const TIPO_CHAMADA_INV_LABEL = { cold_call: 'Cold Call', follow_up: 'Follow-up', discovery: 'Discovery Call' }
 export const RESULTADO_INV_LABEL = { atendeu: 'Atendeu', nao_atendeu: 'Não atendeu', recusou: 'Recusou', numero_errado: 'Número errado' }
 export const PROXIMO_PASSO_INV_LABEL = {
   entrevista_marcada: 'Entrevista marcada',
@@ -35,14 +35,9 @@ export const CRITERIOS_CLASSIFICACAO_LABEL = {
   compromisso: 'Disponibilidade e compromisso',
 }
 
-// Classes SOP 4 (5.4): soma dos 5 critérios, máximo 25.
-export function classeSop4(total) {
-  if (total == null) return null
-  if (total >= 22) return 'A · Prioritário'
-  if (total >= 18) return 'B · Elegível'
-  if (total >= 14) return 'C · Observação'
-  return 'D · Não elegível'
-}
+// A conversão para classe A–D vive só em supabase/functions/_shared/classeInvestidor.js
+// (scorecard da discovery, SOP 23). A pré-classificação de 5 critérios das cold
+// calls é só indicativa e já não se converte em classe.
 
 export function corNota(nota) {
   if (nota == null) return 'bg-surface-muted text-ink-muted'

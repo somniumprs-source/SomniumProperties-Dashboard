@@ -750,6 +750,7 @@ const FUNIL_INVESTIDORES = [
   "Potencial",
   "Marcar call",
   "Marcar Call",
+  "Discovery call marcada",
   "Call marcada",
   "Call Marcada",
   "Follow Up",
@@ -764,7 +765,9 @@ const FUNIL_INVESTIDORES = [
 const FUNIL_INV_LABEL: Record<string, string> = {
   "Potencial Investidor": "Potencial",
   "Marcar call": "Marcar Call",
-  "Call marcada": "Call Marcada",
+  "Discovery call marcada": "Discovery Call Marcada",
+  "Call marcada": "Discovery Call Marcada",
+  "Call Marcada": "Discovery Call Marcada",
   "Investidor Qualificado em Carteira": "Em Carteira",
   "Investidor em espera": "Em Carteira",
   "Investidor em parceria": "Em Parceria",
@@ -1972,7 +1975,7 @@ app.get("/metricas", async (c: any) => {
       "Pendente de Aprovação",
       "Potencial", "Potencial Investidor",
       "Marcar Call", "Marcar call",
-      "Call Marcada", "Call marcada",
+      "Discovery call marcada", "Call Marcada", "Call marcada",
       "Follow Up", "Classificado", "Investidor em espera", "Investidor Qualificado em Carteira",
     ]);
 

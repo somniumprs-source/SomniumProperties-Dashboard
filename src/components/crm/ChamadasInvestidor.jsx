@@ -18,8 +18,9 @@ import { confirmar } from '../ui/ConfirmDialog.jsx'
 import { inputClass } from './RegistoManualFieldset.jsx'
 import {
   TIPO_CHAMADA_INV_LABEL, RESULTADO_INV_LABEL, PROXIMO_PASSO_INV_LABEL, TEMPERATURA_INV_LABEL,
-  PASSOS_INV_LABEL, CRITERIOS_CLASSIFICACAO_LABEL, classeSop4, corNota, corBarra,
+  PASSOS_INV_LABEL, CRITERIOS_CLASSIFICACAO_LABEL, corNota, corBarra,
 } from '../../lib/chamadasInvestidor.js'
+import { CRITERIOS_DISCOVERY, calcularClasseDiscovery } from '../../../supabase/functions/_shared/classeInvestidor.js'
 
 const AUDIO_ACCEPT = 'audio/*,.mp3,.m4a,.wav,.ogg,.webm,.mp4,.aac'
 const EM_PROCESSAMENTO = ['pendente', 'a_transcrever', 'aguarda_analise', 'a_analisar']
@@ -147,6 +148,9 @@ function Analise({ g }) {
   const pc = a.pre_classificacao || {}
   const pcNotas = Object.keys(CRITERIOS_CLASSIFICACAO_LABEL).map(k => pc[k]).filter(v => Number.isFinite(Number(v)) && v !== null)
   const pcTotal = pcNotas.length === 5 ? pcNotas.reduce((s, n) => s + Number(n), 0) : null
+  const sd = a.scorecard_discovery || null
+  let sdCalc = null
+  try { sdCalc = sd ? calcularClasseDiscovery(sd) : null } catch { sdCalc = null }
   const dadosLinhas = [
     ['Tipo', dados.tipo_investidor], ['Capital mín.', dados.capital_min && `${Number(dados.capital_min).toLocaleString('pt-PT')} €`],
     ['Capital máx.', dados.capital_max && `${Number(dados.capital_max).toLocaleString('pt-PT')} €`],
@@ -250,7 +254,7 @@ function Analise({ g }) {
       {pcNotas.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-ink-muted mb-1.5">
-            Pré-classificação indicativa {pcTotal != null && <span className="text-ink">· {pcTotal}/25 · Classe {classeSop4(pcTotal)}</span>}
+            Pré-classificação indicativa {pcTotal != null && <span className="text-ink">· {pcTotal}/25</span>}
           </p>
           <div className="flex flex-wrap gap-1.5">
             {Object.entries(CRITERIOS_CLASSIFICACAO_LABEL).map(([k, l]) => pc[k] != null && (
@@ -258,7 +262,25 @@ function Analise({ g }) {
             ))}
           </div>
           {pc.justificacao && <p className="text-[11px] text-ink-muted mt-1">{pc.justificacao}</p>}
-          <p className="text-[11px] text-ink-muted mt-1">Não altera a classificação da ficha: a oficial é feita na Entrevista Estratégica.</p>
+          <p className="text-[11px] text-ink-muted mt-1">Não altera a classificação da ficha: a classe sai do scorecard da discovery (SOP 23).</p>
+        </div>
+      )}
+
+      {sd && (
+        <div>
+          <p className="text-xs font-semibold text-ink-muted mb-1.5">
+            Scorecard da discovery sugerido pela IA
+            {sdCalc?.total != null && <span className="text-ink"> · {sdCalc.total}/12 · proposta {sdCalc.classe}</span>}
+          </p>
+          <ul className="space-y-1">
+            {CRITERIOS_DISCOVERY.map(c => sd[c.chave] && (
+              <li key={c.chave} className="text-[11px] text-ink">
+                <span className="font-medium">{c.label}: {sd[c.chave].nota ?? '—'}/2</span>
+                {sd[c.chave].evidencia && <span className="text-ink-muted"> · "{sd[c.chave].evidencia}"{sd[c.chave].minuto ? ` (${sd[c.chave].minuto})` : ''}</span>}
+              </li>
+            ))}
+          </ul>
+          <p className="text-[11px] text-ink-muted mt-1">Só sugestão: confirma cada nota no separador Avaliação da ficha.</p>
         </div>
       )}
 
@@ -456,7 +478,7 @@ export function ChamadasInvestidor({ investidorId }) {
           <Mic className="w-4 h-4 text-ink-muted" />
           <div>
             <h3 className="text-sm font-semibold text-ink">Chamadas gravadas</h3>
-            <p className="text-xs text-ink-muted">Cold Call e Follow-up avaliados pelo SOP 4</p>
+            <p className="text-xs text-ink-muted">Cold Call, Follow-up e Discovery Call (SOP 4 e SOP 23)</p>
           </div>
         </div>
         {!adding && (

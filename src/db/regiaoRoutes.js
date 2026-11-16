@@ -5,6 +5,7 @@
 import { Router } from 'express'
 import { randomUUID } from 'crypto'
 import pool from './pg.js'
+import { podeSerApresentado } from '../../supabase/functions/_shared/classeInvestidor.js'
 
 const router = Router()
 
@@ -179,7 +180,10 @@ router.get('/regiao/match/imovel/:id', async (req, res) => {
     const modelo = im.modelo_negocio || ''
     const regiao = im.regiao || 'Coimbra'
 
-    const scored = invs.rows.map(inv => {
+    // SOP 23, 4.10: só A e B com classe definitiva (ou legada) são apresentados.
+      const elegiveis = invs.rows.filter(podeSerApresentado)
+      const excluidos = invs.rows.length - elegiveis.length
+      const scored = elegiveis.map(inv => {
       let score = 0
       const reasons = []
 
@@ -241,9 +245,9 @@ router.get('/regiao/match/imovel/:id', async (req, res) => {
         reasons,
         campos_em_falta: camposEmFalta,
       }
-    }).sort((a, b) => b.score - a.score)
+    }).sort((a, b) => (a.classificacao === 'A' ? 0 : 1) - (b.classificacao === 'A' ? 0 : 1) || b.score - a.score)
 
-    res.json({ imovel_id: im.id, regiao, total: scored.length, top: scored })
+    res.json({ imovel_id: im.id, regiao, total: scored.length, excluidos_por_classe: excluidos, top: scored })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 

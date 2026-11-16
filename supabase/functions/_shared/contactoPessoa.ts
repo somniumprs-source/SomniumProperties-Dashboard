@@ -41,7 +41,7 @@ const PESSOAS = {
   investidor: {
     tabela: 'investidores', interacoes: 'investidor_interacoes', fk: 'investidor_id', origem: 'investidor_interacao',
     espelho: 'data_proxima_acao', fase: 'status', fasesFollowUp: ['Follow Up'],
-    tipoPorFase: { 'Pendente de Aprovação': 'cold_call', 'Potencial Investidor': 'cold_call', 'Marcar call': 'discovery_call', 'Call marcada': 'discovery_call' },
+    tipoPorFase: { 'Pendente de Aprovação': 'cold_call', 'Potencial Investidor': 'cold_call', 'Marcar call': 'discovery_call', 'Discovery call marcada': 'discovery_call', 'Call marcada': 'discovery_call' },
     categorias: { cold_call: 'Cold Call a Investidores', discovery_call: 'Discovery Call a Investidores', follow_up: 'Follow-up de Investidores' },
   },
   parceiro: {
