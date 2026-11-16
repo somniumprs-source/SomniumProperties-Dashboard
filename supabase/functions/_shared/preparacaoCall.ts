@@ -36,6 +36,8 @@ export const TIPO_FILA_RESUMO = 'resumo_reuniao'
 const VERSAO_PROMPT = 'v3'
 const MIN_TRANSCRICAO_RESUMO = 1500
 const DIAS_JANELA = 14
+// Falhas da IA que passam sozinhas (limite de uso do plano, sobrecarga): repetir.
+const RE_ERRO_TRANSITORIO = /usage|limit|rate|overload|timeout|ETIMEDOUT|ECONN|503|529/i
 
 const agora = () => new Date().toISOString()
 const ABERTA = "status NOT IN ('Concluída', 'Concluida') AND COALESCE(arquivada, false) = false AND tarefa NOT LIKE 'Cancelada:%'"
@@ -45,6 +47,11 @@ const normaliza = (s) => String(s || '').toLowerCase().normalize('NFD').replace(
 let _tabelas = false
 export async function ensurePreparacaoTables(pool) {
   if (_tabelas) return
+  // ALTER TABLE pede um bloqueio exclusivo mesmo com IF NOT EXISTS: só se faz se faltar.
+  const { rows: [ok] } = await pool.query(
+    `SELECT to_regclass('public.preparacao_calls') IS NOT NULL AS t,
+            EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'reunioes' AND column_name = 'resumo_ia_em') AS c`)
+  if (ok?.t && ok?.c) { _tabelas = true; return }
   await pool.query(`
     CREATE TABLE IF NOT EXISTS preparacao_calls (
       id TEXT PRIMARY KEY,
@@ -584,7 +591,16 @@ export async function prepararCall(pool, tarefaId, { gerar = true, forcar = fals
   }
 
   // 3. Texto pela IA (só se o contexto mudou).
-  const jaPedido = prep.hash_gerado === hash && ['gerado', 'a_gerar', 'aguarda_resumos'].includes(prep.estado)
+  // Pedido que falhou por limite de uso do Claude (ou que ficou sem nada em
+  // fila) não conta como feito: volta a pedir-se.
+  let travado = false
+  if (prep.estado === 'a_gerar') travado = (await estadoIA(pool, TIPO_FILA_PREPARACAO, tarefaId))?.estado === 'erro'
+  if (prep.estado === 'aguarda_resumos') {
+    const pend = ctx.reunioes.filter(r => !r.resumo_ia && Number(r.tr_len) >= MIN_TRANSCRICAO_RESUMO)
+    const estados = await Promise.all(pend.map(r => estadoIA(pool, TIPO_FILA_RESUMO, r.id)))
+    travado = !estados.some(emFilaIA)
+  }
+  const jaPedido = !travado && prep.hash_gerado === hash && ['gerado', 'a_gerar', 'aguarda_resumos'].includes(prep.estado)
   if (jaPedido && !forcar) return prep
   if (!gerar && prep.conteudo_json && !forcar) {
     if (prep.estado !== 'desatualizado') prep = (await pool.query(`UPDATE preparacao_calls SET estado = 'desatualizado' WHERE id = $1 RETURNING *`, [prep.id])).rows[0]
@@ -597,7 +613,7 @@ export async function prepararCall(pool, tarefaId, { gerar = true, forcar = fals
   const falhados = []
   for (const r of semResumo) {
     const est = await estadoIA(pool, TIPO_FILA_RESUMO, r.id)
-    if (est?.estado === 'erro') { falhados.push(r); continue }
+    if (est?.estado === 'erro' && !RE_ERRO_TRANSITORIO.test(est.erro || '')) { falhados.push(r); continue }
     aEsperar.push(r)
     if (!emFilaIA(est)) {
       const { rows: [comTexto] } = await pool.query('SELECT transcricao FROM reunioes WHERE id = $1', [r.id])

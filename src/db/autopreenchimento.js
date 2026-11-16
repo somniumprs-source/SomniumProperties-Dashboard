@@ -79,6 +79,11 @@ export const CAMPOS_A_RECOLHER = ['profissao', 'zona_residencia', 'capital_max',
 let _tabelas = false
 export async function ensureAutopreenchimento(pool) {
   if (_tabelas) return
+  // ALTER TABLE pede um bloqueio exclusivo mesmo com IF NOT EXISTS: só se faz se faltar.
+  const { rows: [ok] } = await pool.query(
+    `SELECT to_regclass('public.investidor_campos_ia') IS NOT NULL AS t,
+            EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'reunioes' AND column_name = 'extracao_ia') AS c`)
+  if (ok?.t && ok?.c) { _tabelas = true; return }
   await pool.query(`
     ALTER TABLE investidores ADD COLUMN IF NOT EXISTS capital_disponivel_em TEXT;
     ALTER TABLE investidores ADD COLUMN IF NOT EXISTS capital_proprio_ou_financiado TEXT;
