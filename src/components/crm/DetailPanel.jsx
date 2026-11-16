@@ -2416,7 +2416,7 @@ function InvestidorHero({ data }) {
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-warning/15 text-warning font-medium">Classe {data.classificacao_proposta} por validar</span>
               )}
               {data.classificacao_origem === 'legado' && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-muted text-ink-muted font-medium" title="Classe anterior ao SOP 23 – reclassificar na próxima discovery">Legado</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-muted text-ink-muted font-medium" title="Classe anterior ao SOP 23 – reclassificar">Legado</span>
               )}
               <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${pillClass(INV_STATUS_COLOR[data.status])}`}><span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(INV_STATUS_COLOR[data.status])}`} aria-hidden="true" />{data.status || '—'}</span>
               {!!data.nda_assinado && (

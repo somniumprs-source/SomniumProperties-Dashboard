@@ -779,6 +779,7 @@ const getObras        = async () => []
 
 // Cache com TTL para endpoints que fazem queries pesadas
 import { TTLCache } from './src/db/utils/ttlCache.js'
+import { alertasClassificacao } from './src/db/classificacaoInvestidor.js'
 import pool from './src/db/pg.js'
 import { ehParceria, ehConsultorParceiro, contagemParceria, capacidadeDeclarada, ehChamada, imoveisPorContactar, negocioFechado, escrituraRegistada, resumoFases, resumoProjetos, custoRealObra, imoveisContactados, motivosPerda, cumprimentoTarefas, capitalConfirmado, faltaFinanciamento, resumoBloqueios, respostas24h, custoFinalProjetos, diasNaFase, ESTADOS_COM_PROXIMO_PASSO, diasProximoPassoUltrapassado } from './supabase/functions/_shared/regrasDashboard.js'
 import { alertasConservacao } from './src/db/consentimentos.js'
@@ -2444,7 +2445,7 @@ app.get('/api/weekly-pulse', async (req, res) => {
       semana: { de: weekStart.toISOString().slice(0,10), ate: now.toISOString().slice(0,10) },
       score, status,
       atividades: { imoveisAdicionados, chamadasFeitas, visitasFeitas, propostasEnviadas, dealsFechados },
-      alertas: { imoveisParados, investSemContacto, consFollowUpAtrasado },
+      alertas: { imoveisParados, investSemContacto, consFollowUpAtrasado, ...(await alertasClassificacao(pool).catch(() => ({}))) },
       financeiro: { burnRate, lucroPendente, runway },
     }
     cache.set(cacheKey, payload, 300000)

@@ -6,6 +6,7 @@ import { requireAuth } from "../_shared/auth.ts";
 import { RECORD_RESTRICTED_ROLES } from "../_shared/roles.ts";
 import { resolveOrProvisionUser } from "../_shared/userResolve.ts";
 import pool from "../_shared/pg.ts";
+import { alertasClassificacao } from "../_shared/classificacaoInvestidor.ts";
 import { alertasConservacao } from "../_shared/consentimentos.ts";
 import { alertasDocumentosEmpresa } from "../_shared/documentosEmpresa.ts";
 import { juntarResponsavel, donosDasRegioes } from "../_shared/responsavelRegiao.ts";
@@ -4114,7 +4115,7 @@ app.get("/weekly-pulse", async (c: any) => {
       score,
       status,
       atividades: { imoveisAdicionados, chamadasFeitas, visitasFeitas, propostasEnviadas, dealsFechados },
-      alertas: { imoveisParados, investSemContacto, consFollowUpAtrasado },
+      alertas: { imoveisParados, investSemContacto, consFollowUpAtrasado, ...(await alertasClassificacao(pool).catch(() => ({}))) },
       financeiro: { burnRate, lucroPendente, runway },
     };
     return c.json(payload);

@@ -29,6 +29,7 @@ import { RegiaoToggle } from '../components/RegiaoBadge.jsx'
 import { dotClass, pillClass } from '../lib/statusTone.js'
 import { confirmar } from '../components/ui/ConfirmDialog.jsx'
 import { AnimatePresence } from 'framer-motion'
+import { validacaoAtrasada } from '../../supabase/functions/_shared/classeInvestidor.js'
 
 // Sub-tabs regionais partilham as mesmas chaves de sessionStorage que o
 // apiFetch consulta via getRegiaoActivaFromStorage — não trocar o prefixo
@@ -778,7 +779,9 @@ export function CRM() {
                   <p className="text-[13px] font-semibold text-ink truncate">{item.nome}</p>
                 </div>
                 {item.classificacao_estado === 'proposta' && (
-                  <span className="inline-block mb-0.5 text-[10px] px-1.5 py-0.5 rounded bg-warning/15 text-warning font-medium">Classe {item.classificacao_proposta} por validar</span>
+                  <span className={`inline-block mb-0.5 text-[10px] px-1.5 py-0.5 rounded font-medium ${validacaoAtrasada(item) ? 'bg-danger/15 text-danger' : 'bg-warning/15 text-warning'}`}>
+                    Classe {item.classificacao_proposta} por validar{validacaoAtrasada(item) ? ' há mais de 24 h' : ''}
+                  </span>
                 )}
                 <p className="text-[11px] text-ink-muted truncate" title={areaAtuacao.join(', ')}>{areaLabel || '—'}</p>
               </div>

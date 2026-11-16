@@ -29,6 +29,7 @@ import { withAuditUser } from "./audit.ts"
 import { registarContactoPessoa, agendarContactoPessoa, definirTipoContacto } from "./contactoPessoa.ts"
 import { prepararCall } from "./preparacaoCall.ts"
 import { CRITERIOS_DISCOVERY, normalizarNota } from "./classeInvestidor.js"
+import { proporClassificacaoPelaIA } from "./classificacaoInvestidor.ts"
 
 export const TIPO_FILA_EXTRACAO = 'extracao_investidor'
 const agora = () => new Date().toISOString()
@@ -448,20 +449,28 @@ export async function aplicarRegistoCall(pool, gravacaoId) {
   const proximoPasso = g.proximo_passo || escolhe2(a.sugestao_proximo_passo, ['entrevista_marcada', 'follow_up_agendado', 'enviar_forms', 'sem_interesse', 'nao_elegivel'])
   const temperatura = g.temperatura || escolhe2(a.sugestao_temperatura, ['quente', 'intermedio', 'frio'])
   const dataCall = dia(g.data_chamada) || dia(g.created_at)
-  // 0. Scorecard da discovery (SOP 23): uma sugestão por critério, com evidência
-  // e minuto. Só sugestão: o comercial confirma no separador Avaliação e a
-  // classe é validada pelos dois CEO. Corre mesmo com o registo já feito à mão.
+  // 0. Scorecard da discovery (SOP 23 v2.1): notas por critério, com evidência
+  // e minuto. Corre mesmo com o registo da call já feito à mão.
+  // Com os 6 critérios a app propõe a classe automaticamente (quem conduziu a
+  // call fica como proponente e o outro CEO valida em 24 h). Incompleto, ou
+  // com scorecard gravado à mão depois da call: as notas ficam como sugestões.
   if (g.tipo_chamada === 'discovery' && a.scorecard_discovery && typeof a.scorecard_discovery === 'object') {
     await pool.query(`DELETE FROM investidor_campos_ia WHERE origem_tipo = 'gravacao' AND origem_id = $1 AND campo LIKE 'scorecard_discovery.%' AND estado = 'pendente'`, [g.id])
+    const notasIA = {}
     for (const c of CRITERIOS_DISCOVERY) {
       const s = a.scorecard_discovery[c.chave]
       let nota = null
       try { nota = normalizarNota(s?.nota, c.chave) } catch { nota = null }
-      if (nota == null) continue
-      await registar(pool, { investidor_id: g.investidor_id, campo: `scorecard_discovery.${c.chave}`, valor: { nota }, confianca: 'media',
-        evidencia: s?.evidencia || null, minuto: s?.minuto || null, origem_tipo: 'gravacao', origem_id: g.id, origem_data: dataCall,
-        modo: 'auto', estado: 'pendente', motivo: 'classificacao' })
+      if (nota != null) notasIA[c.chave] = { nota, evidencia: s?.evidencia || null, minuto: s?.minuto || null }
     }
+    let proposta = { aplicado: false }
+    try { proposta = await proporClassificacaoPelaIA(pool, g, notasIA) } catch (e) { console.error('[autopreenchimento] proposta de classe:', e.message) }
+    for (const [chave, s] of Object.entries(notasIA)) {
+      await registar(pool, { investidor_id: g.investidor_id, campo: `scorecard_discovery.${chave}`, valor: { nota: s.nota }, confianca: 'media',
+        evidencia: s.evidencia, minuto: s.minuto, origem_tipo: 'gravacao', origem_id: g.id, origem_data: dataCall,
+        modo: 'auto', estado: proposta.aplicado ? 'aplicado' : 'pendente', motivo: 'classificacao' })
+    }
+    res.classe_proposta = proposta.aplicado ? proposta.classe : null
   }
   let dataFollow = g.data_follow_up || dia(a.sugestao_data_follow_up)
   if (!dataFollow && ['follow_up_agendado', 'enviar_forms'].includes(proximoPasso) && dataCall) dataFollow = somaDias(dataCall, DIAS_POR_TEMPERATURA[temperatura] || 60)

@@ -280,7 +280,7 @@ function Analise({ g }) {
               </li>
             ))}
           </ul>
-          <p className="text-[11px] text-ink-muted mt-1">Só sugestão: confirma cada nota no separador Avaliação da ficha.</p>
+          <p className="text-[11px] text-ink-muted mt-1">Com os 6 critérios a app propõe a classe (Pendente de Aprovação); o outro CEO valida no separador Avaliação da ficha.</p>
         </div>
       )}
 

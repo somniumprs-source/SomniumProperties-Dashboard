@@ -1,13 +1,14 @@
 /**
- * Scorecard da discovery call (SOP 23, secção 4.10) na ficha do investidor.
- * 6 critérios de 0 a 2 (campo manual), com a sugestão da IA e a evidência ao
- * lado; total de 0 a 12 e classe proposta pela função única
+ * Scorecard da discovery call (SOP 23 v2.1, secções 4.10 e 4.11) na ficha do
+ * investidor. 6 critérios de 0 a 2: a app preenche-os automaticamente a partir
+ * da análise da discovery gravada (com a evidência) e o campo manual existe
+ * sempre. Total de 0 a 12 e classe pela função única
  * (supabase/functions/_shared/classeInvestidor.js). A classe proposta põe o
- * investidor em Pendente de Aprovação e só fica definitiva com a validação
- * dos dois CEO.
+ * investidor em Pendente de Aprovação; fica definitiva quando o outro CEO
+ * (nunca quem propôs) a valida, em 24 horas.
  */
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Sparkles, ShieldCheck, AlertTriangle, Check } from 'lucide-react'
+import { Sparkles, ShieldCheck, AlertTriangle, Clock } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { useAuth } from '../../contexts/AuthContext.jsx'
@@ -41,6 +42,7 @@ export function ScorecardDiscovery({ investidorId, onUpdate }) {
   const [observacoes, setObservacoes] = useState('')
   const [busy, setBusy] = useState(false)
   const [val, setVal] = useState({ classe: '', motivo: '', follow_up_dias: '', motivo_inactivo: '' })
+  const [alerta, setAlerta] = useState(null)
 
   const carregar = useCallback(async () => {
     const r = await apiFetch(`/api/crm/investidores/${investidorId}/classificacao`)
@@ -49,7 +51,7 @@ export function ScorecardDiscovery({ investidorId, onUpdate }) {
     setD(j)
     setNotas(Object.fromEntries(CRITERIOS_DISCOVERY.map(c => [c.chave, j.scorecard?.[c.chave]?.nota ?? null])))
     setObservacoes(j.scorecard?.observacoes || '')
-    setVal(v => ({ ...v, classe: j.validacao?.classe || '' }))
+    setVal({ classe: j.proposta || '', motivo: '', follow_up_dias: '', motivo_inactivo: '' })
   }, [investidorId, toast])
   useEffect(() => { carregar() }, [carregar])
 
@@ -57,12 +59,12 @@ export function ScorecardDiscovery({ investidorId, onUpdate }) {
 
   if (!d) return <div className="text-sm text-ink-muted">A carregar…</div>
 
-  const souCEO = !!profile?.nome && d.ceos.includes(profile.nome) && (!profile.role || profile.role === 'admin')
   const emValidacao = d.classificacao_estado === 'proposta'
-  const jaValidei = emValidacao && d.validacao.validadores.includes(profile?.nome)
-  const classeVal = val.classe || d.validacao.classe
-  const altera = emValidacao && classeVal && classeVal !== d.validacao.classe
-  const fechaAgora = emValidacao && !altera && d.validacao.validadores.length === 1 && !jaValidei
+  const souCEO = !!profile?.nome && d.ceos.includes(profile.nome) && (!profile.role || profile.role === 'admin')
+  const souProponente = !!profile?.nome && profile.nome === d.proposta_por
+  const outroCEO = d.ceos.filter(n => n !== d.proposta_por)
+  const classeVal = val.classe || d.proposta
+  const altera = emValidacao && classeVal !== d.proposta
 
   async function guardar() {
     setBusy(true)
@@ -85,8 +87,8 @@ export function ScorecardDiscovery({ investidorId, onUpdate }) {
     const j = await r.json().catch(() => ({}))
     setBusy(false)
     if (!r.ok) return toast(j.error || 'Erro ao validar', 'error')
-    toast(j.definitiva ? `Classe ${j.classe} definitiva. Status: ${j.status}.` : 'Validação registada. Falta o outro CEO.', 'success')
-    setVal({ classe: '', motivo: '', follow_up_dias: '', motivo_inactivo: '' })
+    toast(`Classe ${j.classe} definitiva. Status: ${j.status}.`, 'success')
+    setAlerta(j.alerta_apresentacao || null)
     await carregar(); onUpdate?.()
   }
 
@@ -99,42 +101,120 @@ export function ScorecardDiscovery({ investidorId, onUpdate }) {
       )}
       <AvisoLegado origem={d.classificacao_origem} />
 
+      {(alerta || d.desmarcar_apresentacao) && (
+        <div className="flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-ink">
+          <AlertTriangle className="w-4 h-4 text-danger shrink-0 mt-px" />
+          <div>
+            <p className="font-semibold">Desmarcar a apresentação (SOP 23, 4.11)</p>
+            <p>
+              Classe {d.classificacao}: este investidor não pode ser apresentado. {d.proposta_por || 'Quem conduziu a discovery'} tem de desmarcar
+              {d.data_apresentacao_negocio ? ` a apresentação de ${d.data_apresentacao_negocio}` : ' a apresentação'}
+              {d.tarefas_apresentacao?.length ? ` e fechar a tarefa "${d.tarefas_apresentacao[0].tarefa}"` : ''}.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Estado actual */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="rounded-lg border border-line bg-surface-raised p-3">
           <p className="text-[11px] text-ink-muted">Classe definitiva</p>
           <div className="mt-1"><ClassePill classe={d.classificacao} /></div>
           <p className="text-[11px] text-ink-muted mt-1">
-            {d.classificacao_origem === 'discovery' ? `Validada em ${fmtData(d.classificacao_definida_em)}` : d.classificacao_origem === 'legado' ? `Legado (pontuação antiga ${d.pontuacao_antiga ?? 0}/100)` : '—'}
+            {d.classificacao_origem === 'discovery' ? `Validada por ${d.validada_por || '—'} em ${fmtData(d.validada_em)}`
+              : d.classificacao_origem === 'legado' ? `Legado (pontuação antiga ${d.pontuacao_antiga ?? 0}/100)` : '—'}
           </p>
         </div>
-        <div className="rounded-lg border border-line bg-surface-raised p-3">
+        <div className={`rounded-lg border p-3 ${d.atrasada ? 'border-danger/50 bg-danger/5' : 'border-line bg-surface-raised'}`}>
           <p className="text-[11px] text-ink-muted">Classe proposta</p>
-          <div className="mt-1">{emValidacao ? <ClassePill classe={d.classificacao_proposta} /> : <span className="text-xs text-ink-muted">Nenhuma por validar</span>}</div>
-          {emValidacao && <p className="text-[11px] text-ink-muted mt-1">{d.pontuacao_discovery}/12 · por validar pelos dois CEO</p>}
+          <div className="mt-1">{emValidacao ? <ClassePill classe={d.proposta} /> : <span className="text-xs text-ink-muted">Nenhuma por validar</span>}</div>
+          {emValidacao && (
+            <p className={`text-[11px] mt-1 ${d.atrasada ? 'text-danger font-semibold' : 'text-ink-muted'}`}>
+              {d.atrasada && <Clock className="w-3 h-3 inline-block mr-1 align-[-1px]" />}
+              {d.pontuacao_discovery}/12 · {d.proposta_origem === 'ia' ? 'pela análise da call' : 'à mão'} · proposta por {d.proposta_por || 'IA'} em {fmtData(d.proposta_em)}
+              {d.atrasada ? ` · por validar há mais de ${d.prazo_horas} h` : ''}
+            </p>
+          )}
         </div>
         <div className="rounded-lg border border-line bg-surface-raised p-3">
           <p className="text-[11px] text-ink-muted">Status</p>
           <p className="text-sm font-medium text-ink mt-1">{d.status}</p>
+          {d.apresentacao_marcada && <p className="text-[11px] text-ink-muted mt-1">Apresentação de negócio marcada</p>}
         </div>
       </div>
+
+      {/* Validação pelo outro CEO */}
+      {emValidacao && (
+        <div className={`rounded-xl border p-4 space-y-3 ${d.atrasada ? 'border-danger/50' : 'border-line'} bg-surface-raised`}>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-accent-ink" />
+            <h3 className="text-sm font-bold text-ink">Validação pelo outro CEO</h3>
+          </div>
+          <p className="text-xs text-ink-muted">
+            Proposta por <strong className="text-ink">{d.proposta_por || 'IA'}</strong>. Valida: {outroCEO.join(' ou ') || '—'}, em {d.prazo_horas} horas.
+          </p>
+          {!souCEO ? (
+            <p className="text-[11px] text-ink-muted">Só {d.ceos.join(' ou ')} podem validar.</p>
+          ) : souProponente ? (
+            <p className="text-[11px] text-ink-muted">Foste tu que propuseste esta classe: a validação tem de ser feita por {outroCEO.join(' ou ')}.</p>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-ink-muted">Classe:</span>
+                {Object.keys(CLASSES).map(k => (
+                  <button key={k} type="button" onClick={() => setVal(v => ({ ...v, classe: k }))}
+                    className={`px-2.5 py-1 rounded-md text-xs font-semibold border ${classeVal === k ? 'bg-accent text-accent-foreground border-accent' : 'bg-surface border-line text-ink-muted'}`}>{k}</button>
+                ))}
+                <span className="text-[11px] text-ink-muted">Depois: {STATUS_APOS_VALIDACAO[classeVal]}</span>
+              </div>
+              {altera && (
+                <input value={val.motivo} onChange={e => setVal(v => ({ ...v, motivo: e.target.value }))} placeholder="Motivo da alteração (obrigatório)"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink" />
+              )}
+              {classeVal === 'C' && (
+                <div className="flex items-center gap-2 text-xs text-ink-muted">Follow-up a
+                  {DIAS_FOLLOW_UP_C.map(n => (
+                    <button key={n} type="button" onClick={() => setVal(v => ({ ...v, follow_up_dias: String(n) }))}
+                      className={`px-2 py-1 rounded-md border ${val.follow_up_dias === String(n) ? 'bg-accent text-accent-foreground border-accent' : 'bg-surface border-line'}`}>{n} dias</button>
+                  ))}
+                </div>
+              )}
+              {classeVal === 'D' && (
+                <input value={val.motivo_inactivo} onChange={e => setVal(v => ({ ...v, motivo_inactivo: e.target.value }))} placeholder="Motivo para Inactivo (obrigatório)"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink" />
+              )}
+              {['C', 'D'].includes(classeVal) && d.apresentacao_marcada && (
+                <p className="text-[11px] text-danger">Há uma apresentação de negócio marcada: ao validar, fica o alerta para a desmarcar.</p>
+              )}
+              <button type="button" onClick={validar} disabled={busy}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-brand-dark text-white disabled:opacity-50">
+                {altera ? `Alterar para ${classeVal} e validar` : `Validar classe ${classeVal}`}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Scorecard */}
       <div className="rounded-xl border border-line bg-surface-raised p-4 space-y-3">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
             <h3 className="text-sm font-bold text-ink">Scorecard da discovery call</h3>
-            <p className="text-xs text-ink-muted">SOP 23, 4.10: 6 critérios de 0 a 2. A IA sugere, quem fez a call confirma.</p>
+            <p className="text-xs text-ink-muted">
+              SOP 23, 4.10: 6 critérios de 0 a 2. {d.scorecard?.origem === 'ia' ? 'Preenchido pela análise da discovery gravada; podes corrigir qualquer nota.' : 'Preenchido pela análise da discovery gravada ou à mão.'}
+            </p>
           </div>
           <div className="text-right">
             <p className="text-2xl font-semibold num text-ink">{calc?.total ?? '—'}<span className="text-sm text-ink-muted">/{PONTUACAO_MAX_DISCOVERY}</span></p>
-            <p className="text-[11px] text-ink-muted">{calc?.classe ? <>Proposta: <ClassePill classe={calc.classe} /></> : `Faltam ${calc?.em_falta.length ?? 6} critério(s)`}</p>
+            <p className="text-[11px] text-ink-muted">{calc?.classe ? <>Classe: <ClassePill classe={calc.classe} /></> : `Faltam ${calc?.em_falta.length ?? 6} critério(s)`}</p>
           </div>
         </div>
 
         <div className="space-y-2">
           {CRITERIOS_DISCOVERY.map(c => {
             const s = d.sugestoes_ia?.[c.chave]
+            const gravado = d.scorecard?.[c.chave]
+            const evid = gravado?.origem && gravado.origem !== 'manual' && gravado.evidencia ? gravado : null
             return (
               <div key={c.chave} className="rounded-lg border border-line p-3">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -152,6 +232,12 @@ export function ScorecardDiscovery({ investidorId, onUpdate }) {
                 <p className="text-[11px] text-ink-muted mt-1">
                   {notas[c.chave] != null ? `${notas[c.chave]}: ${c.niveis[notas[c.chave]]}` : c.niveis.map((t, i) => `${i} = ${t}`).join(' · ')}
                 </p>
+                {evid && notas[c.chave] === gravado.nota && (
+                  <p className="mt-1 text-[11px] text-ink-muted">
+                    <Sparkles className="w-3 h-3 inline-block mr-1 text-accent-ink align-[-1px]" />
+                    Da call: "{evid.evidencia}"{evid.minuto ? ` (min. ${evid.minuto})` : ''}
+                  </p>
+                )}
                 {s && (
                   <div className="mt-2 flex items-start justify-between gap-2 rounded-md bg-accent/5 border border-accent/20 px-2 py-1.5">
                     <p className="text-[11px] text-ink">
@@ -176,7 +262,7 @@ export function ScorecardDiscovery({ investidorId, onUpdate }) {
         </label>
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <p className="text-[11px] text-ink-muted">
-            {calc?.classe ? `Ao guardar, a classe ${calc.classe} fica proposta e o investidor passa a Pendente de Aprovação.` : 'Sem os 6 critérios não há classe.'}
+            {calc?.classe ? `Ao guardar, a classe ${calc.classe} fica proposta por ti e o investidor passa a Pendente de Aprovação.` : 'Sem os 6 critérios não há classe.'}
           </p>
           <button type="button" onClick={guardar} disabled={busy || !d.migracao_aplicada}
             className="px-3 py-1.5 rounded-lg text-xs font-medium bg-accent text-accent-foreground hover:brightness-[1.04] disabled:opacity-50">
@@ -184,66 +270,6 @@ export function ScorecardDiscovery({ investidorId, onUpdate }) {
           </button>
         </div>
       </div>
-
-      {/* Validação pelos dois CEO */}
-      {emValidacao && (
-        <div className="rounded-xl border border-line bg-surface-raised p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-accent-ink" />
-            <h3 className="text-sm font-bold text-ink">Validação pelos dois CEO</h3>
-          </div>
-          <p className="text-xs text-ink-muted">
-            Proposta original: <strong className="text-ink">{d.classificacao_proposta}</strong>
-            {d.validacao.alterada && <> · em validação: <strong className="text-ink">{d.validacao.classe}</strong> (motivo: {d.classificacao_alteracao_motivo})</>}
-            {' '}· validado por {d.validacao.validadores.length ? d.validacao.validadores.join(' e ') : 'ninguém'} ({d.validacao.validadores.length}/2)
-          </p>
-          {d.validacoes.length > 0 && (
-            <ul className="space-y-1">
-              {d.validacoes.map((e, i) => (
-                <li key={i} className="text-[11px] text-ink">
-                  <Check className="w-3 h-3 inline-block mr-1 text-success align-[-1px]" />
-                  {e.por} {e.acao === 'alterou' ? `alterou para ${e.classe}` : `validou ${e.classe}`} em {fmtData(e.em)}{e.motivo ? ` · ${e.motivo}` : ''}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {!souCEO ? (
-            <p className="text-[11px] text-ink-muted">Só {d.ceos.join(' e ')} podem validar.</p>
-          ) : (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-ink-muted">Classe:</span>
-                {Object.keys(CLASSES).map(k => (
-                  <button key={k} type="button" onClick={() => setVal(v => ({ ...v, classe: k }))}
-                    className={`px-2.5 py-1 rounded-md text-xs font-semibold border ${classeVal === k ? 'bg-accent text-accent-foreground border-accent' : 'bg-surface border-line text-ink-muted'}`}>{k}</button>
-                ))}
-                <span className="text-[11px] text-ink-muted">Depois: {STATUS_APOS_VALIDACAO[classeVal]}</span>
-              </div>
-              {altera && (
-                <input value={val.motivo} onChange={e => setVal(v => ({ ...v, motivo: e.target.value }))} placeholder="Motivo da alteração (obrigatório)"
-                  className="w-full rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink" />
-              )}
-              {classeVal === 'C' && (fechaAgora || altera) && (
-                <div className="flex items-center gap-2 text-xs text-ink-muted">Follow-up a
-                  {DIAS_FOLLOW_UP_C.map(n => (
-                    <button key={n} type="button" onClick={() => setVal(v => ({ ...v, follow_up_dias: String(n) }))}
-                      className={`px-2 py-1 rounded-md border ${val.follow_up_dias === String(n) ? 'bg-accent text-accent-foreground border-accent' : 'bg-surface border-line'}`}>{n} dias</button>
-                  ))}
-                </div>
-              )}
-              {classeVal === 'D' && (fechaAgora || altera) && (
-                <input value={val.motivo_inactivo} onChange={e => setVal(v => ({ ...v, motivo_inactivo: e.target.value }))} placeholder="Motivo para Inactivo (obrigatório)"
-                  className="w-full rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink" />
-              )}
-              <button type="button" onClick={validar} disabled={busy || (jaValidei && !altera)}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-brand-dark text-white disabled:opacity-50">
-                {jaValidei && !altera ? 'Já validaste: falta o outro CEO' : altera ? `Alterar para ${classeVal} e validar` : `Validar classe ${classeVal}`}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   )
 }

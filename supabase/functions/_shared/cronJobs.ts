@@ -223,7 +223,7 @@ async function runRelatorioSemanal() {
 // ── JOB 4: Reclassificação semanal de investidores (Domingos 10:00) ──
 async function runReclassificacaoInvestidores() {
   // Desactivado (SOP 23, 4.10): a classe A–D só muda pelo scorecard da
-  // discovery validado pelos dois CEO (_shared/classeInvestidor.js). A
+  // discovery validado pelo outro CEO (_shared/classeInvestidor.js). A
   // penalização por dias sem contacto despromovia classes validadas.
   console.log("[cron] Reclassificação semanal de investidores desactivada (SOP 23)");
 }

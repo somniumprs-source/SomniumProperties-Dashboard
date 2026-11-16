@@ -5204,7 +5204,7 @@ const RUBRICA: Record<string, Record<string, any[]>> = {
 // ── Automacoes PostgreSQL — port de routes.js 2216-2276 ──
 app.post("/automation/score-investidores", async (c: any) => {
   // Desactivado (SOP 23, 4.10): não recalcula nem a classe nem a pontuação antiga.
-  return c.json({ ok: true, atualizados: 0, detalhes: [], desactivado: "A classificação de investidores só muda pelo scorecard da discovery validado pelos dois CEO (SOP 23, 4.10)" });
+  return c.json({ ok: true, atualizados: 0, detalhes: [], desactivado: "A classificação de investidores só muda pelo scorecard da discovery validado pelo outro CEO (SOP 23, 4.10)" });
 });
 
 // automation/calc-roi removido — usava uma fórmula naive diferente da
@@ -5441,7 +5441,7 @@ app.get("/scorecards/:investidorId", async (c: any) => {
 app.post("/scorecards", async (c: any) => {
   // Scorecard antigo de 5 critérios (0–100): substituído pelo da discovery
   // (POST /investidores/:id/scorecard-discovery). Histórico fica só de leitura.
-  return c.json({ error: "A classificação de investidores só muda pelo scorecard da discovery validado pelos dois CEO (SOP 23, 4.10). Usa o scorecard da discovery no separador Avaliação." }, 410);
+  return c.json({ error: "A classificação de investidores só muda pelo scorecard da discovery validado pelo outro CEO (SOP 23, 4.10). Usa o scorecard da discovery no separador Avaliação." }, 410);
 });
 
 // ── Historico de classificacao — port de routes.js 2740-2748 ──
@@ -5481,7 +5481,7 @@ app.post("/automation/reclassificar-investidores", async (c: any) => {
       const rules = FOLLOWUP_INVESTIDOR_RULES[inv.classificacao] || FOLLOWUP_INVESTIDOR_RULES.C;
       if (diasSem >= rules.dias_intermedio) alertas.follow_up_urgente.push({ nome: inv.nome, classificacao: inv.classificacao, diasSem, proximoLimite: rules.dias_frio });
     }
-    return c.json({ ok: true, atualizados: 0, detalhes: [], alertas, desactivado: "A classificação de investidores só muda pelo scorecard da discovery validado pelos dois CEO (SOP 23, 4.10)" });
+    return c.json({ ok: true, atualizados: 0, detalhes: [], alertas, desactivado: "A classificação de investidores só muda pelo scorecard da discovery validado pelo outro CEO (SOP 23, 4.10)" });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 

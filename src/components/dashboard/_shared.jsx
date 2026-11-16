@@ -46,9 +46,12 @@ export function PrecisaAcao({ itens }) {
           <ul className="rounded-xl border border-line bg-surface-raised divide-y divide-line">
             {ativos.map(i => (
               <li key={i.texto}>
-                <Link to={i.para} className="flex items-center gap-3 px-4 py-2.5 text-sm text-ink hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent">
+                <Link to={i.para} className={`flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent ${i.destaque ? 'bg-danger/10 text-danger' : 'text-ink'}`}>
                   <span className="font-semibold num w-8 text-right">{fmtNum(i.valor)}</span>
-                  <span className="flex-1">{i.texto}</span>
+                  <span className="flex-1">
+                    <span className={i.destaque ? 'font-semibold' : ''}>{i.texto}</span>
+                    {i.detalhe && <span className="block text-[11px] text-ink-muted font-normal">{i.detalhe}</span>}
+                  </span>
                   <ArrowRight className="w-3.5 h-3.5 text-ink-muted" aria-hidden="true" />
                 </Link>
               </li>

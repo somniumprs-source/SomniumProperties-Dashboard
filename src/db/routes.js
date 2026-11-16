@@ -4185,7 +4185,7 @@ router.get('/lookup/consultores', (req, res) => {
 // ── Automações PostgreSQL ──────────────────────────────────────
 router.post('/automation/score-investidores', async (req, res) => {
   // Desactivado (SOP 23, 4.10): não recalcula nem a classe nem a pontuação antiga.
-  res.json({ ok: true, atualizados: 0, detalhes: [], desactivado: 'A classificação de investidores só muda pelo scorecard da discovery validado pelos dois CEO (SOP 23, 4.10)' })
+  res.json({ ok: true, atualizados: 0, detalhes: [], desactivado: 'A classificação de investidores só muda pelo scorecard da discovery validado pelo outro CEO (SOP 23, 4.10)' })
 })
 
 // automation/calc-roi removido — usava uma fórmula naive alternativa à da
@@ -4536,7 +4536,7 @@ router.get('/scorecards/:investidorId', async (req, res) => {
 router.post('/scorecards', async (req, res) => {
   // Scorecard antigo de 5 critérios (0–100): substituído pelo da discovery
   // (POST /investidores/:id/scorecard-discovery). Histórico fica só de leitura.
-  res.status(410).json({ error: 'A classificação de investidores só muda pelo scorecard da discovery validado pelos dois CEO (SOP 23, 4.10). Usa o scorecard da discovery no separador Avaliação.' })
+  res.status(410).json({ error: 'A classificação de investidores só muda pelo scorecard da discovery validado pelo outro CEO (SOP 23, 4.10). Usa o scorecard da discovery no separador Avaliação.' })
 })
 
 // GET histórico de classificação de um investidor
@@ -4578,7 +4578,7 @@ router.post('/automation/reclassificar-investidores', async (req, res) => {
       const rules = FOLLOWUP_INVESTIDOR_RULES[inv.classificacao] || FOLLOWUP_INVESTIDOR_RULES.C
       if (diasSem >= rules.dias_intermedio) alertas.follow_up_urgente.push({ nome: inv.nome, classificacao: inv.classificacao, diasSem, proximoLimite: rules.dias_frio })
     }
-    res.json({ ok: true, atualizados: 0, detalhes: [], alertas, desactivado: 'A classificação de investidores só muda pelo scorecard da discovery validado pelos dois CEO (SOP 23, 4.10)' })
+    res.json({ ok: true, atualizados: 0, detalhes: [], alertas, desactivado: 'A classificação de investidores só muda pelo scorecard da discovery validado pelo outro CEO (SOP 23, 4.10)' })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 

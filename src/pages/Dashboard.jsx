@@ -131,7 +131,7 @@ export function Dashboard() {
   const abas = DEPT_TABS.map(t => ({
     ...t,
     count: {
-      comercial: contar(dashData?.funil?.backlogPorContactar, alertas?.imoveisParados, alertas?.investSemContacto, alertas?.consFollowUpAtrasado),
+      comercial: contar(dashData?.funil?.backlogPorContactar, alertas?.imoveisParados, alertas?.investSemContacto, alertas?.consFollowUpAtrasado, alertas?.classesPorValidar24h, alertas?.apresentacoesADesmarcar),
       obras: contar(dashData?.obras?.fases?.atrasadas),
       financeiro: contar(finKpis?.tranchesAtrasadas?.length),
     }[t.key] ?? undefined,

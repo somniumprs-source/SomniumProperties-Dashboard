@@ -1,8 +1,9 @@
-// Classificação A–D de investidores (SOP 4 e SOP 23, secção 4.10).
+// Classificação A–D de investidores (SOP 4 e SOP 23 v2.1, secções 4.10 e 4.11).
 //
 // Fonte única da regra: scorecard da discovery call (6 critérios de 0 a 2,
 // total de 0 a 12), conversão total → classe, consequência no CRM,
-// elegibilidade para apresentação e validação pelos dois CEO.
+// elegibilidade para apresentação, validação pelo outro CEO (24 h) e
+// apresentações a desmarcar.
 // Só funções puras, sem BD nem dependências: importado tal e qual pelo
 // frontend (Vite), pelo Express de dev (src/db/routes.js) e pelas Edge
 // Functions (Deno). Testes: `npm run test:classe`.
@@ -34,7 +35,7 @@ export const DIAS_FOLLOW_UP_C = [30, 60, 90]
 
 export const ORIGEM_LEGADO = 'legado'
 export const ORIGEM_DISCOVERY = 'discovery'
-export const AVISO_LEGADO = 'Classe anterior ao SOP 23 – reclassificar na próxima discovery'
+export const AVISO_LEGADO = 'Classe anterior ao SOP 23 – reclassificar'
 
 export class ErroClassificacao extends Error {}
 
@@ -82,50 +83,65 @@ export function podeSerApresentado(inv) {
 
 export const ehLegado = (inv) => inv?.classificacao_origem === ORIGEM_LEGADO
 
-// ── Validação pelos dois CEO ──────────────────────────────────
-// log: [{ por, em, classe, acao: 'validou'|'alterou', motivo? }]. Conta só o
-// que veio depois da última alteração: quem altera valida a classe nova e o
-// outro CEO tem de a validar outra vez. Definitiva com dois CEO diferentes.
-export function estadoValidacao(proposta, log = []) {
-  let alvo = proposta || null
-  let validadores = []
-  for (const e of Array.isArray(log) ? log : []) {
-    if (e.acao === 'alterou') { alvo = e.classe; validadores = [e.por] }
-    else if (e.classe === alvo && !validadores.includes(e.por)) validadores.push(e.por)
-  }
-  return { classe: alvo, validadores, alterada: alvo !== proposta, definitiva: !!alvo && validadores.length >= 2 }
-}
+// ── Validação pelo outro CEO (SOP 23 v2.1, 4.10 e 4.11) ──────
+// Quem conduz a discovery propõe; um CEO diferente de quem propôs valida, em
+// 24 horas. Uma validação basta para a classe ficar definitiva.
+export const PRAZO_VALIDACAO_HORAS = 24
 
-// Acrescenta a decisão de um CEO ao log. Devolve { log, estado } ou lança.
 // decisao: { por, classe, motivo?, follow_up_dias?, motivo_inactivo?, em? }
-export function registarValidacao(proposta, log, decisao, ceos = []) {
+// Devolve a entrada a registar ou lança ErroClassificacao.
+export function validarDecisao({ proposta, propostaPor, decisao, ceos = [] }) {
   if (!proposta) throw new ErroClassificacao('Não há classe proposta para validar')
   const por = String(decisao?.por || '').trim()
   if (!por) throw new ErroClassificacao('Validador desconhecido')
-  if (ceos.length && !ceos.includes(por)) throw new ErroClassificacao('Só os dois CEO podem validar a classificação')
-  const classe = decisao?.classe || null
+  if (ceos.length && !ceos.includes(por)) throw new ErroClassificacao('Só os CEO podem validar a classificação')
+  if (propostaPor && por === propostaPor) throw new ErroClassificacao('Quem propôs a classe não a pode validar: tem de ser o outro CEO')
+  const classe = decisao?.classe || proposta
   if (!CLASSES[classe]) throw new ErroClassificacao('Classe inválida')
-  const antes = estadoValidacao(proposta, log)
-  if (antes.definitiva) throw new ErroClassificacao('A classificação já está validada pelos dois CEO')
-  const altera = classe !== antes.classe
+  const alterada = classe !== proposta
   const motivo = String(decisao?.motivo || '').trim()
-  if (altera && !motivo) throw new ErroClassificacao('Alterar a classe proposta obriga a indicar o motivo')
-  if (!altera && antes.validadores.includes(por)) throw new ErroClassificacao('Já validaste esta classe; falta o outro CEO')
-  const entrada = { por, em: decisao?.em || new Date().toISOString(), classe, acao: altera ? 'alterou' : 'validou' }
-  if (motivo) entrada.motivo = motivo
-  const novoLog = [...(Array.isArray(log) ? log : []), entrada]
-  const estado = estadoValidacao(proposta, novoLog)
-  if (estado.definitiva) {
-    if (classe === 'C') {
-      const dias = Number(decisao?.follow_up_dias)
-      if (!DIAS_FOLLOW_UP_C.includes(dias)) throw new ErroClassificacao('Classe C: escolhe o follow-up a 30, 60 ou 90 dias')
-      entrada.follow_up_dias = dias
-    }
-    if (classe === 'D') {
-      const m = String(decisao?.motivo_inactivo || '').trim()
-      if (!m) throw new ErroClassificacao('Classe D: indica o motivo para passar a Inactivo')
-      entrada.motivo_inactivo = m
-    }
+  if (alterada && !motivo) throw new ErroClassificacao('Alterar a classe proposta obriga a indicar o motivo')
+  const entrada = { por, em: decisao?.em || new Date().toISOString(), classe, proposta, alterada }
+  if (alterada) entrada.motivo = motivo
+  if (classe === 'C') {
+    const dias = Number(decisao?.follow_up_dias)
+    if (!DIAS_FOLLOW_UP_C.includes(dias)) throw new ErroClassificacao('Classe C: escolhe o follow-up a 30, 60 ou 90 dias')
+    entrada.follow_up_dias = dias
   }
-  return { log: novoLog, estado }
+  if (classe === 'D') {
+    const m = String(decisao?.motivo_inactivo || '').trim()
+    if (!m) throw new ErroClassificacao('Classe D: indica o motivo para passar a Inactivo')
+    entrada.motivo_inactivo = m
+  }
+  return entrada
+}
+
+// Classe por validar há mais de 24 horas (destaque no dashboard).
+export function validacaoAtrasada(inv, agora = new Date(), horas = PRAZO_VALIDACAO_HORAS) {
+  if (inv?.classificacao_estado !== 'proposta' || !inv.classificacao_proposta_em) return false
+  return new Date(agora).getTime() - new Date(inv.classificacao_proposta_em).getTime() > horas * 3600000
+}
+
+// ── Apresentação marcada (SOP 23, 4.11) ───────────────────────
+// Marcada = ficha com data_apresentacao_negocio preenchida, ou tarefa aberta
+// "Apresentação negócio <nome do investidor>".
+const semAcentos = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
+const ESTADOS_TAREFA_FECHADA = new Set(['concluida', 'cancelada'])
+
+export function ehTarefaApresentacao(tarefa, nomeInvestidor) {
+  const t = semAcentos(tarefa?.tarefa ?? tarefa)
+  const nome = semAcentos(nomeInvestidor)
+  return !!nome && t.startsWith('apresentacao negocio') && t.includes(nome)
+}
+
+export function temApresentacaoMarcada(inv, tarefas = []) {
+  if (String(inv?.data_apresentacao_negocio || '').trim()) return true
+  return tarefas.some((t) => !ESTADOS_TAREFA_FECHADA.has(semAcentos(t.status)) && !t.arquivada && ehTarefaApresentacao(t, inv?.nome))
+}
+
+// Validação baixou para C ou D e há apresentação marcada: quem conduziu a
+// discovery tem de a desmarcar.
+export function precisaDesmarcarApresentacao(inv, tarefas = []) {
+  return inv?.classificacao_origem === ORIGEM_DISCOVERY && inv?.classificacao_estado === 'validada'
+    && ['C', 'D'].includes(inv.classificacao) && temApresentacaoMarcada(inv, tarefas)
 }

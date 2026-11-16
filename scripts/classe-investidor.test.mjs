@@ -2,8 +2,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  calcularClasseDiscovery, classeDoTotal, podeSerApresentado, registarValidacao, estadoValidacao,
-  ErroClassificacao, CHAVES_DISCOVERY, STATUS_APOS_VALIDACAO,
+  calcularClasseDiscovery, classeDoTotal, podeSerApresentado, validarDecisao, validacaoAtrasada,
+  temApresentacaoMarcada, precisaDesmarcarApresentacao, ErroClassificacao, CHAVES_DISCOVERY, STATUS_APOS_VALIDACAO,
 } from '../supabase/functions/_shared/classeInvestidor.js'
 
 // Constrói notas com o total pedido (enche critérios a 2 pela ordem).
@@ -55,34 +55,47 @@ test('elegibilidade: C e D nunca; proposta nunca; legado A/B sim', () => {
   assert.equal(podeSerApresentado({ classificacao: null }), false)
 })
 
-test('validação: precisa dos dois CEO', () => {
-  const ceos = ['Alexandre Mendes', 'João Abreu']
-  const r1 = registarValidacao('B', [], { por: 'Alexandre Mendes', classe: 'B' }, ceos)
-  assert.equal(r1.estado.definitiva, false)
-  assert.throws(() => registarValidacao('B', r1.log, { por: 'Alexandre Mendes', classe: 'B' }, ceos), /falta o outro CEO/)
-  const r2 = registarValidacao('B', r1.log, { por: 'João Abreu', classe: 'B' }, ceos)
-  assert.equal(r2.estado.definitiva, true)
-  assert.equal(r2.estado.classe, 'B')
+const CEOS = ['Alexandre Mendes', 'João Abreu']
+
+test('validação: basta o outro CEO; quem propôs não valida', () => {
+  assert.throws(() => validarDecisao({ proposta: 'B', propostaPor: 'Alexandre Mendes', decisao: { por: 'Alexandre Mendes' }, ceos: CEOS }), /outro CEO/)
+  const e = validarDecisao({ proposta: 'B', propostaPor: 'Alexandre Mendes', decisao: { por: 'João Abreu' }, ceos: CEOS })
+  assert.equal(e.classe, 'B')
+  assert.equal(e.alterada, false)
   assert.equal(STATUS_APOS_VALIDACAO.B, 'Investidor Qualificado em Carteira')
-  assert.throws(() => registarValidacao('B', [], { por: 'Outra Pessoa', classe: 'B' }, ceos), /dois CEO/)
+  assert.throws(() => validarDecisao({ proposta: 'B', propostaPor: 'Comercial', decisao: { por: 'Outra Pessoa' }, ceos: CEOS }), /CEO/)
+  // Proposta feita por quem não é CEO: qualquer CEO valida.
+  assert.equal(validarDecisao({ proposta: 'A', propostaPor: 'Comercial', decisao: { por: 'Alexandre Mendes' }, ceos: CEOS }).classe, 'A')
 })
 
-test('validação: alterar obriga a motivo e repõe a validação do outro CEO', () => {
-  const ceos = ['Alexandre Mendes', 'João Abreu']
-  const r1 = registarValidacao('B', [], { por: 'Alexandre Mendes', classe: 'B' }, ceos)
-  assert.throws(() => registarValidacao('B', r1.log, { por: 'João Abreu', classe: 'C' }, ceos), /motivo/)
-  const r2 = registarValidacao('B', r1.log, { por: 'João Abreu', classe: 'C', motivo: 'Capital depende de venda' }, ceos)
-  assert.deepEqual(r2.estado, { classe: 'C', validadores: ['João Abreu'], alterada: true, definitiva: false })
-  assert.throws(() => registarValidacao('B', r2.log, { por: 'Alexandre Mendes', classe: 'C' }, ceos), /30, 60 ou 90/)
-  const r3 = registarValidacao('B', r2.log, { por: 'Alexandre Mendes', classe: 'C', follow_up_dias: 60 }, ceos)
-  assert.equal(r3.estado.definitiva, true)
-  assert.equal(estadoValidacao('B', r3.log).classe, 'C')
+test('validação: alterar guarda a proposta e obriga a motivo', () => {
+  assert.throws(() => validarDecisao({ proposta: 'B', propostaPor: 'João Abreu', decisao: { por: 'Alexandre Mendes', classe: 'A' }, ceos: CEOS }), /motivo/)
+  const e = validarDecisao({ proposta: 'B', propostaPor: 'João Abreu', decisao: { por: 'Alexandre Mendes', classe: 'A', motivo: 'Capital já transferido' }, ceos: CEOS })
+  assert.deepEqual([e.proposta, e.classe, e.alterada, e.motivo], ['B', 'A', true, 'Capital já transferido'])
 })
 
-test('validação: D exige motivo para Inactivo', () => {
-  const ceos = ['Alexandre Mendes', 'João Abreu']
-  const r1 = registarValidacao('D', [], { por: 'João Abreu', classe: 'D' }, ceos)
-  assert.throws(() => registarValidacao('D', r1.log, { por: 'Alexandre Mendes', classe: 'D' }, ceos), /motivo/)
-  const r2 = registarValidacao('D', r1.log, { por: 'Alexandre Mendes', classe: 'D', motivo_inactivo: 'Sem capital' }, ceos)
-  assert.equal(r2.estado.definitiva, true)
+test('validação: C exige 30/60/90 dias e D exige motivo', () => {
+  const base = { proposta: 'C', propostaPor: 'João Abreu', ceos: CEOS }
+  assert.throws(() => validarDecisao({ ...base, decisao: { por: 'Alexandre Mendes' } }), /30, 60 ou 90/)
+  assert.equal(validarDecisao({ ...base, decisao: { por: 'Alexandre Mendes', follow_up_dias: 90 } }).follow_up_dias, 90)
+  const d = { proposta: 'D', propostaPor: 'João Abreu', ceos: CEOS }
+  assert.throws(() => validarDecisao({ ...d, decisao: { por: 'Alexandre Mendes' } }), /motivo/)
+  assert.equal(validarDecisao({ ...d, decisao: { por: 'Alexandre Mendes', motivo_inactivo: 'Sem capital' } }).motivo_inactivo, 'Sem capital')
+})
+
+test('prazo de 24 horas', () => {
+  const agora = new Date('2026-11-17T12:00:00Z')
+  assert.equal(validacaoAtrasada({ classificacao_estado: 'proposta', classificacao_proposta_em: '2026-11-16T11:00:00Z' }, agora), true)
+  assert.equal(validacaoAtrasada({ classificacao_estado: 'proposta', classificacao_proposta_em: '2026-11-16T13:00:00Z' }, agora), false)
+  assert.equal(validacaoAtrasada({ classificacao_estado: 'validada', classificacao_proposta_em: '2026-11-01T00:00:00Z' }, agora), false)
+})
+
+test('apresentação marcada: campo da ficha ou tarefa aberta com o nome', () => {
+  const inv = { nome: 'Élsio Mota', classificacao: 'C', classificacao_origem: 'discovery', classificacao_estado: 'validada' }
+  assert.equal(temApresentacaoMarcada({ ...inv, data_apresentacao_negocio: '2026-11-20' }), true)
+  assert.equal(temApresentacaoMarcada(inv, [{ tarefa: 'Apresentação negócio Elsio Mota', status: 'A fazer' }]), true)
+  assert.equal(temApresentacaoMarcada(inv, [{ tarefa: 'Apresentação negócio Elsio Mota', status: 'Concluída' }]), false)
+  assert.equal(temApresentacaoMarcada(inv, [{ tarefa: 'Apresentação negócio Pedro Vieira', status: 'A fazer' }]), false)
+  assert.equal(precisaDesmarcarApresentacao({ ...inv, data_apresentacao_negocio: '2026-11-20' }), true)
+  assert.equal(precisaDesmarcarApresentacao({ ...inv, classificacao: 'B', data_apresentacao_negocio: '2026-11-20' }), false)
 })

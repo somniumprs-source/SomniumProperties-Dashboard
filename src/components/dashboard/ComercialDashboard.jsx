@@ -80,7 +80,11 @@ export function ComercialDashboard({ data: d, comKpis, alertas, periodo, onPerio
       </>}
 
       {sub === 'investidores' && <>
-        <PrecisaAcao itens={[{ valor: alertas?.investSemContacto, texto: 'investidores sem contacto há mais de 14 dias', para: '/crm' }]} />
+        <PrecisaAcao itens={[
+          { valor: alertas?.classesPorValidar24h, texto: 'classes de investidor por validar há mais de 24 horas (SOP 23)', para: '/crm', destaque: true, detalhe: alertas?.porValidar?.map(i => `${i.nome} (${i.proposta}, proposta por ${i.proposta_por || 'IA'})`).join(' · ') },
+          { valor: alertas?.apresentacoesADesmarcar, texto: 'apresentações de negócio a desmarcar: investidor validado em C ou D', para: '/crm', destaque: true, detalhe: alertas?.desmarcar?.map(i => `${i.nome} (${i.classe}${i.conduzida_por ? `, ${i.conduzida_por}` : ''})`).join(' · ') },
+          { valor: alertas?.investSemContacto, texto: 'investidores sem contacto há mais de 14 dias', para: '/crm' },
+        ]} />
         <Bloco titulo="Situação atual">
           <Numeros>
             <Indicador id="I10" value={ca?.parceria ? `${ca.parceria.porEstado} / ${ca.parceria.comAporte}` : null} sub="por estado / com capital" tone="green" />

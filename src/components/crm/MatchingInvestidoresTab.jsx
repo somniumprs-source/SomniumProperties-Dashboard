@@ -44,7 +44,7 @@ export function MatchingInvestidoresTab({ imovelId, imovelNome }) {
           </p>
           {data.excluidos_por_classe > 0 && (
             <p className="text-xs text-ink-muted mt-1">
-              {data.excluidos_por_classe} investidor(es) fora da partilha: classe C, D, sem classe ou por validar pelos dois CEO.
+              {data.excluidos_por_classe} investidor(es) fora da partilha: classe C, D, sem classe ou por validar pelo outro CEO.
             </p>
           )}
         </div>

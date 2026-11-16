@@ -198,7 +198,7 @@ ${discovery ? `  "scorecard_discovery": {\n${scorecardJson}\n  },\n` : ''}  "pre
   "sugestao_justificacao": "1-2 frases a justificar as sugestões"
 }
 
-${discovery ? `SCORECARD DA DISCOVERY (SOP 23, 4.10): dá uma nota de 0 a 2 por critério, com a frase do investidor que a justifica e o minuto. Se a transcrição não permite avaliar um critério, usa null (nunca adivinhes). Nesta call, "pre_classificacao" vai a null.\n${scorecardTxt}\nO scorecard é só sugestão: o comercial confirma cada nota e a classe é validada pelos dois CEO.\n\n` : ''}A pre_classificacao é só indicativa (a classe A–D sai do scorecard da discovery). Escreve em português de Portugal, directo e profissional. Não inventes: se algo não aparece na transcrição, usa null.`
+${discovery ? `SCORECARD DA DISCOVERY (SOP 23, 4.10): dá uma nota de 0 a 2 por critério, com a frase do investidor que a justifica e o minuto. Se a transcrição não permite avaliar um critério, usa null (nunca adivinhes). Nesta call, "pre_classificacao" vai a null.\n${scorecardTxt}\nCom os 6 critérios avaliados a app propõe a classe automaticamente; o outro CEO valida-a em 24 horas.\n\n` : ''}A pre_classificacao é só indicativa (a classe A–D sai do scorecard da discovery). Escreve em português de Portugal, directo e profissional. Não inventes: se algo não aparece na transcrição, usa null.`
 }
 
 function parseJson(texto) {
