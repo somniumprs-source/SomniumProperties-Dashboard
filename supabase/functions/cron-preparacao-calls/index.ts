@@ -22,9 +22,12 @@ Deno.serve(async (req) => {
     try { return Response.json({ ok: true, fn: "cron-preparacao-calls", backfill: await pedirBackfill(pool) }); }
     catch (e) { return Response.json({ ok: false, error: (e as Error).message }, { status: 500 }); }
   }
-  const lockKey = 90101;
-  const { rows } = await pool.query("SELECT pg_try_advisory_lock($1) AS got", [lockKey]);
-  if (!rows[0]?.got) return Response.json({ ok: true, ran: false, reason: "lock ocupado" });
+  // Lease de 10 min (ver migração 0103): o advisory lock através do pooler
+  // podia ficar preso noutra ligação e bloquear o cron para sempre.
+  const { rows } = await pool.query(
+    `INSERT INTO cron_leases (nome, ate) VALUES ('cron-preparacao-calls', now() + interval '10 minutes')
+     ON CONFLICT (nome) DO UPDATE SET ate = EXCLUDED.ate WHERE cron_leases.ate < now() RETURNING nome`);
+  if (!rows.length) return Response.json({ ok: true, ran: false, reason: "lease ocupado" });
   try {
     const res = await sincronizarPreparacoes(pool);
     return Response.json({ ok: true, ran: true, fn: "cron-preparacao-calls", ...res });
@@ -32,6 +35,6 @@ Deno.serve(async (req) => {
     console.error("[cron-preparacao-calls]", (e as Error).message);
     return Response.json({ ok: false, error: (e as Error).message }, { status: 500 });
   } finally {
-    await pool.query("SELECT pg_advisory_unlock($1)", [lockKey]);
+    await pool.query(`UPDATE cron_leases SET ate = now() WHERE nome = 'cron-preparacao-calls'`).catch(() => {});
   }
 });
