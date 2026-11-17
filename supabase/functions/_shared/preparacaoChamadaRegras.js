@@ -8,7 +8,7 @@
  */
 
 export const TIPO_FILA = 'preparacao_chamada'
-export const VERSAO_PROMPT = 'preparacao_chamada_v1.md'
+export const VERSAO_PROMPT = 'preparacao_chamada_v2.md'
 export const FICHEIRO_ANEXO_A = 'anexo_a_sop23_v2.1.md'
 export const SEM_DADOS = 'sem dados'
 export const LINHA_FORA_SOP23 = 'Esta chamada não é do SOP 23. Usar o SOP 11.'
