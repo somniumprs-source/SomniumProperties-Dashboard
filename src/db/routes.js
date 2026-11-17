@@ -42,6 +42,8 @@ import {
   aplicarResumoReuniao, aplicarPreparacao, TIPO_FILA_PREPARACAO, TIPO_FILA_RESUMO,
 } from './preparacaoCall.js'
 import { generatePreparacaoCallsPDF } from './pdfPreparacaoCalls.js'
+import { pedirPreparacao, lerPreparacaoChamada, aplicarPreparacaoChamada } from './preparacaoChamada.js'
+import { TIPO_FILA as TIPO_FILA_PREP_CHAMADA, VERSAO_PROMPT as PROMPT_PREP_CHAMADA, FICHEIRO_ANEXO_A as ANEXO_A_PREP_CHAMADA } from '../../supabase/functions/_shared/preparacaoChamadaRegras.js'
 import {
   TIPO_FILA_EXTRACAO, aplicarRespostaExtracao, camposIADoInvestidor, revisaoGravacao, confirmarRegistoGravacao,
   aceitarSugestao, rejeitarSugestao, reverterCampo, pedirBackfill, relatorioBackfill, pedirExtracao,
@@ -1958,6 +1960,7 @@ const APLICADORES_IA = {
   reuniao_consultor: aplicarAnaliseReuniao,
   [TIPO_FILA_RESUMO]: (p, t) => aplicarResumoReuniao(pool, p, t),
   [TIPO_FILA_PREPARACAO]: (p, t) => aplicarPreparacao(pool, p, t),
+  [TIPO_FILA_PREP_CHAMADA]: (p, t) => aplicarPreparacaoChamada(pool, p, t),
   [TIPO_FILA_EXTRACAO]: (p, t) => aplicarRespostaExtracao(pool, p, t),
   relatorio_semanal: aplicarRelatorioSemanal,
   resumo_projeto: aplicarResumoProjeto,
@@ -2625,6 +2628,30 @@ router.patch('/preparacao-calls/tarefa/:tarefaId/tipo', semPortalInvestidor, asy
     res.json(await lerPreparacao(pool, req.params.tarefaId, { criar: false }))
   } catch (e) { res.status(400).json({ error: e.message }) }
 })
+// ── Preparação de chamada por investidor (SOP 23 v2.1) — port de crm/index.ts ──
+const PROMPTS_PREP_CHAMADA = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../supabase/functions/crm/prompts')
+const lerPromptsPrepChamada = async () => ({
+  template: await readFile(path.join(PROMPTS_PREP_CHAMADA, PROMPT_PREP_CHAMADA), 'utf8'),
+  anexoA: await readFile(path.join(PROMPTS_PREP_CHAMADA, ANEXO_A_PREP_CHAMADA), 'utf8'),
+})
+router.get('/investidores/:id/preparacao-chamada', semPortalInvestidor, async (req, res) => {
+  try { res.json(await lerPreparacaoChamada(pool, req.params.id)) } catch (e) { res.status(500).json({ error: e.message }) }
+})
+router.post('/investidores/:id/gerar-preparacao', semPortalInvestidor, async (req, res) => {
+  try {
+    const u = req.appUser || req.user || null
+    const out = await pedirPreparacao(pool, {
+      investidorId: req.params.id, quemConduz: req.body?.quem_conduz || u?.nome || null, geradoPor: u?.nome || u?.email || null,
+      forcar: !!req.body?.forcar, ...(await lerPromptsPrepChamada()),
+    })
+    if (!out) return res.status(404).json({ error: 'Investidor não encontrado' })
+    res.json(out)
+  } catch (e) {
+    console.error('[preparacao-chamada]', req.params.id, e.message)
+    res.status(500).json({ error: e.message })
+  }
+})
+
 router.get('/investidores/:id/preparacoes', semPortalInvestidor, async (req, res) => {
   try { res.json(await preparacoesDoInvestidor(pool, req.params.id)) } catch (e) { res.status(500).json({ error: e.message }) }
 })

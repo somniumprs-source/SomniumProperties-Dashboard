@@ -43,6 +43,8 @@ import {
   aplicarResumoReuniao, aplicarPreparacao, TIPO_FILA_PREPARACAO, TIPO_FILA_RESUMO,
 } from "../_shared/preparacaoCall.ts";
 import { generatePreparacaoCallsPDF } from "../_shared/pdfPreparacaoCalls.ts";
+import { pedirPreparacao, lerPreparacaoChamada, aplicarPreparacaoChamada } from "../_shared/preparacaoChamada.ts";
+import { TIPO_FILA as TIPO_FILA_PREP_CHAMADA, VERSAO_PROMPT as PROMPT_PREP_CHAMADA, FICHEIRO_ANEXO_A as ANEXO_A_PREP_CHAMADA } from "../_shared/preparacaoChamadaRegras.js";
 import {
   TIPO_FILA_EXTRACAO, aplicarRespostaExtracao, camposIADoInvestidor, revisaoGravacao, confirmarRegistoGravacao,
   aceitarSugestao, rejeitarSugestao, reverterCampo, pedirBackfill, relatorioBackfill, pedirExtracao,
@@ -2922,6 +2924,7 @@ const APLICADORES_IA: Record<string, (pedido: any, texto: string) => Promise<any
   reuniao_consultor: aplicarAnaliseReuniao,
   [TIPO_FILA_RESUMO]: (p: any, t: string) => aplicarResumoReuniao(pool, p, t),
   [TIPO_FILA_PREPARACAO]: (p: any, t: string) => aplicarPreparacao(pool, p, t),
+  [TIPO_FILA_PREP_CHAMADA]: (p: any, t: string) => aplicarPreparacaoChamada(pool, p, t),
   [TIPO_FILA_EXTRACAO]: (p: any, t: string) => aplicarRespostaExtracao(pool, p, t),
   relatorio_semanal: aplicarRelatorioSemanal,
   resumo_projeto: aplicarResumoProjeto,
@@ -3514,6 +3517,33 @@ app.patch("/preparacao-calls/tarefa/:tarefaId/tipo", async (c: any) => {
     await corrigirTipoCall(pool, c.req.param("tarefaId"), tipo);
     return c.json(await lerPreparacao(pool, c.req.param("tarefaId"), { criar: false }));
   } catch (e) { return c.json({ error: (e as Error).message }, 400); }
+});
+
+// ── Preparação de chamada por investidor (SOP 23 v2.1, botão "Preparar chamada") ──
+// Lógica em _shared/preparacaoChamada.ts; prompts em ./prompts (static_files). Texto gerado no Mac (fila IA).
+const lerPromptsPrepChamada = async () => ({
+  template: await Deno.readTextFile(new URL(`./prompts/${PROMPT_PREP_CHAMADA}`, import.meta.url)),
+  anexoA: await Deno.readTextFile(new URL(`./prompts/${ANEXO_A_PREP_CHAMADA}`, import.meta.url)),
+});
+app.get("/investidores/:id/preparacao-chamada", semPortalInvestidor, async (c: any) => {
+  try { return c.json(await lerPreparacaoChamada(pool, c.req.param("id"))); }
+  catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+app.post("/investidores/:id/gerar-preparacao", semPortalInvestidor, async (c: any) => {
+  const id = c.req.param("id");
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const u = await resolveCrmUser(c);
+    const out = await pedirPreparacao(pool, {
+      investidorId: id, quemConduz: body?.quem_conduz || u?.nome || null, geradoPor: u?.nome || c.get("user")?.email || null,
+      forcar: !!body?.forcar, ...(await lerPromptsPrepChamada()),
+    });
+    if (!out) return c.json({ error: "Investidor não encontrado" }, 404);
+    return c.json(out);
+  } catch (e) {
+    console.error("[preparacao-chamada]", id, (e as Error).message);
+    return c.json({ error: (e as Error).message }, 500);
+  }
 });
 
 app.get("/investidores/:id/preparacoes", semPortalInvestidor, async (c: any) => {
