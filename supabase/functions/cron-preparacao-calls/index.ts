@@ -24,9 +24,9 @@ Deno.serve(async (req) => {
     try { return Response.json({ ok: true, fn: "cron-preparacao-calls", backfill: await pedirBackfill(pool, { modo, so }) }); }
     catch (e) { return Response.json({ ok: false, error: (e as Error).message }, { status: 500 }); }
   }
-  // Regenerar à força as preparações de um período: ?regenerar=semana&desde=YYYY-MM-DD&ate=YYYY-MM-DD
+  // Regenerar à força as preparações de um período: ?regenerar=semana&desde=YYYY-MM-DD&ate=YYYY-MM-DD[&tarefas=id1,id2]
   if (url.searchParams.get("regenerar") === "semana") {
-    try { return Response.json({ ok: true, fn: "cron-preparacao-calls", regenerar: await regenerarPreparacoes(pool, { desde: url.searchParams.get("desde"), ate: url.searchParams.get("ate") }) }); }
+    try { return Response.json({ ok: true, fn: "cron-preparacao-calls", regenerar: await regenerarPreparacoes(pool, { desde: url.searchParams.get("desde"), ate: url.searchParams.get("ate"), tarefas: (url.searchParams.get("tarefas") || "").split(",").filter(Boolean) }) }); }
     catch (e) { return Response.json({ ok: false, error: (e as Error).message }, { status: 500 }); }
   }
   // Lease de 10 min (ver migração 0103): o advisory lock através do pooler
