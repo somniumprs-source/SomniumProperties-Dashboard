@@ -145,3 +145,13 @@ export function precisaDesmarcarApresentacao(inv, tarefas = []) {
   return inv?.classificacao_origem === ORIGEM_DISCOVERY && inv?.classificacao_estado === 'validada'
     && ['C', 'D'].includes(inv.classificacao) && temApresentacaoMarcada(inv, tarefas)
 }
+
+// Scorecard pontuado à mão antes da call (SOP 23, 3.5 e 4.10): uma linha por critério.
+export function linhasScorecardMao(lista) {
+  const ROTULO_CRITERIO = Object.fromEntries(CRITERIOS_DISCOVERY.map(c => [c.chave, c.label]))
+  const arr = Array.isArray(lista) ? lista : []
+  const notas = arr.map(x => x?.nota).filter(n => n !== null && n !== undefined && Number.isFinite(Number(n))).map(Number)
+  const linhas = arr.map(x => `${ROTULO_CRITERIO[x?.criterio] || x?.criterio}: ${x?.nota === null || x?.nota === undefined ? 'em branco (perguntar)' : `${x.nota}/2`}${x?.porque ? `. ${x.porque}` : ''}`)
+  if (notas.length) linhas.push(`Total parcial: ${notas.reduce((s, n) => s + n, 0)}/${notas.length * 2} (${arr.length - notas.length} critério(s) em branco)`)
+  return linhas
+}

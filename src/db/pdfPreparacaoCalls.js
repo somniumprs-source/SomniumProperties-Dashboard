@@ -10,6 +10,7 @@
  * Portar qualquer alteração para os dois.
  */
 import PDFDocument from "pdfkit"
+import { linhasScorecardMao } from '../../supabase/functions/_shared/classeInvestidor.js'
 import { LOGO_BLACK_PNG } from "./logoBlack.js"
 import { LOGO_WHITE_PNG } from "./logoWhite.js"
 import { DOC_COLORS } from "./docTheme.js"
@@ -72,7 +73,8 @@ export function linhasCartao(p) {
   if (Array.isArray(c.antes_de_ligar) && c.antes_de_ligar.length) L.push(['Antes de ligar', c.antes_de_ligar.join('\n')])
   const perg = Array.isArray(c.perguntas) && c.perguntas.length ? c.perguntas : (b.dados_em_falta || []).slice(0, 6).map(x => `${x}?`)
   if (perg.length) L.push(['Perguntas', perg.join('\n')])
-  L.push(['Objetivo', [c.objetivo, c.proximo_passo ? `Próximo passo: ${c.proximo_passo}` : null].filter(Boolean).join('\n') || 'Marcar a Entrevista Estratégica com os dois sócios.'])
+  if (Array.isArray(c.scorecard_mao) && c.scorecard_mao.length) L.push(['Scorecard à mão (4.10)', linhasScorecardMao(c.scorecard_mao).join('\n')])
+  L.push(['Objetivo', [c.objetivo, c.proximo_passo ? `Próximo passo: ${c.proximo_passo}` : null].filter(Boolean).join('\n') || (p.tipo_final === 'discovery_call' ? 'Discovery: via definida, classe A–D proposta e apresentação marcada.' : p.tipo_final === 'follow_up' ? 'Recontacto: ver se o que faltava mudou e marcar a discovery.' : 'Chamada 1: marcar a discovery no máximo a 48 horas, com o decisor.')])
   if (!p.conteudo_json) L.push(['Nota', p.estado === 'erro' ? 'A IA falhou: só dados do CRM. Usar "Regenerar" na app.' : 'Texto ainda em geração: só dados do CRM.'])
   return L
 }
@@ -126,7 +128,7 @@ export function generatePreparacaoCallsPDF(dados, { preparadoPara = null, gerado
   let cy = 330
   doc.rect(ML + 4, cy, 70, 2).fill(GOLD)
   cy += 26
-  doc.font(SANS_B).fontSize(7.5).fillColor(GOLD).text(espacado('Departamento comercial · SOP 4'), ML + 4, cy, { characterSpacing: 0.4 })
+  doc.font(SANS_B).fontSize(7.5).fillColor(GOLD).text(espacado('Departamento comercial · SOP 23'), ML + 4, cy, { characterSpacing: 0.4 })
   cy += 22
   doc.font(SERIF).fontSize(30).fillColor('#FFFFFF').text('Preparação de calls', ML + 4, cy)
   cy += 36
@@ -176,7 +178,7 @@ export function generatePreparacaoCallsPDF(dados, { preparadoPara = null, gerado
   let diaAnterior = null
   preps.forEach((p, i) => {
     const h = p.secoes_base?.cabecalho || {}
-    const obj = p.conteudo_json?.objetivo_curto || (p.tipo_final === 'cold_call' ? 'Qualificar e marcar Entrevista Estratégica' : 'Retomar e marcar Entrevista Estratégica')
+    const obj = p.conteudo_json?.objetivo_curto || (p.tipo_final === 'cold_call' ? 'Chamada 1 e discovery marcada (48h)' : p.tipo_final === 'discovery_call' ? 'Discovery, classe e apresentação' : 'Recontacto e discovery marcada')
     doc.font(SANS).fontSize(7.5)
     const altura = Math.max(22, doc.heightOfString(obj, { width: cols[6][1] - 8 }) + 12, doc.heightOfString(h.capital || '', { width: cols[5][1] - 8 }) + 12)
     if (precisa(altura)) cabTabela()
@@ -210,7 +212,7 @@ export function generatePreparacaoCallsPDF(dados, { preparadoPara = null, gerado
     y += altura
   })
   y += 10
-  doc.font(SANS).fontSize(7).fillColor(MUTED).text('Ao carregar o áudio de cada call na app, o tipo indicado nesta tabela já vem pré-selecionado, para a análise usar o guião certo do SOP 4.', ML, y, { width: CW })
+  doc.font(SANS).fontSize(7).fillColor(MUTED).text('Ao carregar o áudio de cada call na app, o tipo indicado nesta tabela já vem pré-selecionado, para a análise usar o guião certo do SOP 23.', ML, y, { width: CW })
   y = doc.y + 18
 
   // ── O que mudou na Somnium ──

@@ -1,4 +1,4 @@
-// Preparação das calls com investidores (SOP 4): de hora a hora, garante que
+// Preparação das calls com investidores (SOP 23 v2.1): de hora a hora, garante que
 // todas as calls dos próximos 14 dias têm documento de preparação e regenera
 // as da véspera (D-1, SOP 10) e do próprio dia se o contexto mudou. O texto é
 // gerado no Mac (fila IA); aqui só se classifica, junta o CRM e põe na fila.

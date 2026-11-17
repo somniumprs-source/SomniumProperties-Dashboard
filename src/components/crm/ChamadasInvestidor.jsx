@@ -1,7 +1,7 @@
 /**
  * Chamadas gravadas com o investidor (aba Reuniões): upload do áudio de uma
  * Cold Call ou Follow-up, transcrição pelo worker Whisper local e avaliação
- * pelo Claude contra o SOP 4. O registo manual (resultado, próximo passo,
+ * pelo Claude contra o SOP 23 v2.1. O registo manual (resultado, próximo passo,
  * temperatura, data de follow-up) é a fonte de verdade; a IA só sugere.
  * A leitura agregada fica em Administração > Chamadas > Investidores.
  */
@@ -155,20 +155,27 @@ function Analise({ g }) {
     ['Tipo', dados.tipo_investidor], ['Capital mín.', dados.capital_min && `${Number(dados.capital_min).toLocaleString('pt-PT')} €`],
     ['Capital máx.', dados.capital_max && `${Number(dados.capital_max).toLocaleString('pt-PT')} €`],
     ['Capital disponível', dados.capital_disponivel_quando], ['ROI pretendido', dados.roi_pretendido],
-    ['Estratégia', dados.estrategia], ['Tipo de imóvel', dados.tipo_imovel], ['Experiência', dados.experiencia], ['Equipa de obras', dados.equipa_obras],
+    ['Experiência', dados.experiencia], ['Intervalo de montante', ({ menos_50k: 'Menos de 50 mil', '50k_200k': '50 a 200 mil', '200k_300k': '200 a 300 mil', mais_300k: 'Mais de 300 mil' })[dados.intervalo_montante] || dados.intervalo_montante],
+    ['Capital disponível (hoje)', dados.capital_disponivel], ['Decisor', dados.decisor], ['Objetivo', dados.objetivo], ['Motivo real', dados.motivo_real],
+    ['Urgência', dados.urgencia], ['Capital hoje e rendimento', dados.capital_hoje_rendimento], ['Desafio', dados.desafio],
+    ['Via', dados.via && `${dados.via}${dados.sinais_coerentes === false ? ' (sinais não batem)' : ''}`], ['O que falta', dados.o_que_falta],
+    ['Estratégia', dados.estrategia], ['Tipo de imóvel', dados.tipo_imovel], ['Equipa de obras', dados.equipa_obras],
   ].filter(([, v]) => v)
 
   return (
     <div className="space-y-4">
       {a.resumo && <p className="text-sm text-ink">{a.resumo}</p>}
 
-      {(conf.promessa_rentabilidade_garantida || conf.informacao_financeira_detalhada_cedo) && (
+      {(conf.promessa_rentabilidade_garantida || conf.informacao_financeira_detalhada_cedo || conf.abriu_com_tem_2_minutos || conf.fala_mais_de_metade || conf.urgencia_inventada) && (
         <div className="rounded-lg border border-danger/30 bg-danger/10 p-2.5 text-xs text-danger flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <div>
-            <p className="font-semibold">Alerta de conformidade (SOP 4)</p>
+            <p className="font-semibold">Alerta de conformidade (SOP 23)</p>
             {conf.promessa_rentabilidade_garantida && <p>Houve promessa de rentabilidade garantida.</p>}
-            {conf.informacao_financeira_detalhada_cedo && <p>Foi dada informação financeira detalhada cedo demais.</p>}
+            {conf.informacao_financeira_detalhada_cedo && <p>Foram mostradas oportunidades, números ou retornos antes da apresentação.</p>}
+            {conf.abriu_com_tem_2_minutos && <p>Abriu com "tem 2 minutos?".</p>}
+            {conf.fala_mais_de_metade && <p>Quem ligou falou mais de metade do tempo (regra 70/30).</p>}
+            {conf.urgencia_inventada && <p>Foi criada uma urgência inventada.</p>}
             {conf.comentario && <p className="text-ink-muted mt-1">{conf.comentario}</p>}
           </div>
         </div>
@@ -176,7 +183,7 @@ function Analise({ g }) {
 
       {passos.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-ink-muted mb-2">Avaliação por passo do SOP 4</p>
+          <p className="text-xs font-semibold text-ink-muted mb-2">Avaliação por passo do SOP 23</p>
           <div className="space-y-2.5">
             {passos.map(([k, p]) => {
               const nota = Number(p?.nota)
@@ -319,7 +326,7 @@ function ChamadaCard({ g, busy, onAnalisar, onRetomar, onApagar, onGuardarRegist
           </div>
         </div>
         {g.nota_sop != null && (
-          <span className={`text-sm font-semibold px-2.5 py-1 rounded-lg num shrink-0 ${corNota(g.nota_sop)}`} title="Nota SOP 4 (0-100)">{g.nota_sop}</span>
+          <span className={`text-sm font-semibold px-2.5 py-1 rounded-lg num shrink-0 ${corNota(g.nota_sop)}`} title="Nota SOP 23 (0-100)">{g.nota_sop}</span>
         )}
         <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
           {g.estado === 'erro' && (
@@ -390,7 +397,7 @@ export function ChamadasInvestidor({ investidorId }) {
   useEffect(() => { load() }, [load])
 
   // Tipo pré-selecionado pela preparação da call (calculado pelo histórico),
-  // para a análise usar o guião certo do SOP 4.
+  // para a análise usar o guião certo do SOP 23.
   const [sugerido, setSugerido] = useState(null)
   useEffect(() => {
     let vivo = true
@@ -478,7 +485,7 @@ export function ChamadasInvestidor({ investidorId }) {
           <Mic className="w-4 h-4 text-ink-muted" />
           <div>
             <h3 className="text-sm font-semibold text-ink">Chamadas gravadas</h3>
-            <p className="text-xs text-ink-muted">Cold Call, Follow-up e Discovery Call (SOP 4 e SOP 23)</p>
+            <p className="text-xs text-ink-muted">Chamada 1, Recontacto de Follow Up e Discovery (SOP 23 v2.1)</p>
           </div>
         </div>
         {!adding && (

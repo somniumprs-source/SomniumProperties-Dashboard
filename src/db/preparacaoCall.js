@@ -1,6 +1,7 @@
 
 /**
- * Preparação automática das calls com investidores (SOP 4).
+ * Preparação automática das calls com investidores (SOP 23 v2.1: Chamada 1,
+ * Recontacto de Follow Up e Discovery; investidor já qualificado => SOP 11).
  *
  * Sempre que há uma call com investidor na Agenda (tarefa com origem_tipo =
  * 'investidor' e categoria Cold Call / Follow-up / Discovery Call a
@@ -23,6 +24,7 @@
  */
 import { enfileirarIA, estadoIA, emFilaIA, jsonDaResposta } from "./filaIA.js"
 import { definirTipoContacto } from "./contactoPessoa.js"
+import { CRITERIOS_DISCOVERY, linhasScorecardMao } from '../../supabase/functions/_shared/classeInvestidor.js'
 
 export const CATEGORIAS_CALL_INV = {
   'Cold Call a Investidores': 'cold_call',
@@ -33,7 +35,18 @@ export const TIPO_CALL_LABEL = { cold_call: 'Cold Call', follow_up: 'Follow-up',
 export const TIPOS_CALL = ['cold_call', 'follow_up', 'discovery_call']
 export const TIPO_FILA_PREPARACAO = 'preparacao_call'
 export const TIPO_FILA_RESUMO = 'resumo_reuniao'
-const VERSAO_PROMPT = 'v3'
+const VERSAO_PROMPT = 'v4'
+// Objetivo de cada tipo de call segundo o SOP 23 v2.1.
+const OBJETIVO_SOP23 = {
+  cold_call: 'Chamada 1 – Qualificação (3.6 e 3.7, 5 a 10 min). Decidir se o investidor tem capital, disponibilidade e poder de decisão para uma discovery. Perguntas fechadas: experiência (nunca, 1-2, 3+), montante por intervalos (menos de 50 mil, 50 a 200 mil, 200 a 300 mil, mais de 300 mil), capital disponível hoje ou dependente de quê, decisor. Critério de sucesso: discovery marcada no máximo a 48 horas, com o decisor presente, presencial ou por videochamada, vendida com uma razão concreta e dois horários. Sinais de adiar (3.8: abaixo de 50 mil, capital dependente de venda sem data, "só a ver como funciona", recusa em trazer o outro decisor) => Follow Up com temperatura (quente 30, intermédio 60, frio 90) e data. Não interessado => Inactivo com motivo.',
+  follow_up: 'Recontacto de quem está em Follow Up (3.5). Antes de ligar, pontuar à mão o scorecard 4.10 com o que já se sabe; os critérios em branco são exatamente o que se pergunta. Abrir com o que faltava da última vez e perguntar se mudou. Se mudou: qualificar só o que faltava e marcar a discovery no máximo a 48 horas (se a discovery já foi feita e era o único ponto, atualizar o scorecard, propor a classe e marcar a apresentação para 1 a 2 dias). Se não mudou: nova data de recontacto com a temperatura revista e um ângulo novo registado. Se nunca houve Chamada 1 de facto (só mensagens), fazer a Chamada 1 completa.',
+  discovery_call: 'Chamada 2 – Discovery com bifurcação (4.1 a 4.11, 40 min). Agenda: abertura e gravação 2 min; objetivo 5; porquê real e urgência 5; desafios (a dor) 15; as duas formas de trabalhar connosco 5; montante e confirmação 5; próximo passo 3. Regra 70/30. Bifurcação só depois dos três blocos e escolhida pelo investidor, confirmada pelos sinais (horas por mês, obra, empreiteiro, controlo, montante). Via ativa: critérios de compra (tipologia, zona, teto compra mais obra, margem mínima, prazo de decisão). Montante: passiva "a partir de 50 mil euros", ativa "a partir de 200 mil euros, entre compra e obra". Confirmação 4.9. Fecho 4.11: pontuar o scorecard antes de desligar; A ou B => apresentação marcada ainda na call para 1 a 2 dias (via passiva: NDA enviado no próprio dia); sem projeto ou negócio disponível => Investidor Qualificado em Carteira com data de reativação; C => Follow Up com o que falta; D => Inactivo. A classe é validada pelo outro CEO em 24 horas.',
+}
+const OBJETIVO_DEFAULT = {
+  cold_call: 'Chamada 1: marcar a discovery no máximo a 48 horas, com o decisor presente.',
+  follow_up: 'Recontacto: perceber se o que faltava mudou e marcar a discovery (ou nova data com temperatura).',
+  discovery_call: 'Discovery: via definida, classe A–D proposta e apresentação marcada (A ou B).',
+}
 const MIN_TRANSCRICAO_RESUMO = 1500
 const DIAS_JANELA = 14
 // Falhas da IA que passam sozinhas (limite de uso do plano, sobrecarga): repetir.
@@ -269,7 +282,7 @@ export function classificarTipo(ctx) {
 }
 
 // ── Secções montadas a partir do CRM (sem IA) ─────────────────
-// Campos do Forms 1 do SOP 4 (Anexo 9, fase 2).
+// Campos da ficha a recolher (SOP 23, 3.9, 4.12 e Anexo B; Forms do SOP 4).
 const CAMPOS_FORMS = [
   ['tipo_principal', 'Tipo de investidor (ativo ou passivo)'],
   ['capital_min', 'Capital mínimo'],
@@ -449,7 +462,8 @@ function promptPreparacao(ctx, base, transcricoesBrutas) {
     'zona_residencia', 'horario_contacto', 'capital_disponivel_em', 'capital_proprio_ou_financiado', 'ticket_por_operacao',
     'prazo_maximo_retencao_meses', 'roi_minimo_aceitavel', 'tolerancia_imprevistos', 'tolerancia_imprevistos_nota', 'grau_interferencia',
     'investimentos_atuais', 'negocios_concluidos', 'negocios_concluidos_nota', 'motivacao', 'objecoes', 'compromissos', 'decisores',
-    'contexto_relacional', 'data_entrevista_estrategica']) {
+    'contexto_relacional', 'data_entrevista_estrategica', 'scorecard_discovery', 'pontuacao_discovery', 'classificacao_proposta',
+    'classificacao_estado', 'classificacao_origem']) {
     if (!vazio(inv[k])) ficha[k] = inv[k]
   }
   const reunioes = ctx.reunioes.map(r => ({
@@ -470,19 +484,33 @@ function promptPreparacao(ctx, base, transcricoesBrutas) {
     campos_forms_em_falta: base.dados_em_falta,
     incoerencias_detetadas: base.incoerencias,
   }
-  const objetivoPadrao = /qualificado em carteira|parceria|negocia/i.test(inv.status || '')
-    ? 'O investidor já está qualificado: o objetivo é apresentar um negócio concreto (SOP 11).'
-    : 'O objetivo normal é marcar a Entrevista Estratégica com os dois sócios (Alexandre Mendes, CFO, e João Abreu, CEO).'
-  return `És o diretor comercial da Somnium Properties (investimento imobiliário em Coimbra e no Grande Porto: CAEP/Cedência de Posição Contratual, Fix and Flip, parcerias). Prepara a ${TIPO_CALL_LABEL[base.cabecalho.tipo] || 'call'} de ${fmtData(base.cabecalho.dia)}${base.cabecalho.hora ? ` às ${base.cabecalho.hora}` : ''} com o investidor ${inv.nome}, segundo o SOP 4 (Procura, registo e classificação de Investidores).
+  const scorecardTxt = CRITERIOS_DISCOVERY.map(c => `- ${c.chave} (${c.label}): 0 = ${c.niveis[0]}; 1 = ${c.niveis[1]}; 2 = ${c.niveis[2]}`).join('\n')
+  const qualificado = /qualificado em carteira|parceria|negocia/i.test(inv.status || '')
+  const tipo = base.cabecalho.tipo
+  const objetivoPadrao = qualificado
+    ? 'O investidor já está qualificado (classe validada): esta call segue o SOP 11 (apresentação de negócios). Não refaças a qualificação; confirma a data da apresentação ou a reativação com um negócio dentro dos critérios dele.'
+    : tipo === 'discovery_call' ? OBJETIVO_SOP23.discovery_call
+    : tipo === 'follow_up' ? OBJETIVO_SOP23.follow_up
+    : OBJETIVO_SOP23.cold_call
+  return `És o diretor comercial da Somnium Properties (investimento imobiliário em Coimbra, Gaia e Porto: via ativa por cessão da posição contratual, via passiva como associado num CAEP). Prepara a ${TIPO_CALL_LABEL[tipo] || 'call'} de ${fmtData(base.cabecalho.dia)}${base.cabecalho.hora ? ` às ${base.cabecalho.hora}` : ''} com o investidor ${inv.nome}, conduzida por ${base.cabecalho.responsavel}, segundo o SOP 23 v2.1 (Contacto e Qualificação de Investidores, que integrou o antigo SOP 9).
+
+OBJETIVO DESTA CALL (SOP 23)
+${objetivoPadrao}
+
+SCORECARD DE QUALIFICAÇÃO (SOP 23, 4.10): 0 a 2 por critério, total 0 a 12 (11-12 A, 9-10 B, 7-8 C, 0-6 D)
+${scorecardTxt}
 
 REGRAS OBRIGATÓRIAS
 - Usa só os dados abaixo. Não inventes factos, números, datas nem citações. Quando um dado não existe, escreve "não registado".
 - Os números (capital, ROI, datas) vêm do CRM, tal como estão.
 - Nunca menciones nomes nem montantes de outros investidores. Nunca prometas rentabilidades.
 - Citações só se estiverem literalmente nos resumos ou nas notas.
-- Num follow-up, a abertura faz referência ao último contacto e ao que ficou combinado. Numa cold call com lead quente, a abertura faz referência ao formulário/landing page que ele preencheu (e, se passou muito tempo, assume a demora). Numa cold call fria, apresenta a Somnium em uma frase.
-- ${objetivoPadrao}
-- Follow-up estratégico, nunca repetitivo: traz um motivo real (o que mudou na Somnium).
+- Neste SOP não se mostram oportunidades concretas nem se fala de retornos ou números de rentabilidade: nem na abertura, nem nas perguntas, nem no próximo passo. Os retornos só na apresentação (SOP 11). Nunca urgências inventadas.
+- Abertura na voz de quem conduz (primeiro nome do responsável). Nunca "tem 2 minutos?". Cold call: guião 3.7 ("Bom dia, [nome], fala o [nome] da Somnium Properties. [Recebi o seu contacto através de X / vi que preencheu o nosso formulário]. Ligo para lhe fazer três ou quatro perguntas rápidas e ver se faz sentido marcarmos uma conversa com calma. Pode ser agora?"); com lead quente refere o formulário/landing page e, se passou muito tempo, assume a demora. Follow-up: guião de recontacto 3.5 ("Olá [nome], é o [nome] da Somnium. Da última vez disse-me que [o que faltava]. Isso já mudou?"), com o que faltava concreto tirado do historial. Discovery: abertura 4.2.
+- Perguntas sempre fechadas e por intervalos. Montante: "Com que montante se sentiria confortável num primeiro negócio? Menos de 50 mil, de 50 a 200 mil, de 200 a 300 mil, ou mais de 300 mil?". Nunca "quanto dinheiro tem".
+- Follow-up estratégico, nunca repetitivo: traz um ângulo novo real (o que mudou na Somnium, sem números de retorno, ou uma mudança no que o investidor disse que faltava).
+- "scorecard_mao": pontua à mão os 6 critérios do scorecard com o que JÁ se sabe (ficha, chamadas, reuniões). Critério sem informação => nota null, e passa a ser uma pergunta em "perguntas". Nunca adivinhes. Numa cold call sem conversa anterior, todos null.
+- Se a via ainda não está definida, não a escolhas pelo investidor: a escolha é dele, na discovery (4.6).
 - "correcoes_crm": só valores errados ou incoerentes (ex.: ficha diz Coimbra, a pessoa vive na Maia; capital "30,0005 €") e reuniões sem notas. NÃO incluas campos vazios: esses já vão para "perguntas".
 - No "historial", o canal é o que está nos dados: o primeiro contacto usa a origem da ficha (Skool, Landing Page, Grupos Whatsapp...). Não inventes canais nem contactos.
 - Português de Portugal, direto, frases curtas. Sem emojis. Sem travessões longos.
@@ -498,10 +526,11 @@ Responde APENAS com JSON válido, sem markdown:
   "combinado": [{ "quem": "investidor|somnium", "o_que": "compromisso", "quando": "prazo ou null", "citacao": "frase literal ou null" }],
   "objecoes_alertas": [{ "tipo": "objecao|alerta|contradicao", "texto": "descrição concreta" }],
   "abertura": "1 ou 2 frases para abrir a call, entre aspas, na voz de quem liga",
-  "antes_de_ligar": ["o que preparar ou confirmar internamente antes da call"],
-  "perguntas": ["perguntas a fazer, pela ordem, para preencher os dados em falta e esclarecer contradições"],
-  "objetivo": "objetivo da call segundo o SOP 4",
-  "proximo_passo": "próximo passo concreto a propor no fim da call",
+  "antes_de_ligar": ["o que preparar ou confirmar internamente antes da call (num follow-up: o scorecard pontuado à mão e o que faltava; numa discovery: apresentação institucional, calendário com espaços para a apresentação em 1-2 dias, NDA pronto na via passiva)"],
+  "perguntas": ["perguntas do guião do SOP 23 a fazer, pela ordem, fechadas e por intervalos, incluindo os critérios do scorecard em branco, os dados em falta e as contradições"],
+  "scorecard_mao": [{ "criterio": "capital|via|objetivo|urgencia|experiencia|decisor", "nota": 0-2 ou null, "porque": "o que se sabe e de onde vem, ou o que perguntar" }],
+  "objetivo": "objetivo da call segundo o SOP 23, com o critério de sucesso (ex.: discovery marcada no máximo a 48h com o decisor presente)",
+  "proximo_passo": "próximo passo concreto a propor no fim da call, com data (nunca terminar sem ele)",
   "correcoes_crm": [{ "campo": "campo da ficha ou 'reunião'", "atual": "valor atual ou null", "correto": "valor provável ou ação", "fonte": "de onde vem (reunião de DD/MM, nota, landing page)" }]
 }`
 }
@@ -529,7 +558,8 @@ export function renderMarkdown(base, conteudo) {
   L.push('\n## Perguntas e dados em falta')
   const perg = Array.isArray(c.perguntas) && c.perguntas.length ? c.perguntas : base.dados_em_falta.map(x => `${x}?`)
   L.push(perg.length ? perg.map(x => `- ${x}`).join('\n') : 'Ficha completa.')
-  L.push(`\n## Objetivo e próximo passo\n${c.objetivo || 'Marcar a Entrevista Estratégica com os dois sócios.'}${c.proximo_passo ? `\n\nPróximo passo: ${c.proximo_passo}` : ''}`)
+  if (Array.isArray(c.scorecard_mao) && c.scorecard_mao.length) L.push(`\n## Scorecard à mão (SOP 23, 4.10)\n${linhasScorecardMao(c.scorecard_mao).map(x => `- ${x}`).join('\n')}`)
+  L.push(`\n## Objetivo e próximo passo\n${c.objetivo || OBJETIVO_DEFAULT[h.tipo] || OBJETIVO_DEFAULT.cold_call}${c.proximo_passo ? `\n\nPróximo passo: ${c.proximo_passo}` : ''}`)
   const corr = [...(Array.isArray(c.correcoes_crm) ? c.correcoes_crm.map(x => `${x.campo}: ${x.atual ?? '—'} → ${x.correto}${x.fonte ? ` (${x.fonte})` : ''}`) : []),
     ...base.incoerencias.map(x => `${x.campo}: ${x.atual}. ${x.problema}`)]
   L.push(`\n## Correções ao CRM\n${corr.length ? corr.map(x => `- [ ] ${x}`).join('\n') : 'Nenhuma.'}`)
@@ -763,7 +793,7 @@ export async function tipoChamadaSugerido(pool, investidorId) {
 
 // ── Cron (de hora a hora) ─────────────────────────────────────
 // Calls dos próximos 14 dias: sem preparação => gera; véspera ou próprio dia
-// com contexto alterado => regenera (D-1, SOP 10); mais à frente => só marca
+// com contexto alterado => regenera (D-1, SOP 10 e SOP 23); mais à frente => só marca
 // "desatualizado" (regenera na véspera, ou pelo botão).
 export async function sincronizarPreparacoes(pool) {
   await ensurePreparacaoTables(pool)

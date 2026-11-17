@@ -1,12 +1,12 @@
-// Labels das chamadas gravadas com investidores (SOP 4). Espelho dos valores
+// Labels das chamadas gravadas com investidores (SOP 23 v2.1). Espelho dos valores
 // aceites em src/db/chamadasInvestidor.js (e no gémeo Deno).
 
-export const TIPO_CHAMADA_INV_LABEL = { cold_call: 'Cold Call', follow_up: 'Follow-up', discovery: 'Discovery Call' }
+export const TIPO_CHAMADA_INV_LABEL = { cold_call: 'Chamada 1 (Cold Call)', follow_up: 'Recontacto (Follow-up)', discovery: 'Discovery Call' }
 export const RESULTADO_INV_LABEL = { atendeu: 'Atendeu', nao_atendeu: 'Não atendeu', recusou: 'Recusou', numero_errado: 'Número errado' }
 export const PROXIMO_PASSO_INV_LABEL = {
-  entrevista_marcada: 'Entrevista marcada',
+  entrevista_marcada: 'Discovery/apresentação marcada',
   follow_up_agendado: 'Follow-up agendado',
-  enviar_forms: 'Enviar Forms',
+  enviar_forms: 'Chamada 1 remarcada',
   sem_interesse: 'Sem interesse',
   nao_elegivel: 'Não elegível',
 }
@@ -25,6 +25,21 @@ export const PASSOS_INV_LABEL = {
   valor: 'Valor novo',
   actualizacao: 'Actualização da situação',
   dados_em_falta: 'Recolha de dados em falta',
+  // SOP 23 v2.1
+  gravacao: 'Permissão para gravar',
+  experiencia: 'Experiência',
+  montante: 'Montante',
+  disponibilidade: 'Disponibilidade do capital',
+  decisor: 'Decisor',
+  sem_retornos: 'Sem oportunidades nem retornos',
+  qualifica_falta: 'Qualifica só o que faltava',
+  objetivo: 'Bloco 1: Objetivo',
+  porque: 'Bloco 2: Porquê e urgência',
+  dor: 'Bloco 3: Desafios (a dor)',
+  bifurcacao: 'Bifurcação',
+  criterios_ativa: 'Critérios de compra (ativa)',
+  confirmacao: 'Confirmar antes de terminar',
+  regra_70_30: 'Regra 70/30',
 }
 
 export const CRITERIOS_CLASSIFICACAO_LABEL = {

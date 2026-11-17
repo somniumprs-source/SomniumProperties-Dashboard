@@ -1,7 +1,7 @@
 /**
  * Administração > Chamadas > Investidores: leitura agregada das Cold Calls e
- * Follow-ups a investidores avaliados contra o SOP 4. Nota por passo (onde
- * falhamos), conversão para Entrevista Estratégica, conformidade, evolução,
+ * Follow-ups a investidores avaliados contra o SOP 23 v2.1. Nota por passo (onde
+ * falhamos), conversão para Discovery call marcada, conformidade, evolução,
  * leitura do Claude com prioridades e script recomendado, e exportação PDF.
  * As chamadas carregam-se na ficha do investidor (aba Reuniões).
  */
@@ -171,7 +171,7 @@ export function AdministracaoChamadasInvestidores() {
               <Phone className="w-4 h-4 text-ink-muted" />
             </div>
             <div>
-              <h2 className="text-overline uppercase text-ink-muted">SOP 4 · Procura e Classificação de Investidores</h2>
+              <h2 className="text-overline uppercase text-ink-muted">SOP 23 · Contacto e Qualificação de Investidores</h2>
               <p className="text-ui font-semibold text-ink">Chamadas a investidores</p>
             </div>
           </div>

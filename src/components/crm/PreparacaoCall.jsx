@@ -1,5 +1,5 @@
 /**
- * Preparação das calls com investidores (SOP 4).
+ * Preparação das calls com investidores (SOP 23 v2.1).
  *
  * - PreparacaoDocumento: o documento de uma call (dados do CRM + texto da IA),
  *   com o tipo calculado pelo histórico, correção manual, Regenerar e PDF.
@@ -16,6 +16,7 @@ import { useToast } from '../ui/Toast.jsx'
 import { Button } from '../ui/Button.jsx'
 import { Badge } from '../ui/Badge.jsx'
 import { useAuth } from '../../contexts/AuthContext.jsx'
+import { linhasScorecardMao } from '../../../supabase/functions/_shared/classeInvestidor.js'
 
 export const TIPO_CALL_LABEL = { cold_call: 'Cold Call', follow_up: 'Follow-up', discovery_call: 'Discovery Call', a_confirmar: 'A confirmar' }
 const EM_CURSO = ['a_gerar', 'aguarda_resumos', 'pendente']
@@ -181,9 +182,10 @@ export function PreparacaoDocumento({ prep, onAtualizar, compacto = false }) {
         )}
         <Linha rotulo="Abertura">{c?.abertura}</Linha>
         {Array.isArray(c?.antes_de_ligar) && c.antes_de_ligar.length > 0 && <Linha rotulo="Antes de ligar"><Lista itens={c.antes_de_ligar} /></Linha>}
+        {Array.isArray(c?.scorecard_mao) && c.scorecard_mao.length > 0 && <Linha rotulo="Scorecard à mão (4.10)"><Lista itens={linhasScorecardMao(c.scorecard_mao)} /></Linha>}
         <Linha rotulo="Perguntas e dados em falta">{perguntas.length ? <Lista itens={perguntas} /> : 'Ficha completa.'}</Linha>
         <Linha rotulo="Objetivo">
-          {c?.objetivo || 'Marcar a Entrevista Estratégica com os dois sócios.'}
+          {c?.objetivo || (prep.tipo_final === 'discovery_call' ? 'Discovery: via definida, classe A–D proposta e apresentação marcada.' : prep.tipo_final === 'follow_up' ? 'Recontacto: ver se o que faltava mudou e marcar a discovery.' : 'Chamada 1: marcar a discovery no máximo a 48 horas, com o decisor.')}
           {c?.proximo_passo && <span className="block mt-1 text-ink-muted">Próximo passo: {c.proximo_passo}</span>}
         </Linha>
         {correcoes.length > 0 && <Linha rotulo="Correções ao CRM"><Lista itens={correcoes} /></Linha>}

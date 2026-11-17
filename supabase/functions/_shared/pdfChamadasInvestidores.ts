@@ -1,7 +1,7 @@
 // @ts-nocheck
 /**
  * Relatório PDF das chamadas a investidores (Cold Call e Follow-up) avaliadas
- * contra o SOP 4: indicadores, onde falhamos por passo, prioridades, objecções,
+ * contra o SOP 23 v2.1: indicadores, onde falhamos por passo, prioridades, objecções,
  * script recomendado e registo das chamadas do período.
  *
  * Gémeo Node em src/db/pdfChamadasInvestidores.js — só mudam os imports
@@ -29,7 +29,7 @@ const CW = PW - ML * 2
 
 const TIPO_LABEL = { cold_call: 'Cold Call', follow_up: 'Follow-up' }
 const RESULTADO_LABEL = { atendeu: 'Atendeu', nao_atendeu: 'Não atendeu', recusou: 'Recusou', numero_errado: 'Número errado' }
-const PROXIMO_LABEL = { entrevista_marcada: 'Entrevista marcada', follow_up_agendado: 'Follow-up agendado', enviar_forms: 'Enviar Forms', sem_interesse: 'Sem interesse', nao_elegivel: 'Não elegível' }
+const PROXIMO_LABEL = { entrevista_marcada: 'Discovery/apresentação marcada', follow_up_agendado: 'Follow-up agendado', enviar_forms: 'Enviar Forms', sem_interesse: 'Sem interesse', nao_elegivel: 'Não elegível' }
 
 const fmtData = (d) => {
   if (!d) return '—'
@@ -59,7 +59,7 @@ export function generateChamadasInvestidoresPDF(rel, sintese) {
   const needPage = (needed) => { if (y + needed > PH - PB - 50) doc.addPage({ size: 'A4', margins: { top: PT, bottom: PB, left: ML, right: ML } }) }
 
   doc.addPage({ size: 'A4', margins: { top: PT, bottom: PB, left: ML, right: ML } })
-  drawHeader('Relatório de Chamadas', 'Investidores · Cold Call e Follow-up · Avaliação SOP 4',
+  drawHeader('Relatório de Chamadas', 'Investidores · Chamada 1, Follow Up e Discovery · Avaliação SOP 23',
     `${fmtData(rel.periodo.desde)} a ${fmtData(rel.periodo.ate)}`)
 
   let n = 1
@@ -71,8 +71,8 @@ export function generateChamadasInvestidoresPDF(rel, sintese) {
     ['Chamadas analisadas', `${t.analisadas}${t.por_processar ? ` · ${t.por_processar} ainda em processamento` : ''}`],
     ['Nota SOP média', `${fmtNota(rel.nota_media.global)} (Cold Call ${fmtNota(rel.nota_media.cold_call)} · Follow-up ${fmtNota(rel.nota_media.follow_up)})`],
     ['Taxa de contacto', fmtPct(c.taxa_contacto)],
-    ['Cold Call para Entrevista', `${fmtPct(c.taxa_cold_entrevista)} (${c.cold_entrevista} de ${c.cold_atendidas} atendidas)`],
-    ['Follow-up para Entrevista', `${fmtPct(c.taxa_follow_entrevista)} (${c.follow_entrevista} de ${c.follow_atendidas} atendidas)`],
+    ['Chamada 1 para Discovery', `${fmtPct(c.taxa_cold_entrevista)} (${c.cold_entrevista} de ${c.cold_atendidas} atendidas)`],
+    ['Recontacto para Discovery', `${fmtPct(c.taxa_follow_entrevista)} (${c.follow_entrevista} de ${c.follow_atendidas} atendidas)`],
     ['Sem interesse / não elegível', String(c.sem_interesse)],
     ['Follow-ups sem data definida', String(c.follow_up_sem_data)],
     ['Temperatura dos leads', `Quente ${rel.temperatura.quente} · Intermédio ${rel.temperatura.intermedio} · Frio ${rel.temperatura.frio}`],

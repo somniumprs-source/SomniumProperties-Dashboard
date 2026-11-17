@@ -1,8 +1,10 @@
 // @ts-nocheck
 /**
- * Chamadas gravadas com investidores (Cold Call e Follow-up), avaliadas contra
- * o SOP 4 (Procura, registo e classificação de Investidores) e o Anexo 9
- * (Checklist de Validação de Investidores).
+ * Chamadas gravadas com investidores, avaliadas contra o SOP 23 v2.1 (Contacto
+ * e Qualificação de Investidores): cold_call = Chamada 1 – Qualificação (3.6 e
+ * 3.7), follow_up = Recontacto de quem está em Follow Up (3.5), discovery =
+ * Chamada 2 – Discovery com bifurcação (4.2 a 4.11). O SOP 23 integrou e
+ * revogou o SOP 9 e substitui o SOP 4 na avaliação das chamadas.
  *
  * Fluxo igual ao das gravações dos consultores: upload do áudio → worker
  * Whisper local (launchd) transcreve → análise pelo Claude Code no Mac do
@@ -25,32 +27,39 @@ export const TEMPERATURAS_INV = ['quente', 'intermedio', 'frio']
 
 // Passos avaliados (0 = não feito, 1 = superficial, 2 = bem feito).
 export const PASSOS_INV = {
+  // Chamada 1 – Qualificação (SOP 23, 3.6 e 3.7): 5 a 10 min, só decide se vale uma discovery.
   cold_call: [
-    { chave: 'abertura', label: 'Abertura e apresentação', guia: 'Contacto personalizado (refere o Forms ou a origem do lead), apresenta a Somnium e resume o modelo (Fix and Flip, Cedência de Posição Contratual/CAEP, Parcerias) de forma breve.' },
-    { chave: 'perfil', label: 'Tipo de investidor e experiência', guia: 'Identifica se é Ativo (gere obra e venda) ou Passivo (não participa na gestão), a experiência imobiliária e o historial de negócios. Se Ativo, confirma equipa de obras.' },
-    { chave: 'capital', label: 'Capacidade financeira', guia: 'Capital mínimo e máximo, se é real e rapidamente mobilizável (não teórico) e quando fica disponível. Referência: Passivo 50.000€, Ativo 200.000€.' },
-    { chave: 'retorno', label: 'Retorno esperado e risco', guia: 'ROI e ROI anualizado pretendidos, se são realistas, tolerância a imprevistos (atrasos, custos de obra, valor de venda).' },
-    { chave: 'alinhamento', label: 'Alinhamento estratégico', guia: 'Estratégia (CAEP, cedência de posição, Fix and Flip), tipo de imóvel, zonas e grau de interferência compatíveis com o modelo da Somnium. É o critério mais importante no Passivo.' },
-    { chave: 'compromisso', label: 'Disponibilidade e timing', guia: 'Timing real de decisão (não entusiasmo) e disponibilidade para avançar.' },
-    { chave: 'objeccoes', label: 'Gestão de objecções', guia: 'Responde às dúvidas com clareza, sem pressionar nem prometer. Se não houve objecções, avalia como o interesse foi confirmado.' },
-    { chave: 'fecho', label: 'Fecho e próximo passo', guia: 'Termina com próximo passo concreto e datado: entrevista estratégica com CEO e CFO, ou follow-up com data e motivo.' },
+    { chave: 'abertura', label: 'Abertura', guia: 'Apresenta-se, refere a origem concreta (formulário, referência, quem indicou), diz que são três ou quatro perguntas rápidas e pergunta "Pode ser agora?". Nunca abre com "tem 2 minutos?". Se não puder, marca dia e hora com duas opções antes de desligar.' },
+    { chave: 'gravacao', label: 'Permissão para gravar', guia: 'Pede permissão para gravar no início ("Esta chamada fica gravada para eu não perder nada do que me disser. Pode ser?") (SOP 18).' },
+    { chave: 'experiencia', label: 'Experiência', guia: 'Pergunta fechada por intervalos: "Já investiu em imobiliário? Nunca, 1 a 2 imóveis, 3 ou mais?"' },
+    { chave: 'montante', label: 'Montante por intervalos', guia: 'Pergunta o montante confortável num primeiro negócio por intervalos: menos de 50 mil, 50 a 200 mil, 200 a 300 mil, mais de 300 mil. Nunca pergunta "quanto dinheiro tem". Lê o montante: <50 mil = Follow Up frio; 50 a 200 mil = só via passiva; 200 mil ou mais = qualquer via.' },
+    { chave: 'disponibilidade', label: 'Disponibilidade do capital', guia: 'Apura se o capital está disponível hoje ou depende de vender ou resgatar alguma coisa (e quando).' },
+    { chave: 'decisor', label: 'Decisor', guia: '"Decide sozinho ou há mais alguém na decisão?" Se houver outra pessoa, garante que vai estar na discovery.' },
+    { chave: 'sem_retornos', label: 'Sem oportunidades nem retornos', guia: 'Não mostra oportunidades concretas nem fala de números ou retornos. A "Quanto rende?" responde que os retornos estão no dossiê de cada projeto e se mostram na apresentação.' },
+    { chave: 'objeccoes', label: 'Objeções (secção 5)', guia: 'Responde com a resposta da secção 5 do SOP 23, no máximo uma tentativa por objeção, sem urgência inventada. Se não houve objeções, avalia como confirmou o interesse.' },
+    { chave: 'fecho', label: 'Vender a discovery', guia: 'Dá uma razão concreta para a discovery ("perceber o que quer que este capital faça por si e mostrar as duas formas como trabalhamos") e propõe dois horários, no máximo a 48 horas, com o decisor presente. Se houver sinais de adiar (3.8), passa a Follow Up com temperatura e data. Nunca termina sem próximo passo com data e hora.' },
   ],
+  // Recontacto de quem está em Follow Up (SOP 23, 3.5).
   follow_up: [
-    { chave: 'retoma', label: 'Retoma de contexto', guia: 'Refere a última interação e personaliza. Não repete o mesmo script de forma idêntica (SOP 4, 5.7).' },
-    { chave: 'valor', label: 'Valor novo', guia: 'Traz um motivo real para o contacto: novidade, oportunidade, resultado de projeto, resposta a uma dúvida anterior.' },
-    { chave: 'actualizacao', label: 'Actualização da situação', guia: 'Confirma se mudou o capital disponível, o timing ou o perfil do investidor.' },
-    { chave: 'dados_em_falta', label: 'Recolha de dados em falta', guia: 'Completa a qualificação do Anexo 9 (capital, ROI, estratégia, tipo de imóvel, experiência, equipa de obras).' },
-    { chave: 'objeccoes', label: 'Gestão de objecções', guia: 'Responde às dúvidas com clareza, sem pressionar nem prometer.' },
-    { chave: 'fecho', label: 'Fecho e próximo passo', guia: 'Próximo passo com data. Se não avança, define a temperatura: quente (30 dias), intermédio (60) ou frio (90).' },
-  ],  // Discovery call (SOP 23): explorar os 6 critérios do scorecard e fechar.
+    { chave: 'retoma', label: 'Retoma do que faltava', guia: 'Abre com o que faltava da última vez: "Da última vez disse-me que [o que faltava]. Isso já mudou?". Personaliza e não repete o mesmo texto.' },
+    { chave: 'valor', label: 'Ângulo novo', guia: 'Traz uma razão nova para falar (projeto concluído, mudança no que o investidor disse que faltava), sem números de retorno. Nunca o mesmo texto do contacto anterior.' },
+    { chave: 'qualifica_falta', label: 'Qualifica só o que faltava', guia: 'Se mudou, qualifica só o que faltava (critérios em branco ou baixos do scorecard 4.10: capital, via, objetivo, urgência, experiência e confiança, decisor). Não refaz a conversa toda.' },
+    { chave: 'sem_retornos', label: 'Sem oportunidades nem retornos', guia: 'Não mostra oportunidades concretas nem fala de números ou retornos fora da apresentação (SOP 11).' },
+    { chave: 'objeccoes', label: 'Objeções (secção 5)', guia: 'No máximo uma tentativa por objeção, sem urgência inventada.' },
+    { chave: 'fecho', label: 'Fecho e próximo passo', guia: 'Se mudou: discovery marcada no máximo a 48 horas (ou, se a discovery já foi feita e era o único ponto, propõe a classe e marca a apresentação). Se não mudou: nova data de recontacto com a temperatura revista (quente 30 dias, intermédio 60, frio 90) e um ângulo novo para a próxima conversa.' },
+  ],
+  // Chamada 2 – Discovery com bifurcação (SOP 23, 4.2 a 4.11).
   discovery: [
-    { chave: 'capital', label: 'Capital', guia: 'Apura se o capital está disponível hoje, em breve com data, ou depende de algo sem data.' },
-    { chave: 'via', label: 'Via', guia: 'Apura a via de investimento (Passivo ou Ativo; CAEP, Fix and Flip, cedência de posição) e se é coerente com o que o investidor diz e faz.' },
-    { chave: 'objetivo', label: 'Objetivo', guia: 'Leva o investidor a um objetivo concreto e, se possível, com prazo.' },
-    { chave: 'urgencia', label: 'Urgência', guia: 'Identifica se há urgência e um gatilho concreto para investir agora.' },
-    { chave: 'experiencia', label: 'Experiência e confiança', guia: 'Apura experiência anterior e o grau de confiança no processo da Somnium, sem pressionar.' },
-    { chave: 'decisor', label: 'Decisor', guia: 'Confirma quem decide: sozinho, partilhado, e se os decisores estiveram na call.' },
-    { chave: 'fecho', label: 'Fecho e próximo passo', guia: 'Próximo passo concreto e datado. Não apresenta oportunidades antes da classe validada.' },
+    { chave: 'abertura', label: 'Abertura e gravação', guia: 'Abertura 4.2 ("Antes de falarmos de negócios ou números, quero perceber bem a sua situação... Se não fizer, digo-lhe.") e permissão para gravar.' },
+    { chave: 'objetivo', label: 'Bloco 1: Objetivo', guia: '"O que quer que este capital faça por si nos próximos 1 a 2 anos?" e "O que teria de acontecer para sentir que valeu a pena?". Se vago, leva ao concreto (rendimento por mês, valor no fim).' },
+    { chave: 'porque', label: 'Bloco 2: Porquê real e urgência', guia: '"Porquê agora e não daqui a um ano?" e "O que acontece se o dinheiro ficar onde está mais um ano?". Aprofunda com "E isso é importante porquê?" até um motivo específico.' },
+    { chave: 'dor', label: 'Bloco 3: Desafios (a dor)', guia: 'Onde está o capital e quanto rende, o que já tentou, o que o impede, último negócio que deixou passar. Quantifica sem inventar (ordem de grandeza) e liga a dor ao objetivo ("Concorda que, se resolvêssemos X, ficava mais perto de Y?"), com o investidor a dizer que sim. É o bloco mais longo.' },
+    { chave: 'bifurcacao', label: 'Bifurcação', guia: 'Só depois dos três blocos apresenta as duas vias (ativa: imóvel em nome dele por cessão de posição; passiva: capital num CAEP, nós tratamos de tudo) e deixa o investidor escolher. Confirma com os sinais (horas por mês, obra, empreiteiro, controlo, montante). Se a escolha não bate com os sinais, di-lo como consultor.' },
+    { chave: 'criterios_ativa', label: 'Critérios de compra (só via ativa)', guia: 'Tipologia e zona (1 ou 2 de cada, dentro do universo do SOP 2), teto de compra mais obra, margem mínima e prazo de decisão. Se a via for passiva, nota null.' },
+    { chave: 'montante', label: 'Pré-qualificar o montante', guia: 'Usa a frase da via: passiva "a partir de 50 mil euros", ativa "a partir de 200 mil euros, entre compra e obra". "Está dentro do que pensou, ou fora?"' },
+    { chave: 'confirmacao', label: 'Confirmar antes de terminar', guia: 'Recapitula 4.9: "quer [objetivo], porque [motivo real], e o que o trava é [desafio]. A via que faz mais sentido é [ativa/passiva]. Há algo que me esteja a escapar?"' },
+    { chave: 'regra_70_30', label: 'Regra 70/30 e sem retornos', guia: 'Quem liga fala 30% do tempo ou menos. Não apresenta oportunidades concretas nem números de retorno na discovery.' },
+    { chave: 'fecho', label: 'Fecho 4.11', guia: 'Pontua o scorecard antes de desligar. A ou B: apresentação marcada ainda na call para daqui a 1 a 2 dias; na via passiva promete o NDA no próprio dia. Sem projeto ou negócio disponível: Investidor Qualificado em Carteira com data de reativação. C: Follow Up quente ou intermédio com o que falta. D: Inactivo com motivo.' },
   ],
 }
 
@@ -134,7 +143,8 @@ export function sanitizeRegistoInvestidor(input = {}, current = {}) {
 // Nota SOP (0-100): média dos passos avaliados.
 export function notaSop(analise, tipo) {
   const passos = PASSOS_INV[tipo] || PASSOS_INV.cold_call
-  const notas = passos.map(p => Number(analise?.passos?.[p.chave]?.nota)).filter(n => Number.isFinite(n))
+  // Notas a null (critério que não se aplica, ex.: critérios da via ativa numa via passiva) não contam.
+  const notas = passos.map(p => analise?.passos?.[p.chave]?.nota).filter(n => n !== null && n !== undefined && n !== '').map(Number).filter(n => Number.isFinite(n))
   if (!notas.length) return null
   const soma = notas.reduce((s, n) => s + Math.max(0, Math.min(2, n)), 0)
   return Math.round(soma / (notas.length * 2) * 100)
@@ -154,23 +164,26 @@ function contextoInvestidor(inv) {
 
 function buildPrompt(tipo, investidor) {
   const passos = PASSOS_INV[tipo] || PASSOS_INV.cold_call
-  const nomeTipo = tipo === 'follow_up' ? 'FOLLOW-UP' : tipo === 'discovery' ? 'DISCOVERY CALL' : 'COLD CALL'
+  const nomeTipo = tipo === 'follow_up' ? 'RECONTACTO DE FOLLOW UP' : tipo === 'discovery' ? 'CHAMADA 2 – DISCOVERY COM BIFURCAÇÃO' : 'CHAMADA 1 – QUALIFICAÇÃO (primeiro contacto / cold call)'
   const discovery = tipo === 'discovery'
   const scorecardTxt = CRITERIOS_DISCOVERY.map(c => `- ${c.chave} (${c.label}): 0 = ${c.niveis[0]}; 1 = ${c.niveis[1]}; 2 = ${c.niveis[2]}`).join('\n')
   const scorecardJson = CRITERIOS_DISCOVERY.map(c => `    "${c.chave}": { "nota": 0-2 ou null, "evidencia": "frase exacta do investidor ou null", "minuto": "mm:ss ou null" }`).join(',\n')
   const passosTxt = passos.map((p, i) => `${i + 1}. ${p.chave} (${p.label}): ${p.guia}`).join('\n')
-  const passosJson = passos.map(p => `    "${p.chave}": { "nota": 0-2, "evidencia": "citação curta da transcrição ou null", "comentario": "o que faltou e como fazer melhor" }`).join(',\n')
-  return `És um analista comercial sénior da Somnium Properties (investimento imobiliário em Coimbra, Portugal: Fix and Flip, CAEP/Cedência de Posição Contratual, Parcerias). Recebes a transcrição de uma chamada de ${nomeTipo} entre a nossa equipa e um potencial investidor. Avalia-a contra o SOP 4 (Procura, registo e classificação de Investidores) com o objectivo de OPTIMIZAR as nossas cold calls e follow-ups e treinar a equipa.
+  const passosJson = passos.map(p => `    "${p.chave}": { "nota": 0-2 ou null, "evidencia": "citação curta da transcrição ou null", "comentario": "o que faltou e como fazer melhor, segundo o SOP 23" }`).join(',\n')
+  return `És um analista comercial sénior da Somnium Properties (investimento imobiliário em Coimbra, Gaia e Porto: via ativa por cessão da posição contratual, via passiva como associado num CAEP). Recebes a transcrição de uma ${nomeTipo} entre a nossa equipa (Alexandre Mendes ou João Abreu) e um potencial investidor. Avalia-a contra o SOP 23 v2.1 (Contacto e Qualificação de Investidores), para treinar a equipa e registar no CRM o que o investidor disse.
 
-REGRAS DO SOP 4 PARA ESTE CONTACTO
-- O primeiro contacto é personalizado, resume o modelo de negócio, avalia interesse e convida para conversa exploratória. NÃO deve conter informação financeira detalhada nem oportunidades concretas.
-- Proibido: comunicação enganosa e promessas de rentabilidade garantida.
-- Objectivo da qualificação (Anexo 9, Fase 2): capital mínimo e máximo, data do capital disponível, ROI e ROI anualizado pretendidos, estratégia, tipo de imóvel, tipo de investidor (Ativo/Passivo), experiência, histórico de negócios, equipa de obras.
-- O passo seguinte certo para um investidor qualificado é a Entrevista Estratégica com o CEO e o CFO (Alexandre Mendes e João Abreu).
-- Follow-up estratégico, nunca repetitivo: quente 30 dias, intermédio 60, frio 90.
-- Investidor Passivo: capital mínimo recomendado 50.000€. Investidor Ativo: 200.000€ e experiência com peso máximo.
+REGRAS DO SOP 23
+- Cada chamada tem um único objetivo. Chamada 1: decidir se há capital, disponibilidade e poder de decisão para uma discovery, e marcá-la no máximo a 48 horas com o decisor presente. Recontacto: perceber se o que faltava mudou. Discovery: objetivo, porquê, dor e via; classe A–D proposta e apresentação marcada (A ou B).
+- Nenhuma chamada termina sem o próximo passo marcado, com data e hora.
+- Neste SOP não se mostram oportunidades concretas nem se fala de retornos ou números. Os retornos dizem-se só na apresentação (SOP 11), e só os do dossiê de investimento. Proibidas promessas de rentabilidade e urgências inventadas.
+- Nunca abrir com "tem 2 minutos?". Perguntas de qualificação fechadas e por intervalos; nunca "quanto dinheiro tem".
+- Intervalos de montante: menos de 50 mil (abaixo do mínimo: Follow Up frio), 50 a menos de 200 mil (só via passiva), 200 a 300 mil e mais de 300 mil (qualquer via). Um valor no limite conta no escalão de cima.
+- Sinais de descartar ou adiar (3.8): montante abaixo de 50 mil, capital dependente de uma venda sem data, "estou só a ver como funciona", recusa em trazer o outro decisor. Não se descarta de vez: Follow Up com temperatura (quente 30 dias, intermédio 60, frio 90) e data de reativação.
+- Regra 70/30 na discovery: quem liga fala 30% do tempo ou menos.
+- Objeções (secção 5): uma tentativa por objeção. "Agora não tenho tempo" => marcar dia e hora. "Mande informação por email" => email curto a confirmar a hora, negócios só em reunião. "Quanto rende?" => depende da via e do projeto, mostra-se na apresentação. "Tenho de falar com [outro]" => marcar com os dois. "Rende mais no banco" => "Comparado com quê? Quanto lhe rendeu no último ano?". "Vou pensar" => "É o montante, o prazo ou a confiança em nós?".
+- Próximos passos: "entrevista_marcada" significa Discovery call marcada (na Chamada 1 e no recontacto) ou apresentação marcada (na discovery). "follow_up_agendado" = etapa Follow Up com temperatura e data. "enviar_forms" = Chamada 1 marcada para outro dia (Marcar call). "sem_interesse" = Inactivo com motivo. "nao_elegivel" = classe D ou abaixo do mínimo sem perspetiva.
 
-PASSOS A AVALIAR (0 = não feito, 1 = superficial, 2 = bem feito com detalhe concreto)
+PASSOS A AVALIAR (0 = não feito, 1 = superficial, 2 = bem feito com detalhe concreto; null só se o passo não se aplica a esta conversa)
 ${passosTxt}
 
 FICHA ACTUAL DO INVESTIDOR NO CRM
@@ -184,22 +197,39 @@ Responde APENAS com um objecto JSON válido (sem texto antes ou depois, sem mark
   "passos": {
 ${passosJson}
   },
-  "conformidade": { "promessa_rentabilidade_garantida": true|false, "informacao_financeira_detalhada_cedo": true|false, "comentario": "texto ou null" },
+  "conformidade": { "promessa_rentabilidade_garantida": true|false, "informacao_financeira_detalhada_cedo": true|false (oportunidades concretas, números ou retornos ditos antes da apresentação), "abriu_com_tem_2_minutos": true|false, "fala_mais_de_metade": true|false (quem liga falou mais de metade do tempo), "urgencia_inventada": true|false, "comentario": "texto ou null" },
   "pontos_fortes": ["o que correu bem"],
-  "pontos_fracos": ["onde falhámos ou perdemos o controlo da conversa"],
-  "objeccoes": [{ "objeccao": "dúvida ou objecção do investidor", "resposta_dada": "como respondemos", "eficaz": true|false, "sugestao": "como responder melhor" }],
-  "melhorias_script": [{ "momento": "abertura | qualificacao | objeccao | fecho | outro", "em_vez_de": "o que foi dito", "dizer": "frase concreta a usar da próxima vez" }],
-  "dados_recolhidos": { "tipo_investidor": "Ativo" | "Passivo" | null, "capital_min": numero ou null, "capital_max": numero ou null, "capital_disponivel_quando": "texto ou null", "roi_pretendido": "texto ou null", "estrategia": "texto ou null", "tipo_imovel": "texto ou null", "experiencia": "texto ou null", "equipa_obras": "texto ou null", "dados_em_falta": ["campos do Anexo 9 que ficaram por recolher"] },
-${discovery ? `  "scorecard_discovery": {\n${scorecardJson}\n  },\n` : ''}  "pre_classificacao": { "capacidade_financeira": 1-5 ou null, "experiencia": 1-5 ou null, "alinhamento": 1-5 ou null, "credibilidade": 1-5 ou null, "compromisso": 1-5 ou null, "justificacao": "1-2 frases" },
-  "proximo_passo": "acção recomendada concreta, com prazo",
+  "pontos_fracos": ["onde falhámos face ao SOP 23"],
+  "objeccoes": [{ "objeccao": "dúvida ou objecção do investidor", "resposta_dada": "como respondemos", "eficaz": true|false, "sugestao": "resposta da secção 5 do SOP 23 adaptada" }],
+  "melhorias_script": [{ "momento": "abertura | qualificacao | discovery | bifurcacao | objeccao | fecho | outro", "em_vez_de": "o que foi dito", "dizer": "frase concreta do guião do SOP 23 a usar da próxima vez" }],
+  "dados_recolhidos": {
+    "fonte": "referencia | rede | conteudo | formulario | evento | null",
+    "experiencia": "nunca | 1-2 | 3+ | null",
+    "intervalo_montante": "menos_50k | 50k_200k | 200k_300k | mais_300k | null",
+    "capital_disponivel": "sim | depende de [texto] | null",
+    "decisor": "sozinho | partilhado com [quem] | null",
+    "objetivo": "texto curto ou null",
+    "motivo_real": "texto curto ou null",
+    "urgencia": "nenhuma | alguma | gatilho: [texto] | null",
+    "capital_hoje_rendimento": "onde está o capital e quanto rende, ou null",
+    "desafio": "desafio principal, quantificado se possível, ou null",
+    "via": "ativa | passiva | null",
+    "sinais_coerentes": true | false | null,
+    "criterios_compra": { "tipologia": "texto ou null", "zona": "texto ou null", "teto_compra_obra": numero ou null, "margem_minima": "texto ou null", "prazo_decisao": "48h | semana | mais | null" } ou null,
+    "frases_investidor": ["duas a três frases literais do investidor, para a recapitulação"],
+    "o_que_falta": "o que falta para avançar (para o recontacto), ou null",
+    "tipo_investidor": "Ativo" | "Passivo" | null, "capital_min": numero ou null, "capital_max": numero ou null, "capital_disponivel_quando": "texto ou null", "estrategia": "texto ou null", "tipo_imovel": "texto ou null", "equipa_obras": "texto ou null",
+    "dados_em_falta": ["campos do SOP 23 (secção 3.9, 4.12 e Anexo B) que ficaram por recolher"]
+  },
+${discovery ? `  "scorecard_discovery": {\n${scorecardJson}\n  },\n` : ''}  "proximo_passo": "acção recomendada concreta, com data, segundo o SOP 23",
   "sugestao_resultado": "atendeu" | "nao_atendeu" | "recusou" | "numero_errado" | null,
   "sugestao_proximo_passo": "entrevista_marcada" | "follow_up_agendado" | "enviar_forms" | "sem_interesse" | "nao_elegivel" | null,
   "sugestao_temperatura": "quente" | "intermedio" | "frio" | null,
   "sugestao_data_follow_up": "YYYY-MM-DD ou null",
-  "sugestao_justificacao": "1-2 frases a justificar as sugestões"
+  "sugestao_justificacao": "1-2 frases a justificar as sugestões com o SOP 23 (3.5, 3.8, 3.9 ou 4.11)"
 }
 
-${discovery ? `SCORECARD DA DISCOVERY (SOP 23, 4.10): dá uma nota de 0 a 2 por critério, com a frase do investidor que a justifica e o minuto. Se a transcrição não permite avaliar um critério, usa null (nunca adivinhes). Nesta call, "pre_classificacao" vai a null.\n${scorecardTxt}\nCom os 6 critérios avaliados a app propõe a classe automaticamente; o outro CEO valida-a em 24 horas.\n\n` : ''}A pre_classificacao é só indicativa (a classe A–D sai do scorecard da discovery). Escreve em português de Portugal, directo e profissional. Não inventes: se algo não aparece na transcrição, usa null.`
+${discovery ? `SCORECARD DA DISCOVERY (SOP 23, 4.10): dá uma nota de 0 a 2 por critério, com a frase do investidor que a justifica e o minuto. Se a transcrição não permite avaliar um critério, usa null (nunca adivinhes).\n${scorecardTxt}\nCom os 6 critérios avaliados a app propõe a classe automaticamente (11-12 A, 9-10 B, 7-8 C, 0-6 D); o outro CEO valida-a em 24 horas.\n\n` : ''}Escreve em português de Portugal, directo e profissional. Não inventes: se algo não aparece na transcrição, usa null.`
 }
 
 function parseJson(texto) {
@@ -422,7 +452,7 @@ export async function passoSinteseInvestidores(pool, id, resposta) {
     `UPDATE investidor_chamadas_sinteses SET estado = 'a_gerar', updated_at = $2
       WHERE id = $1 AND (estado = 'aguarda' OR (estado = 'a_gerar' AND updated_at < $3))`, [id, agora(), limiteObsoleto()])
   if (!rowCount) return { ocupado: true }
-  return { pedido: { passo: 'sintese', modelo: MODELO_IA_INV, prompt: `És o director comercial da Somnium Properties. Analisa o conjunto das chamadas a investidores (Cold Call e Follow-up) do período ${periodo.desde} a ${periodo.ate}, avaliadas contra o SOP 4, e diz o que a equipa deve mudar para converter mais investidores em Entrevista Estratégica.
+  return { pedido: { passo: 'sintese', modelo: MODELO_IA_INV, prompt: `És o director comercial da Somnium Properties. Analisa o conjunto das chamadas a investidores (Chamada 1 de qualificação, recontactos de Follow Up e discoveries) do período ${periodo.desde} a ${periodo.ate}, avaliadas contra o SOP 23 v2.1 (Contacto e Qualificação de Investidores), e diz o que a equipa deve mudar para marcar mais discoveries e mais apresentações. Usa os KPIs da secção 7 do SOP 23: taxa de resposta ao primeiro contacto (meta 30%), conversão em Chamada 1 (meta 20%), tempo até à Chamada 1 (formulário no próprio dia, referências até 3 dias úteis), registo no próprio dia (meta 100%), taxa de qualificação (discoveries marcadas / Chamadas 1), comparência à discovery, distribuição por via e classe, validação da classe em 24 horas. "entrevista_marcada" nas estatísticas significa discovery ou apresentação marcada.
 
 ESTATÍSTICAS DO PERÍODO
 ${JSON.stringify(estat)}
@@ -434,11 +464,12 @@ Responde APENAS com JSON válido, sem markdown:
 {
   "diagnostico": "3-5 frases: onde estamos a falhar e porquê, com base nos números",
   "prioridades": [{ "titulo": "mudança concreta", "porque": "evidência nos dados", "accao": "o que fazer já na próxima chamada" }],
-  "objeccoes_frequentes": [{ "objeccao": "objecção agrupada", "frequencia": numero, "melhor_resposta": "resposta recomendada, conforme o SOP 4" }],
-  "script_cold_call": { "abertura": "texto a usar", "qualificacao": ["perguntas pela ordem"], "fecho": "texto a usar" },
-  "follow_up": ["recomendações concretas para os follow-ups (timing, valor novo, canal)"]
+  "objeccoes_frequentes": [{ "objeccao": "objecção agrupada", "frequencia": numero, "melhor_resposta": "resposta recomendada, conforme a secção 5 do SOP 23" }],
+  "script_cold_call": { "abertura": "abertura da Chamada 1 a usar", "qualificacao": ["perguntas fechadas por intervalos, pela ordem"], "fecho": "frase para vender a discovery com dois horários" },
+  "follow_up": ["recomendações para a cadência D+3/D+7/D+12/D+15 e para os recontactos de Follow Up (o que faltava, ângulo novo, temperatura)"],
+  "discovery": ["recomendações para as discoveries (três blocos, bifurcação, regra 70/30, fecho 4.11)"]
 }
-No máximo 5 prioridades e 6 objecções. Português de Portugal, directo. Sem promessas de rentabilidade garantida nos textos sugeridos.` } }
+No máximo 5 prioridades e 6 objecções. Português de Portugal, directo. Sem promessas de rentabilidade, sem números de retorno e sem urgências inventadas nos textos sugeridos.` } }
 }
 
 export async function falhaSinteseInvestidores(pool, id, erro) {
