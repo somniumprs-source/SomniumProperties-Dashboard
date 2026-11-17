@@ -191,8 +191,8 @@ export function AdministracaoChamadasInvestidores() {
         <KpiCard icon={Phone} label="Chamadas" value={loading ? '—' : String(t.chamadas ?? 0)} sub={`${t.cold_call ?? 0} cold call · ${t.follow_up ?? 0} follow-up`} />
         <KpiCard icon={Gauge} label="Nota SOP média" value={fmtNota(rel?.nota_media?.global)} sub={`${t.analisadas ?? 0} analisadas`} />
         <KpiCard icon={TrendingUp} label="Taxa de contacto" value={fmtPct(c.taxa_contacto)} sub="chamadas atendidas" />
-        <KpiCard icon={Target} label="Cold Call para entrevista" value={fmtPct(c.taxa_cold_entrevista)} sub={`${c.cold_entrevista ?? 0} de ${c.cold_atendidas ?? 0} atendidas`} />
-        <KpiCard icon={RefreshCw} label="Follow-up para entrevista" value={fmtPct(c.taxa_follow_entrevista)} sub={`${c.follow_entrevista ?? 0} de ${c.follow_atendidas ?? 0} atendidas`} />
+        <KpiCard icon={Target} label="Chamada 1 para discovery" value={fmtPct(c.taxa_cold_entrevista)} sub={`${c.cold_entrevista ?? 0} de ${c.cold_atendidas ?? 0} atendidas`} />
+        <KpiCard icon={RefreshCw} label="Recontacto para discovery" value={fmtPct(c.taxa_follow_entrevista)} sub={`${c.follow_entrevista ?? 0} de ${c.follow_atendidas ?? 0} atendidas`} />
         <KpiCard icon={ShieldAlert} label="Alertas de conformidade" value={String((conf.promessas_rentabilidade ?? 0) + (conf.info_financeira_cedo ?? 0))} sub="promessas ou info cedo demais" />
       </div>
 
