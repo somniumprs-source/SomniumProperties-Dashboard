@@ -313,11 +313,17 @@ export function limparResposta(texto) {
 // ── Validação depois da geração (no código, não no modelo) ─────
 const RE_PERCENT = /\d+(?:[.,]\d+)?\s*%|\bpor\s+cento\b/i
 const RE_PALAVRA_RETORNO = /(retorno|rendimento|rentabilidade|\bfee\b)/gi
+const RE_REFERENCIA = /\b(parte|sec[cç][aã]o|sec[cç][oõ]es|chamada|anexo|sop|bloco|passo|etapa)\s+\d+(\.\d+)?(\s*(a|e)\s*\d+(\.\d+)?)?|\bD\+\d+|^\s*\d+[.)]\s|\b\d+\.\d+\b(?!\s*(%|mil|€))/gim
 export function temNumeroRetorno(texto) {
   const t = String(texto || '')
   if (RE_PERCENT.test(t)) return true
   for (const m of t.matchAll(RE_PALAVRA_RETORNO)) {
-    const janela = t.slice(Math.max(0, m.index - 40), m.index + m[0].length + 40)
+    // Só a mesma linha, sem referências do SOP ("secção 5", "Chamada 1", "D+3", "3.5").
+    const ini = t.lastIndexOf('\n', m.index) + 1
+    const fimLinha = t.indexOf('\n', m.index)
+    const linha = t.slice(ini, fimLinha === -1 ? t.length : fimLinha)
+    const pos = m.index - ini
+    const janela = linha.slice(Math.max(0, pos - 40), pos + m[0].length + 40).replace(RE_REFERENCIA, ' ')
     if (/\d/.test(janela)) return true
   }
   return false
