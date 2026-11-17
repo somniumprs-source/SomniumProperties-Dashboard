@@ -1,5 +1,6 @@
 /**
- * Análise de reuniões com investidores.
+ * Análise de reuniões com investidores pelo SOP 23 v2.1 (mesmo guião e scorecard
+ * das calls gravadas; a classe A–D é automática).
  * Extrai informação da transcrição + gera sugestões de melhoria.
  * A análise pelo Claude corre no Mac do worker (fila IA, plano Claude, sem API
  * paga): pedirAnaliseReuniao põe o prompt na fila e aplicarAnaliseReuniao grava
@@ -11,6 +12,8 @@
 import pool from './pg.js'
 import { enfileirarIA, jsonDaResposta } from './filaIA.js'
 import { pedirExtracao } from './autopreenchimento.js'
+import { buildPrompt } from './chamadasInvestidor.js'
+import { classificarAutomaticamente } from './classificacaoInvestidor.js'
 
 /**
  * Analisa uma reunião e retorna:
@@ -30,10 +33,14 @@ export async function pedirAnaliseReuniao(reuniaoId) {
   const { rows: [reuniao] } = await pool.query('SELECT * FROM reunioes WHERE id = $1', [reuniaoId])
   if (!reuniao) throw new Error('Reunião não encontrada')
   const consultor = reuniao.entidade_tipo === 'consultores'
+  let investidor = null
+  if (!consultor && reuniao.entidade_tipo === 'investidores' && reuniao.entidade_id) {
+    investidor = (await pool.query('SELECT * FROM investidores WHERE id = $1', [reuniao.entidade_id])).rows[0] || null
+  }
   return enfileirarIA(pool, {
     tipo: consultor ? 'reuniao_consultor' : 'reuniao_investidor',
     ref_id: reuniaoId,
-    prompt: consultor ? promptReuniaoConsultor(reuniao) : promptReuniaoInvestidor(reuniao),
+    prompt: consultor ? promptReuniaoConsultor(reuniao) : promptReuniaoInvestidor(reuniao, investidor),
   })
 }
 
@@ -45,58 +52,30 @@ export async function aplicarAnaliseReuniao(pedido, texto) {
     : autoFillInvestidor(pedido.ref_id, analise)
 }
 
-// Prompt da análise de reunião com investidor.
-function promptReuniaoInvestidor(reuniao) {
+// Prompt da análise de reunião com investidor: o mesmo guião e scorecard do
+// SOP 23 que as calls gravadas (buildPrompt de chamadasInvestidor), mais as
+// chaves que o separador Reuniões e o PDF da reunião já mostram.
+function promptReuniaoInvestidor(reuniao, investidor) {
   const transcricao = reuniao.transcricao || ''
-  const resumo = reuniao.resumo || ''
-  return `Analisa esta transcrição de uma reunião com um potencial investidor imobiliário da Somnium Properties (empresa portuguesa de investimento imobiliário com operações em Coimbra e na Área Metropolitana do Porto — Porto, Vila Nova de Gaia, Santa Maria da Feira).
+  const base = buildPrompt('discovery', investidor || { nome: reuniao.titulo }, { reuniao: true })
+  return `${base}
 
-TÍTULO: ${reuniao.titulo}
-DATA: ${reuniao.data}
-RESUMO FIREFLIES: ${resumo}
+ACRESCENTA AO MESMO OBJECTO JSON estas chaves (usadas no separador Reuniões e no PDF da reunião):
+  "tipo_contacto": "chamada1" | "recontacto" | "discovery" | "apresentacao" | "outro",
+  "resumo_executivo": "2-3 frases sobre a reunião",
+  "pontos_chave": ["pontos importantes ditos pelo investidor"],
+  "proximos_passos": ["próximo passo com data, segundo o SOP 23"],
+  "sugestoes_melhoria": ["o que fazer melhor face ao SOP 23, em frases concretas"],
+  "classificacao_sugerida": "A" | "B" | "C" | "D" | null (só se os 6 critérios do scorecard puderem ser avaliados, pela conversão 11-12 A, 9-10 B, 7-8 C, 0-6 D),
+  "notas_adicionais": "texto ou null",
+  "investidor_dados": { "capital_min": número ou null, "capital_max": número ou null, "estrategia": [], "tipo_investidor": [], "experiencia_imobiliario": "texto ou null", "motivacao": "texto ou null", "objecoes": "texto ou null", "profissao": "texto ou null", "localizacao": "texto ou null" }
+Não incluas "scorecard" de 5 critérios nem "probabilidade_investimento" (modelo antigo do SOP 4).
 
-TRANSCRIÇÃO:
-${transcricao.slice(0, 8000)}
-
-Responde APENAS em JSON válido com esta estrutura:
-{
-  "investidor_dados": {
-    "capital_min": null ou número em EUR,
-    "capital_max": null ou número em EUR,
-    "estrategia": [] array de estratégias mencionadas (ex: "Wholesaling", "Fix and Flip", "CAEP", "Capital Passivo"),
-    "perfil_risco": null ou "Conservador" ou "Moderado" ou "Agressivo",
-    "tipo_investidor": [] array (ex: "Passivo", "Ativo", "Particular", "Institucional"),
-    "experiencia_imobiliario": null ou texto breve,
-    "motivacao": null ou texto breve,
-    "objecoes": null ou texto breve,
-    "profissao": null ou texto,
-    "localizacao": null ou texto
-  },
-  "resumo_executivo": "2-3 frases resumindo a reunião",
-  "pontos_chave": ["ponto 1", "ponto 2", ...],
-  "proximos_passos": ["passo 1", "passo 2", ...],
-  "sugestoes_melhoria": [
-    "sugestão concreta para melhorar a abordagem",
-    "sugestão sobre o que poderia ter sido perguntado",
-    "sugestão sobre técnica de vendas ou comunicação"
-  ],
-  "classificacao_sugerida": "A" ou "B" ou "C" ou "D",
-  "probabilidade_investimento": 0 a 100,
-  "notas_adicionais": "informação relevante adicional",
-  "scorecard": {
-    "tipo_investidor": "Passivo" ou "Ativo",
-    "c1_score": 1 a 5 (Capacidade Financeira — Passivo: mín €50k, Ativo: mín €200k. 1=sem capital, 3=mínimo OK, 5=muito acima),
-    "c1_notas": "justificação breve",
-    "c2_score": 1 a 5 (Experiência Imobiliária — Passivo: peso reduzido, foco sofisticação. Ativo: peso máximo, gestão obra),
-    "c2_notas": "justificação breve",
-    "c3_score": 1 a 5 (Alinhamento Estratégico — ROI realista, tolerância imprevistos, aceita modelo Somnium),
-    "c3_notas": "justificação breve",
-    "c4_score": 1 a 5 (Estabilidade e Credibilidade — coerência respostas, disposição KYC, origem capital),
-    "c4_notas": "justificação breve",
-    "c5_score": 1 a 5 (Disponibilidade e Compromisso — timing decisão, capital reservado, agenda livre),
-    "c5_notas": "justificação breve"
-  }
-}`
+TÍTULO: ${reuniao.titulo || ''}
+DATA: ${reuniao.data || ''}
+${reuniao.resumo ? `RESUMO EXISTENTE: ${String(reuniao.resumo).slice(0, 2000)}\n` : ''}
+--- TRANSCRIÇÃO ---
+${transcricao.slice(0, 120000)}`
 }
 
 /**
@@ -230,6 +209,7 @@ function analyzeWithPatterns(reuniao, transcricao, resumo) {
  * Auto-preenche campos do investidor com dados extraídos da reunião
  */
 async function autoFillInvestidor(reuniaoId, analise) {
+  // analise é reatribuída com a classe calculada pela app
   // Buscar a reunião para saber o investidor
   const { rows: [reuniao] } = await pool.query('SELECT * FROM reunioes WHERE id = $1', [reuniaoId])
   if (!reuniao?.entidade_id || reuniao.entidade_tipo !== 'investidores') {
@@ -240,11 +220,22 @@ async function autoFillInvestidor(reuniaoId, analise) {
   if (!inv) return { ...analise, autoFilled: false, reason: 'Investidor não encontrado' }
 
   // A ficha é preenchida pela extração com prova (autopreenchimento: campo a
-  // campo, com confiança e citação; nunca sobrescreve). Já não se escreve aqui
-  // nem se cria scorecard/classificação: a classe é validada pelos dois sócios.
+  // campo, com confiança e citação; nunca sobrescreve). A classe é automática
+  // (SOP 23, 4.10; decisão de 17/11/2026): as notas desta reunião juntam-se às
+  // dos contactos anteriores e, com os 6 critérios, a classe fica definida.
   try { await pedirExtracao(pool, `reuniao:${reuniaoId}`) } catch (e) { console.error('[meetingAnalysis] extração:', e.message) }
   const updates = {}
-  const scorecardCreated = false
+  let scorecardCreated = false
+  if (analise?.scorecard_discovery && typeof analise.scorecard_discovery === 'object') {
+    const data = String(reuniao.data || '').slice(0, 10)
+    try {
+      const r = await classificarAutomaticamente(pool, inv.id, analise.scorecard_discovery,
+        { tipo: 'reuniao', id: reuniaoId, data, descricao: `Reunião de ${data}`, conduzidaPor: reuniao.organizador || null })
+      scorecardCreated = !!r?.aplicado
+      analise = { ...analise, classificacao_app: r?.classe || null, pontuacao_app: r?.total ?? null, criterios_em_falta: r?.em_falta || [] }
+      if (r?.aplicado) analise.classificacao_sugerida = r.classe
+    } catch (e) { console.error('[meetingAnalysis] classificação:', e.message) }
+  }
 
   // Persistir análise completa na reunião (para cache e sistema de alertas)
   try {

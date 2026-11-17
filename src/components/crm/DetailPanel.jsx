@@ -17,7 +17,7 @@ import { PartilharAcesso } from '../PartilharAcesso.jsx'
 import { GravacoesConsultor } from './GravacoesConsultor.jsx'
 import { DocumentosConsultor } from './DocumentosConsultor.jsx'
 import { RegistoChamadasTab } from './RegistoChamadasTab.jsx'
-import { ChamadasInvestidor } from './ChamadasInvestidor.jsx'
+import { ChamadasInvestidor, Analise as AnaliseSop23 } from './ChamadasInvestidor.jsx'
 import { useCamposIA, SugestoesIA, MarcaIA } from './RevisaoCallInvestidor.jsx'
 import { ChamadasConsultor } from './ChamadasConsultor.jsx'
 import { AvaliacaoConsultor } from './AvaliacaoConsultor.jsx'
@@ -1417,6 +1417,13 @@ function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onC
 
                 {ana && !ana.error && !ana.em_fila && (
                   <>
+                    {/* Avaliação SOP 23 (guião, conformidade, scorecard) */}
+                    {ana.passos && (
+                      <div className="rounded-lg border border-line p-3">
+                        <p className="text-xs text-ink-muted uppercase tracking-wide mb-2">Avaliação SOP 23{ana.classificacao_app ? ` · classe ${ana.classificacao_app}${ana.pontuacao_app != null ? ` (${ana.pontuacao_app}/12)` : ''}` : ''}</p>
+                        <AnaliseSop23 g={{ analise: ana }} />
+                      </div>
+                    )}
                     {/* Dados extraídos */}
                     {ana.investidor_dados && (
                       <div>

@@ -70,6 +70,50 @@ export const CRITERIOS_CLASSIFICACAO = [
   ['compromisso', 'Disponibilidade e compromisso'],
 ]
 
+// ── Gravação ligada à call agendada (tarefa da Agenda) ────────
+// Categoria da tarefa => tipo de chamada (o guião do SOP 23 usado na análise).
+export const TIPO_POR_CATEGORIA_INV = {
+  'Cold Call a Investidores': 'cold_call',
+  'Follow-up de Investidores': 'follow_up',
+  'Discovery Call a Investidores': 'discovery',
+}
+const FECHADA = ['Concluída', 'Concluida']
+
+// Calls deste investidor para escolher ao carregar o áudio: dos últimos 14 dias
+// até amanhã, mais recentes primeiro, com a gravação já ligada (se houver).
+export async function callsParaGravacao(pool, investidorId) {
+  await ensureInvestidorGravacoesTable(pool)
+  const desde = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)
+  const ate = new Date(Date.now() + 86400000).toISOString().slice(0, 10)
+  const { rows } = await pool.query(
+    `SELECT t.id, t.tarefa, t.categoria, COALESCE(t.inicio, t.data_limite) AS quando, t.status, t.funcionario,
+            (SELECT g.id FROM investidor_gravacoes g WHERE g.tarefa_id = t.id LIMIT 1) AS gravacao_id
+       FROM tarefas t
+      WHERE t.origem_tipo = 'investidor' AND t.origem_id = $1 AND t.categoria = ANY($2)
+        AND COALESCE(t.arquivada, false) = false AND t.tarefa NOT LIKE 'Cancelada:%'
+        AND left(COALESCE(t.inicio, t.data_limite), 10) BETWEEN $3 AND $4
+      ORDER BY COALESCE(t.inicio, t.data_limite) DESC`,
+    [investidorId, Object.keys(TIPO_POR_CATEGORIA_INV), desde, ate])
+  return rows.map(r => ({ ...r, tipo_chamada: TIPO_POR_CATEGORIA_INV[r.categoria] || 'cold_call' }))
+}
+
+// Valida a tarefa escolhida e devolve tipo, data e título para a gravação.
+export async function dadosDaTarefaParaGravacao(pool, investidorId, tarefaId) {
+  if (!tarefaId) return null
+  const { rows: [t] } = await pool.query(
+    `SELECT id, tarefa, categoria, inicio, data_limite, status FROM tarefas WHERE id = $1 AND origem_tipo = 'investidor' AND origem_id = $2`,
+    [tarefaId, investidorId])
+  if (!t || !TIPO_POR_CATEGORIA_INV[t.categoria]) throw new Error('A call escolhida não pertence a este investidor')
+  const data = String(t.inicio || t.data_limite || '').slice(0, 10) || new Date().toISOString().slice(0, 10)
+  return { tarefa_id: t.id, tipo: TIPO_POR_CATEGORIA_INV[t.categoria], data, titulo: t.tarefa }
+}
+
+// A call aconteceu (há gravação): a tarefa fica concluída.
+export async function concluirTarefaDaGravacao(pool, tarefaId) {
+  if (!tarefaId) return
+  await pool.query(`UPDATE tarefas SET status = 'Concluída', updated_at = NOW() WHERE id = $1 AND status <> ALL($2)`, [tarefaId, FECHADA])
+}
+
 let _tabelaGarantida = false
 export async function ensureInvestidorGravacoesTable(pool) {
   if (_tabelaGarantida) return
@@ -96,6 +140,7 @@ export async function ensureInvestidorGravacoesTable(pool) {
       notas TEXT,
       registo_fonte TEXT,
       registo_confirmado_em TEXT,
+      tarefa_id TEXT,
       created_at TEXT DEFAULT (NOW()::TEXT),
       updated_at TEXT DEFAULT (NOW()::TEXT)
     );
@@ -161,10 +206,13 @@ function contextoInvestidor(inv) {
   return campos.filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}: ${v}`).join('\n') || '(ficha vazia)'
 }
 
-function buildPrompt(tipo, investidor) {
+// opts.reuniao: o mesmo prompt para reuniões (presenciais ou videochamadas gravadas).
+export function buildPrompt(tipo, investidor, opts = {}) {
   const passos = PASSOS_INV[tipo] || PASSOS_INV.cold_call
-  const nomeTipo = tipo === 'follow_up' ? 'RECONTACTO DE FOLLOW UP' : tipo === 'discovery' ? 'CHAMADA 2 – DISCOVERY COM BIFURCAÇÃO' : 'CHAMADA 1 – QUALIFICAÇÃO (primeiro contacto / cold call)'
-  const discovery = tipo === 'discovery'
+  const nomeTipo = opts.reuniao ? 'REUNIÃO (presencial ou videochamada gravada; avalia-a como Discovery com bifurcação, ou pelo guião que de facto se aplicou)' : tipo === 'follow_up' ? 'RECONTACTO DE FOLLOW UP' : tipo === 'discovery' ? 'CHAMADA 2 – DISCOVERY COM BIFURCAÇÃO' : 'CHAMADA 1 – QUALIFICAÇÃO (primeiro contacto / cold call)'
+  const discovery = true // o scorecard sai em todos os contactos (classificação automática, 17/11/2026)
+  const scAtual = (() => { try { const v = typeof investidor?.scorecard_discovery === 'string' ? JSON.parse(investidor.scorecard_discovery) : investidor?.scorecard_discovery; return v || {} } catch { return {} } })()
+  const scAtualTxt = CRITERIOS_DISCOVERY.map(c => `- ${c.label}: ${scAtual?.[c.chave]?.nota ?? 'em branco'}${scAtual?.[c.chave]?.data ? ` (${scAtual[c.chave].data})` : ''}`).join('\n')
   const scorecardTxt = CRITERIOS_DISCOVERY.map(c => `- ${c.chave} (${c.label}): 0 = ${c.niveis[0]}; 1 = ${c.niveis[1]}; 2 = ${c.niveis[2]}`).join('\n')
   const scorecardJson = CRITERIOS_DISCOVERY.map(c => `    "${c.chave}": { "nota": 0-2 ou null, "evidencia": "frase exacta do investidor ou null", "minuto": "mm:ss ou null" }`).join(',\n')
   const passosTxt = passos.map((p, i) => `${i + 1}. ${p.chave} (${p.label}): ${p.guia}`).join('\n')
@@ -187,6 +235,9 @@ ${passosTxt}
 
 FICHA ACTUAL DO INVESTIDOR NO CRM
 ${contextoInvestidor(investidor)}
+
+SCORECARD ACUMULADO DOS CONTACTOS ANTERIORES (classe actual: ${investidor?.classificacao || 'sem classe'})
+${scAtualTxt}
 
 Responde APENAS com um objecto JSON válido (sem texto antes ou depois, sem markdown), com esta estrutura exacta:
 {
@@ -228,7 +279,7 @@ ${discovery ? `  "scorecard_discovery": {\n${scorecardJson}\n  },\n` : ''}  "pro
   "sugestao_justificacao": "1-2 frases a justificar as sugestões com o SOP 23 (3.5, 3.8, 3.9 ou 4.11)"
 }
 
-${discovery ? `SCORECARD DA DISCOVERY (SOP 23, 4.10): dá uma nota de 0 a 2 por critério, com a frase do investidor que a justifica e o minuto. Se a transcrição não permite avaliar um critério, usa null (nunca adivinhes).\n${scorecardTxt}\nCom os 6 critérios avaliados a app propõe a classe automaticamente (11-12 A, 9-10 B, 7-8 C, 0-6 D); o outro CEO valida-a em 24 horas.\n\n` : ''}Escreve em português de Portugal, directo e profissional. Não inventes: se algo não aparece na transcrição, usa null.`
+SCORECARD DE QUALIFICAÇÃO (SOP 23, 4.10), em qualquer tipo de contacto: dá uma nota de 0 a 2 por critério SÓ quando ESTA conversa traz prova (frase do investidor e minuto). Sem prova nesta conversa, usa null: a app mantém a nota do contacto anterior. Se o investidor disse algo que muda uma nota anterior (ex.: o capital deixou de estar disponível), dá a nota nova. Nunca adivinhes.\n${scorecardTxt}\nA app junta estas notas às dos contactos anteriores e, com os 6 critérios, define a classe automaticamente (11-12 A, 9-10 B, 7-8 C, 0-6 D), sem validação.\n\nEscreve em português de Portugal, directo e profissional. Não inventes: se algo não aparece na transcrição, usa null.`
 }
 
 function parseJson(texto) {

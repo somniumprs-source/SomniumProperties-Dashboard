@@ -29,10 +29,11 @@ import {
 import { persistDocumento, listDocumentos, urlAssinadaDocumento, apagarDocumentosDoImovel, apagarFotosDoImovel } from "../_shared/documentLifecycle.ts";
 import { generateImovelPDF } from "../_shared/pdfReport.ts";
 import { generateMeetingPDF } from "../_shared/pdfMeetingReport.ts";
-import { generateChamadasInvestidoresPDF } from "../_shared/pdfChamadasInvestidores.ts";
+import { generateChamadasInvestidoresPDF, generateChamadaInvestidorPDF } from "../_shared/pdfChamadasInvestidores.ts";
 import {
   ensureInvestidorGravacoesTable, tabelaDaGravacao, sanitizeRegistoInvestidor, relatorioChamadasInvestidores, TIPOS_CHAMADA_INV,
   pedirAnaliseInvestidor, investidorGravacoesPorAnalisar, passoAnaliseInvestidor, falhaAnaliseInvestidor,
+  callsParaGravacao, dadosDaTarefaParaGravacao, concluirTarefaDaGravacao,
   lerSinteseInvestidores, pedirSinteseInvestidores, sintesesInvestidoresPorGerar, passoSinteseInvestidores, falhaSinteseInvestidores,
 } from "../_shared/chamadasInvestidor.ts";
 import { analyzeReuniao, pedirAnaliseReuniao, aplicarAnaliseReuniao } from "../_shared/meetingAnalysis.ts";
@@ -3518,6 +3519,12 @@ app.get("/investidores/:id/preparacoes", semPortalInvestidor, async (c: any) => 
   catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
+// Calls agendadas deste investidor para ligar à gravação (últimos 14 dias até amanhã).
+app.get("/investidores/:id/calls-para-gravacao", semPortalInvestidor, async (c: any) => {
+  try { return c.json(await callsParaGravacao(pool, c.req.param("id"))); }
+  catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
 app.get("/investidores/:id/tipo-chamada-sugerido", semPortalInvestidor, async (c: any) => {
   try { return c.json(await tipoChamadaSugerido(pool, c.req.param("id"))); }
   catch (e) { return c.json({ error: (e as Error).message }, 500); }
@@ -3599,9 +3606,10 @@ app.get("/autopreenchimento/relatorio", async (c: any) => {
   catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── Chamadas gravadas com investidores (SOP 4) ───────────────
+// ── Chamadas gravadas com investidores (SOP 23) ──────────────
 // Mesmo fluxo das gravacoes dos consultores (bucket "Gravacoes", worker
-// Whisper local), mas avaliadas contra o SOP 4. Logica em chamadasInvestidor.ts.
+// Whisper local), mas avaliadas contra o SOP 23. A gravação pode ficar ligada
+// à call agendada (tarefa_id): tipo e data vêm dela e a tarefa fica concluída. Logica em chamadasInvestidor.ts.
 app.post("/investidores/:id/chamadas", async (c: any) => {
   try {
     const _rl = await checkUploadLimit(c, 10, 60 * 60 * 1000); if (_rl) return _rl;
@@ -3622,16 +3630,18 @@ app.post("/investidores/:id/chamadas", async (c: any) => {
     const storagePath = `investidores/${investidorId}/${id}${ext}`;
     await uploadPrivate(GRAVACOES_BUCKET, storagePath, new Uint8Array(await file.arrayBuffer()), file.type || "application/octet-stream");
 
-    const tipo = TIPOS_CHAMADA_INV.includes(String(form.get("tipo_chamada"))) ? String(form.get("tipo_chamada")) : "cold_call";
-    const dataChamada = /^\d{4}-\d{2}-\d{2}$/.test(String(form.get("data_chamada") || "")) ? String(form.get("data_chamada")) : new Date().toISOString().slice(0, 10);
+    const daTarefa = await dadosDaTarefaParaGravacao(pool, investidorId, String(form.get("tarefa_id") || "") || null);
+    const tipo = daTarefa?.tipo || (TIPOS_CHAMADA_INV.includes(String(form.get("tipo_chamada"))) ? String(form.get("tipo_chamada")) : "cold_call");
+    const dataChamada = daTarefa?.data || (/^\d{4}-\d{2}-\d{2}$/.test(String(form.get("data_chamada") || "")) ? String(form.get("data_chamada")) : new Date().toISOString().slice(0, 10));
     const u = await resolveCrmUser(c);
     const now = new Date().toISOString();
     const { rows: [row] } = await pool.query(
-      `INSERT INTO investidor_gravacoes (id, investidor_id, tipo_chamada, titulo, data_chamada, realizada_por, ficheiro_path, ficheiro_nome, estado, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pendente',$9,$9) RETURNING *`,
-      [id, investidorId, tipo, `${tipo === "follow_up" ? "Follow-up" : "Cold Call"} ${dataChamada}`, dataChamada,
-       u?.nome || u?.email || null, storagePath, file.name, now],
+      `INSERT INTO investidor_gravacoes (id, investidor_id, tipo_chamada, titulo, data_chamada, realizada_por, ficheiro_path, ficheiro_nome, estado, created_at, updated_at, tarefa_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pendente',$9,$9,$10) RETURNING *`,
+      [id, investidorId, tipo, daTarefa?.titulo || `${tipo === "follow_up" ? "Recontacto" : tipo === "discovery" ? "Discovery" : "Chamada 1"} ${dataChamada}`, dataChamada,
+       u?.nome || u?.email || null, storagePath, file.name, now, daTarefa?.tarefa_id || null],
     );
+    if (daTarefa?.tarefa_id) await concluirTarefaDaGravacao(pool, daTarefa.tarefa_id);
     return c.json(row);
   } catch (e) {
     console.error("[chamadas investidor upload]", (e as Error).message);
@@ -3710,6 +3720,20 @@ app.get("/chamadas-investidores/sintese", async (c: any) => {
 app.post("/chamadas-investidores/sintese", async (c: any) => {
   try { return c.json(await pedirSinteseInvestidores(pool, periodoChamadas(c))); }
   catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// Relatório PDF de uma chamada (análise SOP 23).
+app.get("/chamadas-investidores/:id/relatorio-pdf", async (c: any) => {
+  try {
+    await ensureInvestidorGravacoesTable(pool);
+    const { rows: [g] } = await pool.query("SELECT * FROM investidor_gravacoes WHERE id = $1", [c.req.param("id")]);
+    if (!g) return c.json({ error: "Chamada nao encontrada" }, 404);
+    if (!g.analise) return c.json({ error: "Chamada ainda sem analise" }, 400);
+    const { rows: [inv] } = await pool.query("SELECT * FROM investidores WHERE id = $1", [g.investidor_id]);
+    const buffer = await streamToBuffer(generateChamadaInvestidorPDF(g, inv || {}));
+    const nome = String(inv?.nome || "Investidor").normalize("NFD").replace(/[^A-Za-z0-9]+/g, "_");
+    return c.body(buffer, 200, { "Content-Type": "application/pdf", "Content-Disposition": pdfDisposition(c, `Relatorio_Chamada_${nome}_${String(g.data_chamada).slice(0, 10)}.pdf`) });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
 app.get("/chamadas-investidores/relatorio/pdf", async (c: any) => {
@@ -5204,7 +5228,7 @@ const RUBRICA: Record<string, Record<string, any[]>> = {
 // ── Automacoes PostgreSQL — port de routes.js 2216-2276 ──
 app.post("/automation/score-investidores", async (c: any) => {
   // Desactivado (SOP 23, 4.10): não recalcula nem a classe nem a pontuação antiga.
-  return c.json({ ok: true, atualizados: 0, detalhes: [], desactivado: "A classificação de investidores só muda pelo scorecard da discovery validado pelo outro CEO (SOP 23, 4.10)" });
+  return c.json({ ok: true, atualizados: 0, detalhes: [], desactivado: "A classificação de investidores é automática: sai do scorecard de qualificação de cada contacto analisado (SOP 23, 4.10)" });
 });
 
 // automation/calc-roi removido — usava uma fórmula naive diferente da
@@ -5441,7 +5465,7 @@ app.get("/scorecards/:investidorId", async (c: any) => {
 app.post("/scorecards", async (c: any) => {
   // Scorecard antigo de 5 critérios (0–100): substituído pelo da discovery
   // (POST /investidores/:id/scorecard-discovery). Histórico fica só de leitura.
-  return c.json({ error: "A classificação de investidores só muda pelo scorecard da discovery validado pelo outro CEO (SOP 23, 4.10). Usa o scorecard da discovery no separador Avaliação." }, 410);
+  return c.json({ error: "A classificação de investidores é automática: sai do scorecard de qualificação de cada contacto analisado (SOP 23, 4.10). Usa o scorecard da discovery no separador Avaliação." }, 410);
 });
 
 // ── Historico de classificacao — port de routes.js 2740-2748 ──
@@ -5481,7 +5505,7 @@ app.post("/automation/reclassificar-investidores", async (c: any) => {
       const rules = FOLLOWUP_INVESTIDOR_RULES[inv.classificacao] || FOLLOWUP_INVESTIDOR_RULES.C;
       if (diasSem >= rules.dias_intermedio) alertas.follow_up_urgente.push({ nome: inv.nome, classificacao: inv.classificacao, diasSem, proximoLimite: rules.dias_frio });
     }
-    return c.json({ ok: true, atualizados: 0, detalhes: [], alertas, desactivado: "A classificação de investidores só muda pelo scorecard da discovery validado pelo outro CEO (SOP 23, 4.10)" });
+    return c.json({ ok: true, atualizados: 0, detalhes: [], alertas, desactivado: "A classificação de investidores é automática: sai do scorecard de qualificação de cada contacto analisado (SOP 23, 4.10)" });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 

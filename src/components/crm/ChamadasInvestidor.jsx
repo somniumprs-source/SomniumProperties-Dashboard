@@ -139,7 +139,7 @@ function RegistoManual({ g, onGuardar }) {
   )
 }
 
-function Analise({ g }) {
+export function Analise({ g }) {
   const a = g.analise
   if (!a) return null
   const passos = Object.entries(a.passos || {})
@@ -276,8 +276,8 @@ function Analise({ g }) {
       {sd && (
         <div>
           <p className="text-xs font-semibold text-ink-muted mb-1.5">
-            Scorecard da discovery sugerido pela IA
-            {sdCalc?.total != null && <span className="text-ink"> · {sdCalc.total}/12 · proposta {sdCalc.classe}</span>}
+            Scorecard de qualificação (prova deste contacto)
+            {sdCalc?.total != null && <span className="text-ink"> · {sdCalc.total}/12 · classe {sdCalc.classe}</span>}
           </p>
           <ul className="space-y-1">
             {CRITERIOS_DISCOVERY.map(c => sd[c.chave] && (
@@ -287,7 +287,7 @@ function Analise({ g }) {
               </li>
             ))}
           </ul>
-          <p className="text-[11px] text-ink-muted mt-1">Com os 6 critérios a app propõe a classe (Pendente de Aprovação); o outro CEO valida no separador Avaliação da ficha.</p>
+          <p className="text-[11px] text-ink-muted mt-1">Critérios sem prova nesta conversa mantêm a nota dos contactos anteriores. Com os 6 critérios a classe fica definida automaticamente (separador Avaliação, com histórico).</p>
         </div>
       )}
 
@@ -316,6 +316,7 @@ function ChamadaCard({ g, busy, onAnalisar, onRetomar, onApagar, onGuardarRegist
             <span className="text-xs text-ink-muted">{fmtDia(g.data_chamada)}</span>
             {dur && <span className="text-xs text-ink-muted">· {dur}</span>}
             {g.realizada_por && <span className="text-xs text-ink-muted">· {g.realizada_por}</span>}
+            {g.tarefa_id && <span className="text-[11px] px-2 py-0.5 rounded-full bg-accent/10 text-accent-ink" title={g.titulo || ''}>Ligada à call agendada</span>}
           </div>
           <div className="flex items-center gap-1.5 flex-wrap mt-1">
             <span className={`text-[11px] px-2 py-0.5 rounded-full border flex items-center gap-1 ${em.cls}`}>
@@ -339,6 +340,21 @@ function ChamadaCard({ g, busy, onAnalisar, onRetomar, onApagar, onGuardarRegist
             <button type="button" onClick={() => onAnalisar(g.id)} disabled={!!busy} title={g.analise ? 'Analisar de novo' : 'Analisar'}
               className="p-1.5 rounded text-ink-muted hover:text-ink hover:bg-surface-muted disabled:opacity-50">
               {busy === 'analisar' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            </button>
+          )}
+          {g.analise && (
+            <button type="button" title="Relatório PDF da chamada (SOP 23)"
+              onClick={async () => {
+                try {
+                  const r = await apiFetch(`/api/crm/chamadas-investidores/${g.id}/relatorio-pdf`)
+                  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Falha ao gerar o PDF')
+                  const url = URL.createObjectURL(await r.blob())
+                  window.open(url, '_blank')
+                  setTimeout(() => URL.revokeObjectURL(url), 60000)
+                } catch (e) { alert(e.message) }
+              }}
+              className="p-1.5 rounded text-ink-muted hover:text-ink hover:bg-surface-muted">
+              <FileText className="w-3.5 h-3.5" />
             </button>
           )}
           {g.estado === 'analisado' && (
@@ -381,7 +397,8 @@ export function ChamadasInvestidor({ investidorId }) {
   const [chamadas, setChamadas] = useState([])
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
-  const [nova, setNova] = useState({ tipo_chamada: 'cold_call', data_chamada: hojeISO(), file: null })
+  const [nova, setNova] = useState({ tipo_chamada: 'cold_call', data_chamada: hojeISO(), file: null, tarefa_id: '' })
+  const [calls, setCalls] = useState([]) // calls agendadas para ligar à gravação
   const [enviando, setEnviando] = useState(false)
   const [busy, setBusy] = useState({})
   const [rever, setRever] = useState(null) // id da gravação no ecrã "Rever call"
@@ -409,6 +426,19 @@ export function ChamadasInvestidor({ investidorId }) {
     return () => { vivo = false }
   }, [investidorId])
 
+  // Calls agendadas (últimos 14 dias até amanhã): a gravação fica ligada à call escolhida.
+  useEffect(() => {
+    if (!adding) return
+    let vivo = true
+    apiFetch(`/api/crm/investidores/${investidorId}/calls-para-gravacao`).then(r => r.json()).then(d => {
+      if (!vivo || !Array.isArray(d)) return
+      setCalls(d)
+      const livre = d.find(c => !c.gravacao_id && String(c.quando || '').slice(0, 10) <= hojeISO())
+      if (livre) setNova(n => ({ ...n, tarefa_id: livre.id, tipo_chamada: livre.tipo_chamada, data_chamada: String(livre.quando).slice(0, 10) }))
+    }).catch(() => {})
+    return () => { vivo = false }
+  }, [adding, investidorId])
+
   const temPendentes = chamadas.some(g => EM_PROCESSAMENTO.includes(g.estado))
   useEffect(() => {
     if (!temPendentes) return
@@ -425,13 +455,14 @@ export function ChamadasInvestidor({ investidorId }) {
       fd.append('audio', nova.file)
       fd.append('tipo_chamada', nova.tipo_chamada)
       fd.append('data_chamada', nova.data_chamada)
+      if (nova.tarefa_id) fd.append('tarefa_id', nova.tarefa_id)
       const r = await apiFetch(`/api/crm/investidores/${investidorId}/chamadas`, { method: 'POST', body: fd })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error || 'Falha ao carregar a chamada')
       setChamadas(p => [d, ...p])
       setAdding(false)
-      setNova({ tipo_chamada: sugerido?.tipo || 'cold_call', data_chamada: hojeISO(), file: null })
-      toast('Chamada carregada. Fica em fila para transcrever e analisar.', 'success')
+      setNova({ tipo_chamada: sugerido?.tipo || 'cold_call', data_chamada: hojeISO(), file: null, tarefa_id: '' })
+      toast(nova.tarefa_id ? 'Chamada carregada e ligada à call agendada (marcada como concluída). Fica em fila para transcrever e analisar.' : 'Chamada carregada. Fica em fila para transcrever e analisar.', 'success')
     } catch (err) { toast(friendlyError(err.message || 'Falha ao carregar a chamada'), 'error') }
     setEnviando(false)
   }
@@ -498,6 +529,21 @@ export function ChamadasInvestidor({ investidorId }) {
 
       {adding && (
         <form onSubmit={enviar} className="bg-surface-raised rounded-xl border border-line p-4 space-y-3">
+          <label className="block text-xs text-ink-muted">Call agendada a que pertence esta gravação
+            <select value={nova.tarefa_id} className={`mt-1 ${inputClass}`}
+              onChange={e => {
+                const c = calls.find(x => x.id === e.target.value)
+                setNova(n => c ? { ...n, tarefa_id: c.id, tipo_chamada: c.tipo_chamada, data_chamada: String(c.quando).slice(0, 10) } : { ...n, tarefa_id: '' })
+              }}>
+              <option value="">Nenhuma (call sem agendamento)</option>
+              {calls.map(c => (
+                <option key={c.id} value={c.id} disabled={!!c.gravacao_id}>
+                  {String(c.quando || '').slice(0, 16).replace('T', ' ')} · {c.tarefa}{c.gravacao_id ? ' (já tem gravação)' : ''}{['Concluída', 'Concluida'].includes(c.status) ? ' · concluída' : ''}
+                </option>
+              ))}
+            </select>
+            {nova.tarefa_id && <span className="block mt-1 text-[11px]">O tipo e a data vêm da call escolhida, que fica concluída ao carregar.</span>}
+          </label>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Select label="Tipo de chamada" value={nova.tipo_chamada} options={TIPO_CHAMADA_INV_LABEL}
               onChange={v => setNova(n => ({ ...n, tipo_chamada: v || 'cold_call' }))} />

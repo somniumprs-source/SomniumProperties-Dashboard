@@ -1,9 +1,13 @@
 // Classificação A–D de investidores (SOP 4 e SOP 23 v2.1, secções 4.10 e 4.11).
 //
-// Fonte única da regra: scorecard da discovery call (6 critérios de 0 a 2,
-// total de 0 a 12), conversão total → classe, consequência no CRM,
-// elegibilidade para apresentação, validação pelo outro CEO (24 h) e
-// apresentações a desmarcar.
+// Fonte única da regra: scorecard de qualificação (6 critérios de 0 a 2,
+// total de 0 a 12), conversão total → classe, elegibilidade para apresentação
+// e apresentações a desmarcar.
+// Decisão de 17/11/2026 (Alexandre Mendes): a classe é AUTOMÁTICA. Cada
+// contacto analisado (call gravada ou reunião, incluindo videochamadas
+// gravadas) atualiza os critérios sobre os quais houve prova; com os 6
+// critérios a classe fica definida logo, sem validação pelo outro CEO, e pode
+// mudar no contacto seguinte (histórico em classificacao_historico).
 // Só funções puras, sem BD nem dependências: importado tal e qual pelo
 // frontend (Vite), pelo Express de dev (src/db/routes.js) e pelas Edge
 // Functions (Deno). Testes: `npm run test:classe`.
@@ -154,4 +158,37 @@ export function linhasScorecardMao(lista) {
   const linhas = arr.map(x => `${ROTULO_CRITERIO[x?.criterio] || x?.criterio}: ${x?.nota === null || x?.nota === undefined ? 'em branco (perguntar)' : `${x.nota}/2`}${x?.porque ? `. ${x.porque}` : ''}`)
   if (notas.length) linhas.push(`Total parcial: ${notas.reduce((s, n) => s + n, 0)}/${notas.length * 2} (${arr.length - notas.length} critério(s) em branco)`)
   return linhas
+}
+
+// ── Scorecard acumulado entre contactos (classificação automática) ──
+// anterior: scorecard gravado { capital: { nota, data, ... }, ... }.
+// novas: notas deste contacto { capital: { nota, evidencia, minuto } | nota | null }.
+// fonte: { data: 'YYYY-MM-DD', tipo: 'gravacao'|'reuniao'|'manual', id, descricao }.
+// Um critério só muda com prova neste contacto (nota não nula) e se o contacto
+// não for mais antigo do que a prova que já lá está. Devolve o scorecard novo e
+// a lista dos critérios que mudaram.
+export function fundirScorecard(anterior = {}, novas = {}, fonte = {}) {
+  const base = anterior && typeof anterior === 'object' ? anterior : {}
+  const out = {}
+  const alterados = []
+  const data = String(fonte.data || '').slice(0, 10) || null
+  for (const k of CHAVES_DISCOVERY) {
+    const ant = base[k] && typeof base[k] === 'object' ? base[k] : (base[k] != null ? { nota: base[k] } : null)
+    const bruto = novas?.[k]
+    const valor = bruto && typeof bruto === 'object' ? bruto.nota : bruto
+    let n = null
+    try { n = normalizarNota(valor, k) } catch { n = null }
+    const antData = ant?.data ? String(ant.data).slice(0, 10) : null
+    const maisRecente = !antData || !data || data >= antData
+    if (n !== null && maisRecente) {
+      out[k] = {
+        nota: n, origem: fonte.tipo === 'manual' ? 'manual' : 'ia', data,
+        evidencia: (bruto && typeof bruto === 'object' && bruto.evidencia) || null,
+        minuto: (bruto && typeof bruto === 'object' && bruto.minuto) || null,
+        fonte: fonte.descricao || null, fonte_tipo: fonte.tipo || null, fonte_id: fonte.id || null,
+      }
+      if (!ant || ant.nota !== n) alterados.push(k)
+    } else if (ant) out[k] = ant
+  }
+  return { scorecard: out, alterados }
 }

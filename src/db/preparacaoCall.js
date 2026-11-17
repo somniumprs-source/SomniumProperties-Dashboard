@@ -40,7 +40,7 @@ const VERSAO_PROMPT = 'v4'
 const OBJETIVO_SOP23 = {
   cold_call: 'Chamada 1 – Qualificação (3.6 e 3.7, 5 a 10 min). Decidir se o investidor tem capital, disponibilidade e poder de decisão para uma discovery. Perguntas fechadas: experiência (nunca, 1-2, 3+), montante por intervalos (menos de 50 mil, 50 a 200 mil, 200 a 300 mil, mais de 300 mil), capital disponível hoje ou dependente de quê, decisor. Critério de sucesso: discovery marcada no máximo a 48 horas, com o decisor presente, presencial ou por videochamada, vendida com uma razão concreta e dois horários. Sinais de adiar (3.8: abaixo de 50 mil, capital dependente de venda sem data, "só a ver como funciona", recusa em trazer o outro decisor) => Follow Up com temperatura (quente 30, intermédio 60, frio 90) e data. Não interessado => Inactivo com motivo.',
   follow_up: 'Recontacto de quem está em Follow Up (3.5). Antes de ligar, pontuar à mão o scorecard 4.10 com o que já se sabe; os critérios em branco são exatamente o que se pergunta. Abrir com o que faltava da última vez e perguntar se mudou. Se mudou: qualificar só o que faltava e marcar a discovery no máximo a 48 horas (se a discovery já foi feita e era o único ponto, atualizar o scorecard e propor a classe: só A ou B, 9 pontos ou mais, têm apresentação marcada para 1 a 2 dias; C fica em Follow Up quente ou intermédio com o que falta; D passa a Inactivo). Se não mudou: nova data de recontacto com a temperatura revista e um ângulo novo registado. Se nunca houve Chamada 1 de facto (só mensagens), fazer a Chamada 1 completa.',
-  discovery_call: 'Chamada 2 – Discovery com bifurcação (4.1 a 4.11, 40 min). Agenda: abertura e gravação 2 min; objetivo 5; porquê real e urgência 5; desafios (a dor) 15; as duas formas de trabalhar connosco 5; montante e confirmação 5; próximo passo 3. Regra 70/30. Bifurcação só depois dos três blocos e escolhida pelo investidor, confirmada pelos sinais (horas por mês, obra, empreiteiro, controlo, montante). Via ativa: critérios de compra (tipologia, zona, teto compra mais obra, margem mínima, prazo de decisão). Montante: passiva "a partir de 50 mil euros", ativa "a partir de 200 mil euros, entre compra e obra". Confirmação 4.9. Fecho 4.11: pontuar o scorecard antes de desligar; A ou B => apresentação marcada ainda na call para 1 a 2 dias (via passiva: NDA enviado no próprio dia); sem projeto ou negócio disponível => Investidor Qualificado em Carteira com data de reativação; C => Follow Up com o que falta; D => Inactivo. A classe é validada pelo outro CEO em 24 horas.',
+  discovery_call: 'Chamada 2 – Discovery com bifurcação (4.1 a 4.11, 40 min). Agenda: abertura e gravação 2 min; objetivo 5; porquê real e urgência 5; desafios (a dor) 15; as duas formas de trabalhar connosco 5; montante e confirmação 5; próximo passo 3. Regra 70/30. Bifurcação só depois dos três blocos e escolhida pelo investidor, confirmada pelos sinais (horas por mês, obra, empreiteiro, controlo, montante). Via ativa: critérios de compra (tipologia, zona, teto compra mais obra, margem mínima, prazo de decisão). Montante: passiva "a partir de 50 mil euros", ativa "a partir de 200 mil euros, entre compra e obra". Confirmação 4.9. Fecho 4.11: pontuar o scorecard antes de desligar; A ou B => apresentação marcada ainda na call para 1 a 2 dias (via passiva: NDA enviado no próprio dia); sem projeto ou negócio disponível => Investidor Qualificado em Carteira com data de reativação; C => Follow Up com o que falta; D => Inactivo. A classe é definida automaticamente pela análise da gravação (sem validação).',
 }
 const OBJETIVO_DEFAULT = {
   cold_call: 'Chamada 1: marcar a discovery no máximo a 48 horas, com o decisor presente.',
@@ -367,6 +367,88 @@ function historialBase(ctx) {
   return ev.filter(e => e.data || e.texto).sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')))
 }
 
+// ── Guião completo do SOP 23 (Anexo A), preenchido com os dados do investidor ──
+// Montado aqui, sem IA. Itens: { t: 'fala' | 'nota' | 'titulo', x: texto }.
+const primeiroNome = (s) => String(s || '').trim().split(/\s+/)[0] || ''
+function ultimaAnalise(ctx) {
+  const gs = (ctx.gravacoes || []).filter(g => g.analise).sort((a, b) => String(b.data_chamada || '').localeCompare(String(a.data_chamada || '')))
+  return gs[0]?.analise || null
+}
+export function guiaoSop23(tipo, ctx, cls = {}) {
+  const inv = ctx.investidor || {}
+  const nome = primeiroNome(inv.nome) || '[nome]'
+  const eu = primeiroNome(ctx.tarefa?.funcionario) || '[o seu nome]'
+  const origem = cls.lead_quente || /forms|landing|formul/i.test(inv.origem || '')
+    ? 'vi que preencheu o nosso formulário'
+    : inv.origem ? `recebi o seu contacto através de ${inv.origem}` : 'recebi o seu contacto através de [origem]'
+  const a = ultimaAnalise(ctx)
+  const d = a?.dados_recolhidos || {}
+  const faltava = d.o_que_falta || (Array.isArray(d.dados_em_falta) && d.dados_em_falta[0]) || '[o que faltava]'
+  const G = []
+  const fala = (x) => G.push({ t: 'fala', x })
+  const nota = (x) => G.push({ t: 'nota', x })
+  const titulo = (x) => G.push({ t: 'titulo', x })
+  if (tipo === 'follow_up') {
+    titulo('Recontacto de quem está em Follow Up (SOP 23, 3.5)')
+    nota('Antes de ligar: pontuar à mão o scorecard 4.10 (ver acima). Os critérios em branco são o que se pergunta.')
+    fala(`Olá ${nome}, é o ${eu} da Somnium. Da última vez disse-me que ${faltava}. Isso já mudou?`)
+    nota('Se mudou: qualificar só o que faltava e marcar a discovery no máximo a 48 horas, com o decisor presente.')
+    fala('Com que montante se sentiria confortável num primeiro negócio? Menos de 50 mil, de 50 a 200 mil, de 200 a 300 mil, ou mais de 300 mil?')
+    fala('Esse capital está disponível hoje, ou depende de vender ou resgatar alguma coisa?')
+    fala('Decide sozinho ou há mais alguém na decisão?')
+    fala('Nessa conversa quero perceber o que quer que este capital faça por si e mostrar-lhe as duas formas como trabalhamos com investidores. No fim sai a saber se faz sentido para si, mesmo que não avance connosco. Amanhã às [hora] ou [dia] às [hora]?')
+    nota('Se não mudou:')
+    fala(`Percebo. Volto a ligar-lhe em [mês]; nessa altura já devo ter [ângulo novo: um projeto concluído, um negócio na zona que procura]. Pode ser?`)
+    nota('Registar a temperatura revista (quente 30 dias, intermédio 60, frio 90) e o ângulo da próxima conversa. Não atende: mensagem escrita do Anexo C e nova tentativa por telefone dentro de uma semana.')
+    return G
+  }
+  if (tipo === 'discovery_call') {
+    const objetivo = d.objetivo || '[objetivo]'
+    const motivo = d.motivo_real || '[motivo real]'
+    const desafio = d.desafio || '[desafio]'
+    titulo('Chamada 2 – Discovery com bifurcação (SOP 23, 4.2 a 4.11, 40 min)')
+    nota('Agenda: abertura 2 min · objetivo 5 · porquê 5 · dor 15 · duas formas de trabalhar 5 · montante e confirmação 5 · próximo passo 3. Regra 70/30.')
+    fala('Esta chamada fica gravada para eu não perder nada do que me disser. Pode ser?')
+    fala('Antes de falarmos de negócios ou números, quero perceber bem a sua situação e o que procura, para ver se faz sentido trabalharmos juntos e de que forma. Se não fizer, digo-lhe. Pode ser?')
+    fala('O que quer que este capital faça por si nos próximos 1 a 2 anos? O que teria de acontecer para sentir que valeu a pena?')
+    fala('Porquê agora e não daqui a um ano? O que acontece se o dinheiro ficar onde está mais um ano?')
+    nota('Aprofundar com "E isso é importante porquê?" até chegar a um motivo específico.')
+    fala('Onde está esse capital hoje e quanto lhe rende? O que já tentou para o pôr a render? O que correu mal?')
+    fala('O que o impede hoje de investir mais em imobiliário? Qual foi o último negócio que deixou passar, e porquê?')
+    fala(`Concorda que, se resolvêssemos ${desafio}, ficava mais perto de ${objetivo}?`)
+    fala('Há duas formas de trabalhar connosco. Numa, o imóvel fica em seu nome: nós encontramos e negociamos o negócio, passamos-lho, e é o senhor que controla a obra e a venda. Na outra, não se envolve na operação: entra com capital num projeto concreto e nós tratamos de tudo. Pelo que me contou, qual das duas encaixa melhor consigo?')
+    fala('Quantas horas por mês quer dedicar a isto? Já acompanhou alguma obra? Tem empreiteiro de confiança?')
+    nota('Só via ativa:')
+    fala('Que tipologia e que zona? Até que valor de compra mais obra? Qual é a margem mínima abaixo da qual não lhe interessa? Se aparecer um negócio dentro disto, decide em 48 horas, numa semana, ou mais?')
+    nota('Via passiva:')
+    fala('Os nossos projetos para investidores que entram só com capital começam nos 50 mil euros. Isto está dentro do que pensou, ou fora?')
+    nota('Via ativa:')
+    fala('Os negócios que passamos a investidores com o imóvel em nome próprio pedem a partir de 200 mil euros, entre compra e obra. Isto está dentro do que pensou, ou fora?')
+    fala(`Deixe-me confirmar que percebi bem: quer ${objetivo}, porque ${motivo}, e o que o trava hoje é ${desafio}. A via que faz mais sentido é [ativa/passiva]. Há algo importante que me esteja a escapar?`)
+    nota('Pontuar o scorecard antes de desligar. Só classe A ou B (9 a 12 pontos) marca já a apresentação.')
+    fala('Na próxima conversa mostro-lhe [o negócio / o projeto] com os números. Pode ser [dia] às [hora]?')
+    nota('Via passiva:')
+    fala('Ainda hoje envio-lhe um acordo de confidencialidade, para lhe poder mostrar o projeto com todos os números.')
+    nota('Sem projeto ou negócio disponível: Investidor Qualificado em Carteira com data de reativação. C: Follow Up com o que falta. D: Inactivo com motivo.')
+    return G
+  }
+  titulo('Chamada 1 – Qualificação (SOP 23, 3.6 e 3.7, 5 a 10 min)')
+  fala(`Bom dia, ${nome}, fala o ${eu} da Somnium Properties. ${origem.charAt(0).toUpperCase()}${origem.slice(1)}. Ligo para lhe fazer três ou quatro perguntas rápidas e ver se faz sentido marcarmos uma conversa com calma. Pode ser agora?`)
+  nota('Se não puder: "Sem problema. Ligo-lhe amanhã às [hora] ou prefere [dia] às [hora]?" Nunca abrir com "tem 2 minutos?".')
+  fala('Esta chamada fica gravada para eu não perder nada do que me disser. Pode ser?')
+  fala('Já investiu em imobiliário? Nunca, 1 a 2 imóveis, 3 ou mais?')
+  fala('Com que montante se sentiria confortável num primeiro negócio? Menos de 50 mil, de 50 a 200 mil, de 200 a 300 mil, ou mais de 300 mil?')
+  fala('Esse capital está disponível hoje, ou depende de vender ou resgatar alguma coisa?')
+  fala('Decide sozinho ou há mais alguém na decisão?')
+  nota('Se houver outro decisor, tem de estar na discovery. Abaixo de 50 mil, capital dependente de venda sem data, "só a ver como funciona" ou recusa em trazer o decisor: Follow Up com temperatura e data.')
+  fala('Nessa conversa quero perceber o que quer que este capital faça por si e mostrar-lhe as duas formas como trabalhamos com investidores. No fim sai a saber se faz sentido para si, mesmo que não avance connosco. Amanhã às [hora] ou [dia] às [hora]?')
+  nota('A discovery fica no calendário no máximo a 48 horas, com o decisor presente. Se perguntar quanto rende: os retornos estão no dossiê de cada projeto e mostram-se na apresentação.')
+  return G
+}
+export function linhasGuiao(guiao) {
+  return (Array.isArray(guiao) ? guiao : []).map(g => g.t === 'fala' ? `"${g.x}"` : g.t === 'titulo' ? g.x.toUpperCase() : `[${g.x}]`)
+}
+
 export function montarSecoesBase(ctx, cls, tipoFinal) {
   const inv = ctx.investidor
   const q = quandoDaTarefa(ctx.tarefa)
@@ -386,6 +468,7 @@ export function montarSecoesBase(ctx, cls, tipoFinal) {
     participacoes: ctx.participacoes.map(p => ({ negocio: p.movimento, fase: p.fase, modelo: p.categoria })),
     dados_em_falta: emFalta,
     incoerencias: incoerenciasFicha(inv),
+    guiao: guiaoSop23(tipoFinal, ctx, cls),
   }
 }
 
@@ -561,6 +644,7 @@ export function renderMarkdown(base, conteudo) {
   L.push(perg.length ? perg.map(x => `- ${x}`).join('\n') : 'Ficha completa.')
   if (Array.isArray(c.scorecard_mao) && c.scorecard_mao.length) L.push(`\n## Scorecard à mão (SOP 23, 4.10)\n${linhasScorecardMao(c.scorecard_mao).map(x => `- ${x}`).join('\n')}`)
   L.push(`\n## Objetivo e próximo passo\n${c.objetivo || OBJETIVO_DEFAULT[h.tipo] || OBJETIVO_DEFAULT.cold_call}${c.proximo_passo ? `\n\nPróximo passo: ${c.proximo_passo}` : ''}`)
+  if (Array.isArray(base.guiao) && base.guiao.length) L.push(`\n## Guião da call (SOP 23, Anexo A)\n${linhasGuiao(base.guiao).map(x => `- ${x}`).join('\n')}`)
   const corr = [...(Array.isArray(c.correcoes_crm) ? c.correcoes_crm.map(x => `${x.campo}: ${x.atual ?? '—'} → ${x.correto}${x.fonte ? ` (${x.fonte})` : ''}`) : []),
     ...base.incoerencias.map(x => `${x.campo}: ${x.atual}. ${x.problema}`)]
   L.push(`\n## Correções ao CRM\n${corr.length ? corr.map(x => `- [ ] ${x}`).join('\n') : 'Nenhuma.'}`)

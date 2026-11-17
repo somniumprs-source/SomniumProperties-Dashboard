@@ -35,7 +35,7 @@ import { analyzeReuniao, pedirAnaliseReuniao, aplicarAnaliseReuniao } from './me
 import { estadoIA, emFilaIA, enfileirarIA, jsonDaResposta, pedidosIAPendentes, iniciarIA, concluirIA, falharIA } from './filaIA.js'
 import { aplicarRelatorioSemanal } from './relatorioSemanalAggregator.js'
 import { generateMeetingPDF } from './pdfMeetingReport.js'
-import { generateChamadasInvestidoresPDF } from './pdfChamadasInvestidores.js'
+import { generateChamadasInvestidoresPDF, generateChamadaInvestidorPDF } from './pdfChamadasInvestidores.js'
 import {
   prepararCall, lerPreparacao, preparacoesDoInvestidor, preparacoesSemana, corrigirTipoCall, tipoChamadaSugerido,
   aplicarResumoReuniao, aplicarPreparacao, TIPO_FILA_PREPARACAO, TIPO_FILA_RESUMO,
@@ -50,6 +50,7 @@ import { podeSerApresentado } from '../../supabase/functions/_shared/classeInves
 import {
   ensureInvestidorGravacoesTable, tabelaDaGravacao, sanitizeRegistoInvestidor, relatorioChamadasInvestidores, TIPOS_CHAMADA_INV,
   pedirAnaliseInvestidor, investidorGravacoesPorAnalisar, passoAnaliseInvestidor, falhaAnaliseInvestidor,
+  callsParaGravacao, dadosDaTarefaParaGravacao, concluirTarefaDaGravacao,
   lerSinteseInvestidores, pedirSinteseInvestidores, sintesesInvestidoresPorGerar, passoSinteseInvestidores, falhaSinteseInvestidores,
 } from './chamadasInvestidor.js'
 import { ensureLabels, organizeMessage, organizeBatch, autoOrganize, isConfigured as gmailConfigured } from './gmailSync.js'
@@ -2625,6 +2626,11 @@ router.patch('/preparacao-calls/tarefa/:tarefaId/tipo', semPortalInvestidor, asy
 router.get('/investidores/:id/preparacoes', semPortalInvestidor, async (req, res) => {
   try { res.json(await preparacoesDoInvestidor(pool, req.params.id)) } catch (e) { res.status(500).json({ error: e.message }) }
 })
+// Calls agendadas deste investidor para ligar à gravação (últimos 14 dias até amanhã).
+router.get('/investidores/:id/calls-para-gravacao', semPortalInvestidor, async (req, res) => {
+  try { res.json(await callsParaGravacao(pool, req.params.id)) } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 router.get('/investidores/:id/tipo-chamada-sugerido', semPortalInvestidor, async (req, res) => {
   try { res.json(await tipoChamadaSugerido(pool, req.params.id)) } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -2687,9 +2693,9 @@ router.get('/autopreenchimento/relatorio', semPortalInvestidor, async (req, res)
   try { res.json(await relatorioBackfill(pool)) } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-// ── Chamadas gravadas com investidores (SOP 4) ───────────────
+// ── Chamadas gravadas com investidores (SOP 23) ──────────────
 // Mesmo fluxo das gravacoes dos consultores (bucket "Gravacoes", worker
-// Whisper local), mas avaliadas contra o SOP 4. Logica em chamadasInvestidor.js.
+// Whisper local), mas avaliadas contra o SOP 23. Pode ficar ligada à call agendada (tarefa_id). Logica em chamadasInvestidor.js.
 router.post('/investidores/:id/chamadas', uploadRateLimit, uploadAudio.single('audio'), async (req, res) => {
   try {
     await ensureInvestidorGravacoesTable(pool)
@@ -2706,16 +2712,18 @@ router.post('/investidores/:id/chamadas', uploadRateLimit, uploadAudio.single('a
       .upload(storagePath, req.file.buffer, { contentType: req.file.mimetype || 'application/octet-stream', upsert: true })
     if (upErr) return res.status(500).json({ error: `Storage: ${upErr.message}` })
 
-    const tipo = TIPOS_CHAMADA_INV.includes(req.body?.tipo_chamada) ? req.body.tipo_chamada : 'cold_call'
-    const dataChamada = /^\d{4}-\d{2}-\d{2}$/.test(req.body?.data_chamada || '') ? req.body.data_chamada : new Date().toISOString().slice(0, 10)
+    const daTarefa = await dadosDaTarefaParaGravacao(pool, req.params.id, req.body?.tarefa_id || null)
+    const tipo = daTarefa?.tipo || (TIPOS_CHAMADA_INV.includes(req.body?.tipo_chamada) ? req.body.tipo_chamada : 'cold_call')
+    const dataChamada = daTarefa?.data || (/^\d{4}-\d{2}-\d{2}$/.test(req.body?.data_chamada || '') ? req.body.data_chamada : new Date().toISOString().slice(0, 10))
     const u = await resolveCrmUser(req).catch(() => null)
     const now = new Date().toISOString()
     const { rows: [row] } = await pool.query(
-      `INSERT INTO investidor_gravacoes (id, investidor_id, tipo_chamada, titulo, data_chamada, realizada_por, ficheiro_path, ficheiro_nome, estado, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pendente',$9,$9) RETURNING *`,
-      [id, req.params.id, tipo, `${tipo === 'follow_up' ? 'Follow-up' : 'Cold Call'} ${dataChamada}`, dataChamada,
-       u?.nome || u?.email || null, storagePath, req.file.originalname, now]
+      `INSERT INTO investidor_gravacoes (id, investidor_id, tipo_chamada, titulo, data_chamada, realizada_por, ficheiro_path, ficheiro_nome, estado, created_at, updated_at, tarefa_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pendente',$9,$9,$10) RETURNING *`,
+      [id, req.params.id, tipo, daTarefa?.titulo || `${tipo === 'follow_up' ? 'Recontacto' : tipo === 'discovery' ? 'Discovery' : 'Chamada 1'} ${dataChamada}`, dataChamada,
+       u?.nome || u?.email || null, storagePath, req.file.originalname, now, daTarefa?.tarefa_id || null]
     )
+    if (daTarefa?.tarefa_id) await concluirTarefaDaGravacao(pool, daTarefa.tarefa_id)
     res.json(row)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -2792,6 +2800,21 @@ router.get('/chamadas-investidores/sintese', async (req, res) => {
 router.post('/chamadas-investidores/sintese', async (req, res) => {
   try { res.json(await pedirSinteseInvestidores(pool, periodoChamadas(req))) }
   catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Relatório PDF de uma chamada (análise SOP 23).
+router.get('/chamadas-investidores/:id/relatorio-pdf', async (req, res) => {
+  try {
+    await ensureInvestidorGravacoesTable(pool)
+    const { rows: [g] } = await pool.query('SELECT * FROM investidor_gravacoes WHERE id = $1', [req.params.id])
+    if (!g) return res.status(404).json({ error: 'Chamada nao encontrada' })
+    if (!g.analise) return res.status(400).json({ error: 'Chamada ainda sem analise' })
+    const { rows: [inv] } = await pool.query('SELECT * FROM investidores WHERE id = $1', [g.investidor_id])
+    const nome = String(inv?.nome || 'Investidor').normalize('NFD').replace(/[^A-Za-z0-9]+/g, '_')
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', pdfDisposition(req, `Relatorio_Chamada_${nome}_${String(g.data_chamada).slice(0, 10)}.pdf`))
+    generateChamadaInvestidorPDF(g, inv || {}).pipe(res)
+  } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 router.get('/chamadas-investidores/relatorio/pdf', async (req, res) => {
@@ -4185,7 +4208,7 @@ router.get('/lookup/consultores', (req, res) => {
 // ── Automações PostgreSQL ──────────────────────────────────────
 router.post('/automation/score-investidores', async (req, res) => {
   // Desactivado (SOP 23, 4.10): não recalcula nem a classe nem a pontuação antiga.
-  res.json({ ok: true, atualizados: 0, detalhes: [], desactivado: 'A classificação de investidores só muda pelo scorecard da discovery validado pelo outro CEO (SOP 23, 4.10)' })
+  res.json({ ok: true, atualizados: 0, detalhes: [], desactivado: 'A classificação de investidores é automática: sai do scorecard de qualificação de cada contacto analisado (SOP 23, 4.10)' })
 })
 
 // automation/calc-roi removido — usava uma fórmula naive alternativa à da
@@ -4536,7 +4559,7 @@ router.get('/scorecards/:investidorId', async (req, res) => {
 router.post('/scorecards', async (req, res) => {
   // Scorecard antigo de 5 critérios (0–100): substituído pelo da discovery
   // (POST /investidores/:id/scorecard-discovery). Histórico fica só de leitura.
-  res.status(410).json({ error: 'A classificação de investidores só muda pelo scorecard da discovery validado pelo outro CEO (SOP 23, 4.10). Usa o scorecard da discovery no separador Avaliação.' })
+  res.status(410).json({ error: 'A classificação de investidores é automática: sai do scorecard de qualificação de cada contacto analisado (SOP 23, 4.10). Usa o scorecard da discovery no separador Avaliação.' })
 })
 
 // GET histórico de classificação de um investidor
@@ -4578,7 +4601,7 @@ router.post('/automation/reclassificar-investidores', async (req, res) => {
       const rules = FOLLOWUP_INVESTIDOR_RULES[inv.classificacao] || FOLLOWUP_INVESTIDOR_RULES.C
       if (diasSem >= rules.dias_intermedio) alertas.follow_up_urgente.push({ nome: inv.nome, classificacao: inv.classificacao, diasSem, proximoLimite: rules.dias_frio })
     }
-    res.json({ ok: true, atualizados: 0, detalhes: [], alertas, desactivado: 'A classificação de investidores só muda pelo scorecard da discovery validado pelo outro CEO (SOP 23, 4.10)' })
+    res.json({ ok: true, atualizados: 0, detalhes: [], alertas, desactivado: 'A classificação de investidores é automática: sai do scorecard de qualificação de cada contacto analisado (SOP 23, 4.10)' })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 

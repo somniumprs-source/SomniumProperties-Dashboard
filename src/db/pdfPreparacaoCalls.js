@@ -75,6 +75,7 @@ export function linhasCartao(p) {
   if (perg.length) L.push(['Perguntas', perg.join('\n')])
   if (Array.isArray(c.scorecard_mao) && c.scorecard_mao.length) L.push(['Scorecard à mão (4.10)', linhasScorecardMao(c.scorecard_mao).join('\n')])
   L.push(['Objetivo', [c.objetivo, c.proximo_passo ? `Próximo passo: ${c.proximo_passo}` : null].filter(Boolean).join('\n') || (p.tipo_final === 'discovery_call' ? 'Discovery: via definida, classe A–D proposta e apresentação marcada.' : p.tipo_final === 'follow_up' ? 'Recontacto: ver se o que faltava mudou e marcar a discovery.' : 'Chamada 1: marcar a discovery no máximo a 48 horas, com o decisor.')])
+  if (Array.isArray(b.guiao) && b.guiao.length) L.push(['Guião (Anexo A)', b.guiao.map(g => g.t === 'fala' ? `"${g.x}"` : g.t === 'titulo' ? g.x : `[${g.x}]`).join('\n')])
   if (!p.conteudo_json) L.push(['Nota', p.estado === 'erro' ? 'A IA falhou: só dados do CRM. Usar "Regenerar" na app.' : 'Texto ainda em geração: só dados do CRM.'])
   return L
 }

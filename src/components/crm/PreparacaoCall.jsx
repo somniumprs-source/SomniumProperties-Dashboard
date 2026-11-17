@@ -188,6 +188,20 @@ export function PreparacaoDocumento({ prep, onAtualizar, compacto = false }) {
           {c?.objetivo || (prep.tipo_final === 'discovery_call' ? 'Discovery: via definida, classe A–D proposta e apresentação marcada.' : prep.tipo_final === 'follow_up' ? 'Recontacto: ver se o que faltava mudou e marcar a discovery.' : 'Chamada 1: marcar a discovery no máximo a 48 horas, com o decisor.')}
           {c?.proximo_passo && <span className="block mt-1 text-ink-muted">Próximo passo: {c.proximo_passo}</span>}
         </Linha>
+        {Array.isArray(b.guiao) && b.guiao.length > 0 && (
+          <Linha rotulo="Guião (SOP 23, Anexo A)">
+            <details open={!compacto}>
+              <summary className="cursor-pointer text-xs text-ink-muted select-none">Mostrar / esconder o guião completo</summary>
+              <div className="mt-2 space-y-1.5">
+                {b.guiao.map((g, i) => g.t === 'titulo'
+                  ? <p key={i} className="text-xs font-semibold text-ink uppercase tracking-wide">{g.x}</p>
+                  : g.t === 'nota'
+                    ? <p key={i} className="text-xs text-ink-muted italic">[{g.x}]</p>
+                    : <p key={i} className="text-sm text-ink">"{g.x}"</p>)}
+              </div>
+            </details>
+          </Linha>
+        )}
         {correcoes.length > 0 && <Linha rotulo="Correções ao CRM"><Lista itens={correcoes} /></Linha>}
       </div>
 

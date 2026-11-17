@@ -1,9 +1,10 @@
 /**
- * Classificação A–D de investidores pelo scorecard da discovery call
- * (SOP 4 e SOP 23 v2.1, secções 4.10 e 4.11): gravar o scorecard, propor a
- * classe (à mão ou automaticamente pela análise da call), validação pelo outro
- * CEO em 24 horas e alertas (por validar, apresentação a desmarcar). A regra
- * (limiares, critérios, consequências) vive só em ./classeInvestidor.js.
+ * Classificação A–D de investidores pelo scorecard de qualificação (SOP 23,
+ * 4.10). Desde 17/11/2026 a classe é AUTOMÁTICA: cada contacto analisado (call
+ * gravada ou reunião) atualiza os critérios com prova; com os 6 critérios a
+ * classe fica definida logo, sem validação pelo outro CEO, e pode mudar no
+ * contacto seguinte. Cada classificação fica em classificacao_historico.
+ * A classe não mexe na etapa do kanban. A regra vive só em ./classeInvestidor.js.
  *
  * Gémeo Deno em supabase/functions/_shared/classificacaoInvestidor.ts — o código é o mesmo, só
  * muda o import. Portar qualquer alteração para os dois.
@@ -12,7 +13,7 @@
 import {
   CRITERIOS_DISCOVERY, CHAVES_DISCOVERY, calcularClasseDiscovery, validarDecisao, validacaoAtrasada,
   temApresentacaoMarcada, precisaDesmarcarApresentacao, ehTarefaApresentacao,
-  STATUS_APOS_VALIDACAO, STATUS_CLASSE_PROPOSTA, ORIGEM_DISCOVERY, PRAZO_VALIDACAO_HORAS, ErroClassificacao,
+  STATUS_APOS_VALIDACAO, STATUS_CLASSE_PROPOSTA, ORIGEM_DISCOVERY, PRAZO_VALIDACAO_HORAS, ErroClassificacao, fundirScorecard,
 } from "../../supabase/functions/_shared/classeInvestidor.js"
 
 const agora = () => new Date().toISOString()
@@ -95,29 +96,85 @@ export async function lerClassificacaoInvestidor(pool, investidorId) {
     tarefas_apresentacao: tarefas.map((t) => ({ id: t.id, tarefa: t.tarefa, status: t.status })),
     desmarcar_apresentacao: precisaDesmarcarApresentacao(inv, tarefas),
     ceos: await nomesCEO(pool),
+    automatica: true,
+    historico: (await pool.query(
+      `SELECT classificacao_anterior, classificacao_nova, pontuacao_nova, motivo, tipo, autor, created_at FROM classificacao_historico
+        WHERE investidor_id = $1 ORDER BY created_at DESC LIMIT 50`, [investidorId]).catch(() => ({ rows: [] }))).rows,
   }
 }
 
-// Grava a proposta (comum ao manual e à IA). scorecard já montado.
-async function gravarProposta(pool, inv, scorecard, calc, { por, origem, motivoHistorico }) {
+// Aplica o scorecard ao investidor. Com os 6 critérios a classe fica definida
+// (automática, sem validação); incompleto, a classe anterior mantém-se.
+async function aplicarScorecard(pool, inv, scorecard, { por, origem, descricao, fonteTipo, fonteId }) {
+  const calc = calcularClasseDiscovery(scorecard)
   const now = agora()
+  if (!calc.classe) {
+    await pool.query(`UPDATE investidores SET scorecard_discovery = $2, pontuacao_discovery = NULL, updated_at = $3 WHERE id = $1`,
+      [inv.id, JSON.stringify(scorecard), now])
+    return { completo: false, em_falta: calc.em_falta, total: null, classe: inv.classificacao || null, classe_anterior: inv.classificacao || null }
+  }
   await pool.query(
-    `UPDATE investidores SET scorecard_discovery = $2, pontuacao_discovery = $3, classificacao_proposta = $4,
-       classificacao_proposta_por = $5, classificacao_proposta_em = $6, classificacao_proposta_origem = $7,
-       classificacao_estado = 'proposta', classificacao_validada_por = NULL, classificacao_validada_em = NULL,
-       classificacao_alteracao_motivo = NULL, status = $8, updated_at = $6 WHERE id = $1`,
-    [inv.id, JSON.stringify(scorecard), calc.total, calc.classe, por, now, origem, STATUS_CLASSE_PROPOSTA])
+    `UPDATE investidores SET scorecard_discovery = $2, pontuacao_discovery = $3, classificacao = $4, classificacao_origem = $5,
+       classificacao_estado = 'validada', classificacao_definida_em = $6,
+       classificacao_proposta = $4, classificacao_proposta_por = $7, classificacao_proposta_em = $6, classificacao_proposta_origem = $8,
+       classificacao_validada_por = $9, classificacao_validada_em = $6, classificacao_alteracao_motivo = NULL, updated_at = $6
+     WHERE id = $1`,
+    [inv.id, JSON.stringify(scorecard), calc.total, calc.classe, ORIGEM_DISCOVERY, now, por || null, origem === 'manual' ? 'manual' : 'ia',
+      origem === 'manual' ? `Manual (${por || 'utilizador'})` : 'Automática (IA)'])
+  const antes = inv.classificacao || null
   await pool.query(
     `INSERT INTO classificacao_historico (id, investidor_id, classificacao_anterior, classificacao_nova, pontuacao_anterior, pontuacao_nova, motivo, tipo, autor, created_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-    [crypto.randomUUID(), inv.id, inv.classificacao || null, calc.classe, inv.pontuacao_discovery ?? null, calc.total,
-      motivoHistorico, 'discovery_proposta', por, now])
+    [crypto.randomUUID(), inv.id, antes, calc.classe, inv.pontuacao_discovery ?? null, calc.total,
+      `${descricao || 'Scorecard'}: ${calc.total}/12, classe ${calc.classe}${antes && antes !== calc.classe ? ` (era ${antes})` : ''}${fonteTipo ? ` [${fonteTipo}${fonteId ? `:${fonteId}` : ''}]` : ''}`,
+      origem === 'manual' ? 'scorecard_manual' : 'automatica', por || (origem === 'manual' ? 'utilizador' : 'IA'), now])
+  const tarefas = (await tarefasApresentacao(pool, [inv]))[inv.id] || []
+  const depois = { ...inv, classificacao: calc.classe, classificacao_estado: 'validada', classificacao_origem: ORIGEM_DISCOVERY }
+  return {
+    completo: true, total: calc.total, classe: calc.classe, classe_anterior: antes, em_falta: [],
+    alerta_apresentacao: precisaDesmarcarApresentacao(depois, tarefas) ? `Apresentação marcada com classe ${calc.classe}: desmarcar (SOP 23, 4.11)` : null,
+  }
 }
 
 /**
- * Grava o scorecard à mão. body: { notas: { capital: 0..2|null, ... }, observacoes? }
- * Com os 6 critérios: classe proposta por quem gravou, status Pendente de
- * Aprovação. A classe definitiva só muda na validação pelo outro CEO.
+ * Classificação automática depois de cada contacto analisado.
+ * notas: { capital: { nota, evidencia, minuto } | null, ... } (só com prova deste contacto).
+ * fonte: { tipo: 'gravacao'|'reuniao', id, data: 'YYYY-MM-DD', descricao, conduzidaPor }.
+ */
+export async function classificarAutomaticamente(pool, investidorId, notas, fonte = {}) {
+  try {
+    const { rows: [inv] } = await pool.query('SELECT * FROM investidores WHERE id = $1', [investidorId])
+    if (!inv || !temColunas(inv)) return { aplicado: false, motivo: 'migracao' }
+    const anterior = json(inv.scorecard_discovery) || {}
+    const { scorecard, alterados } = fundirScorecard(anterior, notas || {}, { data: fonte.data, tipo: fonte.tipo, id: fonte.id, descricao: fonte.descricao })
+    if (!alterados.length && json(inv.scorecard_discovery)) {
+      // Nada novo: a classe mantém-se, mas regista-se no histórico que este contacto a confirmou (com os 6 critérios).
+      const calc = calcularClasseDiscovery(scorecard)
+      if (calc.classe && fonte.descricao) {
+        await pool.query(
+          `INSERT INTO classificacao_historico (id, investidor_id, classificacao_anterior, classificacao_nova, pontuacao_anterior, pontuacao_nova, motivo, tipo, autor, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,'automatica','IA',$8)`,
+          [crypto.randomUUID(), inv.id, inv.classificacao || null, calc.classe, inv.pontuacao_discovery ?? null, calc.total,
+            `${fonte.descricao}: sem prova nova, mantém ${calc.total}/12, classe ${calc.classe}`, agora()])
+      }
+      return { aplicado: !!calc.classe, classe: calc.classe, total: calc.total, alterados: [] }
+    }
+    const meta = { ...scorecard, origem: 'ia', preenchido_por: fonte.descricao ? `IA (${fonte.descricao})` : 'IA', preenchido_em: agora(),
+      ultima_fonte: { tipo: fonte.tipo || null, id: fonte.id || null, data: fonte.data || null, conduzida_por: fonte.conduzidaPor || null } }
+    const r = await aplicarScorecard(pool, inv, meta, { por: fonte.conduzidaPor || null, origem: 'ia', descricao: fonte.descricao, fonteTipo: fonte.tipo, fonteId: fonte.id })
+    return { aplicado: r.completo, classe: r.classe, total: r.total, em_falta: r.em_falta, alterados, alerta_apresentacao: r.alerta_apresentacao || null }
+  } catch (e) { throw traduzErro(e) }
+}
+
+// Compatibilidade: a análise das gravações chamava esta função.
+export async function proporClassificacaoPelaIA(pool, gravacao, notasIA) {
+  const data = String(gravacao.data_chamada || gravacao.created_at || '').slice(0, 10)
+  return classificarAutomaticamente(pool, gravacao.investidor_id, notasIA, { tipo: 'gravacao', id: gravacao.id, data, descricao: `Call de ${data}`, conduzidaPor: gravacao.realizada_por })
+}
+
+/**
+ * Scorecard gravado à mão. body: { notas: { capital: 0..2|null, ... }, observacoes? }
+ * Com os 6 critérios a classe fica definida logo (sem validação).
  */
 export async function guardarScorecardDiscovery(pool, investidorId, body, user) {
   try {
@@ -129,14 +186,14 @@ export async function guardarScorecardDiscovery(pool, investidorId, body, user) 
     const anterior = json(inv.scorecard_discovery) || {}
     const autor = autorDe(user)
     const now = agora()
+    const hoje = now.slice(0, 10)
     const scorecard = { observacoes: String(body?.observacoes || '').trim() || null, preenchido_por: autor, preenchido_em: now, origem: 'manual' }
     for (const k of CHAVES_DISCOVERY) {
       const n = calc.notas[k]
-      const s = sugestoes[k]
       const ant = anterior[k]
-      if (s && s.nota === n) scorecard[k] = { nota: n, origem: 'ia_confirmada', evidencia: s.evidencia || null, minuto: s.minuto || null }
-      else if (ant && ant.nota === n && ant.origem && ant.origem !== 'manual') scorecard[k] = { ...ant } // nota da IA mantida
-      else scorecard[k] = { nota: n, origem: 'manual' }
+      if (n === null) continue
+      if (ant && ant.nota === n) scorecard[k] = { ...ant }
+      else scorecard[k] = { nota: n, origem: 'manual', data: hoje, fonte: `Manual (${autor || 'utilizador'})` }
     }
     for (const k of CHAVES_DISCOVERY) {
       const s = sugestoes[k]
@@ -144,62 +201,13 @@ export async function guardarScorecardDiscovery(pool, investidorId, body, user) 
       await pool.query(`UPDATE investidor_campos_ia SET estado = $2, decidido_por = $3, decidido_em = $4 WHERE id = $1`,
         [s.id, s.nota === calc.notas[k] ? 'aceite' : 'rejeitado', autor || 'utilizador', now])
     }
-
-    if (!calc.classe) {
-      // Incompleto: sem classe. Uma proposta pendente deixa de valer.
-      await pool.query(
-        `UPDATE investidores SET scorecard_discovery = $2, pontuacao_discovery = NULL,
-           classificacao_proposta = CASE WHEN classificacao_estado = 'proposta' THEN NULL ELSE classificacao_proposta END,
-           classificacao_proposta_por = CASE WHEN classificacao_estado = 'proposta' THEN NULL ELSE classificacao_proposta_por END,
-           classificacao_proposta_em = CASE WHEN classificacao_estado = 'proposta' THEN NULL ELSE classificacao_proposta_em END,
-           classificacao_estado = CASE WHEN classificacao_estado = 'proposta' THEN NULL ELSE classificacao_estado END,
-           updated_at = $3 WHERE id = $1`,
-        [investidorId, JSON.stringify(scorecard), now])
-      return { ok: true, completo: false, em_falta: calc.em_falta, total: null, classe_proposta: null }
-    }
-
-    await gravarProposta(pool, inv, scorecard, calc, {
-      por: autor, origem: 'manual',
-      motivoHistorico: `Proposta por ${autor || 'utilizador'} pelo scorecard da discovery (${calc.total}/12), por validar pelo outro CEO`,
-    })
-    return { ok: true, completo: true, total: calc.total, classe_proposta: calc.classe, status: STATUS_CLASSE_PROPOSTA }
+    const r = await aplicarScorecard(pool, inv, scorecard, { por: autor, origem: 'manual', descricao: `Scorecard à mão por ${autor || 'utilizador'}` })
+    return { ok: true, completo: r.completo, em_falta: r.em_falta, total: r.total, classe: r.completo ? r.classe : null, classe_proposta: r.completo ? r.classe : null, alerta_apresentacao: r.alerta_apresentacao || null }
   } catch (e) { throw traduzErro(e) }
 }
 
 /**
- * Proposta automática a partir da análise de uma discovery call gravada.
- * notasIA: { capital: { nota, evidencia, minuto }, ... }. Só propõe com os 6
- * critérios e se ninguém gravou o scorecard à mão depois desta call; nesse
- * caso devolve { aplicado: false } e as notas ficam como sugestões.
- * Quem propõe = quem conduziu a call (realizada_por), para o outro CEO validar.
- */
-export async function proporClassificacaoPelaIA(pool, gravacao, notasIA) {
-  try {
-    const { rows: [inv] } = await pool.query('SELECT * FROM investidores WHERE id = $1', [gravacao.investidor_id])
-    if (!inv || !temColunas(inv)) return { aplicado: false, motivo: 'migracao' }
-    let calc
-    try { calc = calcularClasseDiscovery(notasIA || {}) } catch { return { aplicado: false, motivo: 'notas_invalidas' } }
-    if (!calc.classe) return { aplicado: false, motivo: 'incompleto' }
-    const dataCall = String(gravacao.data_chamada || gravacao.created_at || '').slice(0, 10)
-    const anterior = json(inv.scorecard_discovery)
-    if (anterior?.origem === 'manual' && String(anterior.preenchido_em || '').slice(0, 10) >= dataCall) return { aplicado: false, motivo: 'manual_mais_recente' }
-    const now = agora()
-    const por = gravacao.realizada_por || null
-    const scorecard = { observacoes: null, preenchido_por: `IA (discovery de ${dataCall})`, preenchido_em: now, origem: 'ia', gravacao_id: gravacao.id, conduzida_por: por }
-    for (const k of CHAVES_DISCOVERY) {
-      const s = notasIA[k] || {}
-      scorecard[k] = { nota: calc.notas[k], origem: 'ia', evidencia: s.evidencia || null, minuto: s.minuto || null }
-    }
-    await gravarProposta(pool, inv, scorecard, calc, {
-      por, origem: 'ia',
-      motivoHistorico: `Proposta automática pela análise da discovery de ${dataCall}${por ? ` conduzida por ${por}` : ''} (${calc.total}/12), por validar pelo outro CEO`,
-    })
-    return { aplicado: true, classe: calc.classe, total: calc.total }
-  } catch (e) { throw traduzErro(e) }
-}
-
-/**
- * Validação pelo outro CEO. body: { classe?, motivo?, follow_up_dias?, motivo_inactivo? }
+ * Validação pelo outro CEO (desativada na app desde 17/11/2026: a classe é automática). body: { classe?, motivo?, follow_up_dias?, motivo_inactivo? }
  * Basta uma validação, de um CEO diferente de quem propôs.
  */
 export async function validarClassificacaoInvestidor(pool, investidorId, body, user) {

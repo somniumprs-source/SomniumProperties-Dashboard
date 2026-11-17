@@ -325,7 +325,7 @@ async function main() {
   for (const g of sop2 || []) await passoUnico(`/crm/gravacoes/${g.id}/analise-sop2`, `Analise SOP 2 (consultor): gravacao ${g.id}`)
   let investidores = []
   try { investidores = await api('/crm/gravacoes/investidores/por-analisar') } catch (e) { err(`Falha a obter analises de investidores: ${e.message}`) }
-  for (const g of investidores || []) await passoUnico(`/crm/gravacoes/${g.id}/analise-investidor`, `Analise SOP 4 (investidor): gravacao ${g.id} (${g.tipo_chamada})`)
+  for (const g of investidores || []) await passoUnico(`/crm/gravacoes/${g.id}/analise-investidor`, `Analise SOP 23 (investidor): gravacao ${g.id} (${g.tipo_chamada})`)
   let sinteses = []
   try { sinteses = await api('/crm/gravacoes/sinteses-investidores/por-gerar') } catch (e) { err(`Falha a obter sinteses: ${e.message}`) }
   for (const s of sinteses || []) await passoUnico(`/crm/gravacoes/sinteses-investidores/${encodeURIComponent(s.id)}/passo`, `Sintese das chamadas a investidores ${s.desde} a ${s.ate}`)
