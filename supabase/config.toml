@@ -7,6 +7,8 @@ project_id = "mjgusjuougzoeiyavsor"
 
 [functions.crm]
 verify_jwt = true
+# Prompts editáveis sem mexer em código (preparação de chamadas, SOP 23).
+static_files = ["./functions/crm/prompts/*.md"]
 
 [functions.dashboard]
 verify_jwt = true
