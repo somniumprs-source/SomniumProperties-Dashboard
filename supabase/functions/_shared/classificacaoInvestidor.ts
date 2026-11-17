@@ -116,9 +116,9 @@ async function aplicarScorecard(pool, inv, scorecard, { por, origem, descricao, 
   }
   await pool.query(
     `UPDATE investidores SET scorecard_discovery = $2, pontuacao_discovery = $3, classificacao = $4, classificacao_origem = $5,
-       classificacao_estado = 'validada', classificacao_definida_em = $6,
-       classificacao_proposta = $4, classificacao_proposta_por = $7, classificacao_proposta_em = $6, classificacao_proposta_origem = $8,
-       classificacao_validada_por = $9, classificacao_validada_em = $6, classificacao_alteracao_motivo = NULL, updated_at = $6
+       classificacao_estado = 'validada', classificacao_definida_em = $6::timestamptz,
+       classificacao_proposta = $4, classificacao_proposta_por = $7, classificacao_proposta_em = $6::timestamptz, classificacao_proposta_origem = $8,
+       classificacao_validada_por = $9, classificacao_validada_em = $6::timestamptz, classificacao_alteracao_motivo = NULL, updated_at = $6::text
      WHERE id = $1`,
     [inv.id, JSON.stringify(scorecard), calc.total, calc.classe, ORIGEM_DISCOVERY, now, por || null, origem === 'manual' ? 'manual' : 'ia',
       origem === 'manual' ? `Manual (${por || 'utilizador'})` : 'Automática (IA)'])
@@ -266,4 +266,40 @@ export async function alertasClassificacao(pool) {
     if (traduzErro(e) instanceof ErroMigracao) return { classesPorValidar24h: 0, apresentacoesADesmarcar: 0, porValidar: [], desmarcar: [] }
     throw e
   }
+}
+
+// Reclassificação sem IA: volta a aplicar, por ordem cronológica, as notas do
+// scorecard já guardadas nas análises das calls e das reuniões. Recomeça o
+// scorecard dos investidores sem scorecard manual (o manual mantém-se e entra
+// como ponto de partida). Útil depois de mudar a regra ou corrigir um erro.
+export async function reclassificarPelasAnalises(pool, { investidorId = null } = {}) {
+  const { rows: contactos } = await pool.query(
+    `SELECT 'gravacao' AS tipo, g.id, g.investidor_id, left(COALESCE(g.data_chamada, g.created_at), 10) AS data, g.tipo_chamada AS sub,
+            g.realizada_por AS por, g.analise->'scorecard_discovery' AS sc
+       FROM investidor_gravacoes g WHERE g.analise ? 'scorecard_discovery' AND ($1::text IS NULL OR g.investidor_id = $1)
+     UNION ALL
+     SELECT 'reuniao', r.id, r.entidade_id, left(r.data, 10), NULL, r.organizador, r.analise_completa::jsonb->'scorecard_discovery'
+       FROM reunioes r WHERE r.entidade_tipo = 'investidores' AND r.entidade_id IS NOT NULL
+        AND r.analise_completa IS NOT NULL AND r.analise_completa::jsonb ? 'scorecard_discovery' AND ($1::text IS NULL OR r.entidade_id = $1)
+     ORDER BY 3, 4, 1`, [investidorId])
+  const porInv = {}
+  for (const c of contactos) (porInv[c.investidor_id] ||= []).push(c)
+  const res = { investidores: 0, contactos: contactos.length, classificados: 0, resultado: [] }
+  for (const [invId, lista] of Object.entries(porInv)) {
+    const { rows: [inv] } = await pool.query('SELECT scorecard_discovery FROM investidores WHERE id = $1', [invId])
+    const atual = json(inv?.scorecard_discovery)
+    if (atual?.origem !== 'manual') {
+      await pool.query(`UPDATE investidores SET scorecard_discovery = NULL, pontuacao_discovery = NULL WHERE id = $1`, [invId])
+      await pool.query(`DELETE FROM classificacao_historico WHERE investidor_id = $1 AND tipo = 'automatica'`, [invId])
+    }
+    res.investidores++
+    let ultimo = null
+    for (const c of lista) {
+      const rotulo = c.tipo === 'reuniao' ? 'Reunião' : ({ cold_call: 'Chamada 1', follow_up: 'Recontacto', discovery: 'Discovery' }[c.sub] || 'Call')
+      ultimo = await classificarAutomaticamente(pool, invId, c.sc || {}, { tipo: c.tipo, id: c.id, data: c.data, descricao: `${rotulo} de ${c.data}`, conduzidaPor: c.por })
+    }
+    if (ultimo?.aplicado) res.classificados++
+    res.resultado.push({ investidor_id: invId, contactos: lista.length, classe: ultimo?.classe || null, total: ultimo?.total ?? null, em_falta: ultimo?.em_falta || [] })
+  }
+  return res
 }

@@ -6,6 +6,7 @@ import pool from "../_shared/pg.ts";
 import { sincronizarPreparacoes, regenerarPreparacoes } from "../_shared/preparacaoCall.ts";
 import { pedirBackfill } from "../_shared/autopreenchimento.ts";
 import { pedirAnaliseReuniao } from "../_shared/meetingAnalysis.ts";
+import { reclassificarPelasAnalises } from "../_shared/classificacaoInvestidor.ts";
 
 const INTERNAL_API_KEY = Deno.env.get("INTERNAL_API_KEY") || "";
 
@@ -23,6 +24,11 @@ Deno.serve(async (req) => {
     const modo = url.searchParams.get("modo") || "backfill";
     const so = url.searchParams.get("so") || null;
     try { return Response.json({ ok: true, fn: "cron-preparacao-calls", backfill: await pedirBackfill(pool, { modo, so }) }); }
+    catch (e) { return Response.json({ ok: false, error: (e as Error).message }, { status: 500 }); }
+  }
+  // Reclassificar sem IA, pelas notas já guardadas nas análises: ?reclassificar=investidores[&id=<investidor>]
+  if (url.searchParams.get("reclassificar") === "investidores") {
+    try { return Response.json({ ok: true, fn: "cron-preparacao-calls", reclassificar: await reclassificarPelasAnalises(pool, { investidorId: url.searchParams.get("id") || null }) }); }
     catch (e) { return Response.json({ ok: false, error: (e as Error).message }, { status: 500 }); }
   }
   // Reanalisar pelo SOP 23 as reuniões de investidores com transcrição: ?reanalisar=reunioes
