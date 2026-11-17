@@ -5,6 +5,7 @@
 import pool from "../_shared/pg.ts";
 import { sincronizarPreparacoes, regenerarPreparacoes } from "../_shared/preparacaoCall.ts";
 import { pedirBackfill } from "../_shared/autopreenchimento.ts";
+import { pedirAnaliseReuniao } from "../_shared/meetingAnalysis.ts";
 
 const INTERNAL_API_KEY = Deno.env.get("INTERNAL_API_KEY") || "";
 
@@ -23,6 +24,16 @@ Deno.serve(async (req) => {
     const so = url.searchParams.get("so") || null;
     try { return Response.json({ ok: true, fn: "cron-preparacao-calls", backfill: await pedirBackfill(pool, { modo, so }) }); }
     catch (e) { return Response.json({ ok: false, error: (e as Error).message }, { status: 500 }); }
+  }
+  // Reanalisar pelo SOP 23 as reuniões de investidores com transcrição: ?reanalisar=reunioes
+  if (url.searchParams.get("reanalisar") === "reunioes") {
+    try {
+      const { rows } = await pool.query(
+        `SELECT id FROM reunioes WHERE entidade_tipo = 'investidores' AND entidade_id IS NOT NULL AND length(COALESCE(transcricao, '')) >= 1500 ORDER BY data ASC`);
+      let pedidas = 0; const erros: string[] = [];
+      for (const r of rows) { try { await pedirAnaliseReuniao(r.id); pedidas++; } catch (e) { erros.push(`${r.id}: ${(e as Error).message}`); } }
+      return Response.json({ ok: true, fn: "cron-preparacao-calls", reanalisar: { total: rows.length, pedidas, erros } });
+    } catch (e) { return Response.json({ ok: false, error: (e as Error).message }, { status: 500 }); }
   }
   // Regenerar à força as preparações de um período: ?regenerar=semana&desde=YYYY-MM-DD&ate=YYYY-MM-DD[&tarefas=id1,id2]
   if (url.searchParams.get("regenerar") === "semana") {
