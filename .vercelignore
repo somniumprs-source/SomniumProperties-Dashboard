@@ -17,6 +17,7 @@ supabase/functions/_shared/*
 !supabase/functions/_shared/analiseLocalizacaoIA.js
 !supabase/functions/_shared/estudoMapaOSM.js
 !supabase/functions/_shared/estudoSvg.js
+!supabase/functions/_shared/classeInvestidor.js
 server.js
 docs
 tmp
