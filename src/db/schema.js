@@ -268,6 +268,19 @@ db.exec(`
     status TEXT DEFAULT 'ok'
   );
 
+  -- Preparação de chamada por investidor (SOP 23 v2.1). Em produção: migração 0106.
+  CREATE TABLE IF NOT EXISTS preparacoes_chamada (
+    id TEXT PRIMARY KEY,
+    investidor_id TEXT NOT NULL REFERENCES investidores(id) ON DELETE CASCADE,
+    tipo_chamada TEXT NOT NULL CHECK (tipo_chamada IN ('qualificacao', 'discovery', 'recontacto', 'fora_sop23')),
+    conteudo TEXT, -- markdown
+    alertas TEXT, -- JSON array
+    gerado_em TEXT,
+    gerado_por TEXT,
+    versao_prompt TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_preparacoes_chamada_inv ON preparacoes_chamada(investidor_id, gerado_em);
+
   -- Índices para performance
   CREATE INDEX IF NOT EXISTS idx_imoveis_estado ON imoveis(estado);
   CREATE INDEX IF NOT EXISTS idx_imoveis_zona ON imoveis(zona);
