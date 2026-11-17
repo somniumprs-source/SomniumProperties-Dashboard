@@ -761,6 +761,21 @@ export async function preparacoesSemana(pool, { desde, ate, agendadoPor = null }
   return { periodo: { desde, ate }, filtro: agendadoPor ? 'minhas' : 'todas', preparacoes: lista, mudou_somnium: mudou }
 }
 
+// Regenerar à força as calls abertas entre duas datas (mudança de SOP ou de prompt).
+export async function regenerarPreparacoes(pool, { desde, ate }) {
+  await ensurePreparacaoTables(pool)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(desde)) || !/^\d{4}-\d{2}-\d{2}$/.test(String(ate))) throw new Error('Datas inválidas')
+  const { rows } = await pool.query(
+    `SELECT id FROM tarefas WHERE origem_tipo = 'investidor' AND categoria = ANY($1) AND ${ABERTA}
+       AND left(COALESCE(inicio, data_limite), 10) BETWEEN $2 AND $3`, [Object.keys(CATEGORIAS_CALL_INV), desde, ate])
+  const res = { total: rows.length, pedidas: 0, erros: [] }
+  for (const t of rows) {
+    try { const p = await prepararCall(pool, t.id, { gerar: true, forcar: true }); if (p && ['a_gerar', 'aguarda_resumos'].includes(p.estado)) res.pedidas++ }
+    catch (e) { res.erros.push({ tarefa_id: t.id, erro: e.message }) }
+  }
+  return res
+}
+
 // Correção manual do tipo (nunca mais é recalculado).
 export async function corrigirTipoCall(pool, tarefaId, tipo) {
   await ensurePreparacaoTables(pool)

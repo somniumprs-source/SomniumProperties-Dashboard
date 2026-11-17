@@ -4,7 +4,7 @@
  * (investidor_gravacoes) e das reuniões (reunioes), com prova.
  *
  * Fluxo:
- *   1. a análise SOP 4 de uma gravação termina (chamadasInvestidor) ou a
+ *   1. a análise SOP 23 de uma gravação termina (chamadasInvestidor) ou a
  *      análise de uma reunião é aplicada (meetingAnalysis) => põe na fila IA um
  *      pedido 'extracao_investidor' com a transcrição completa;
  *   2. o Claude no Mac devolve, campo a campo, valor + confiança + citação;
@@ -536,7 +536,7 @@ export async function aplicarRegistoCall(pool, gravacaoId) {
   return res
 }
 
-// Depois da análise SOP 4 de uma gravação: registo + extração.
+// Depois da análise SOP 23 de uma gravação: registo + extração.
 export async function aposAnaliseGravacao(pool, gravacaoId) {
   try { await aplicarRegistoCall(pool, gravacaoId) } catch (e) { console.error('[autopreenchimento] registo:', e.message) }
   try { await pedirExtracao(pool, `gravacao:${gravacaoId}`) } catch (e) { console.error('[autopreenchimento] extração:', e.message) }
@@ -662,14 +662,17 @@ export async function confirmarRegistoGravacao(pool, gravacaoId) {
 }
 
 // ── Backfill (modo só-sugestões) e relatório ─────────────────
-export async function pedirBackfill(pool) {
+// modo 'backfill' (só sugestões, por defeito) ou 'auto' (preenche campos vazios).
+// so: 'gravacoes' | 'reunioes' | null (ambos).
+export async function pedirBackfill(pool, { modo = 'backfill', so = null } = {}) {
   await ensureAutopreenchimento(pool)
-  const { rows: grav } = await pool.query(`SELECT id FROM investidor_gravacoes WHERE estado = 'analisado' AND COALESCE(btrim(transcricao), '') <> ''`)
-  const { rows: reun } = await pool.query(
+  if (!['backfill', 'auto'].includes(modo)) throw new Error('Modo inválido')
+  const { rows: grav } = so === 'reunioes' ? { rows: [] } : await pool.query(`SELECT id FROM investidor_gravacoes WHERE estado = 'analisado' AND COALESCE(btrim(transcricao), '') <> ''`)
+  const { rows: reun } = so === 'gravacoes' ? { rows: [] } : await pool.query(
     `SELECT id FROM reunioes WHERE entidade_tipo = 'investidores' AND entidade_id IS NOT NULL AND length(COALESCE(transcricao, '')) >= 1500`)
   let n = 0
-  for (const g of grav) if (await pedirExtracao(pool, `gravacao:${g.id}`, { modo: 'backfill' })) n++
-  for (const r of reun) if (await pedirExtracao(pool, `reuniao:${r.id}`, { modo: 'backfill' })) n++
+  for (const g of grav) if (await pedirExtracao(pool, `gravacao:${g.id}`, { modo })) n++
+  for (const r of reun) if (await pedirExtracao(pool, `reuniao:${r.id}`, { modo })) n++
   return { pedidos: n, gravacoes: grav.length, reunioes: reun.length }
 }
 

@@ -3,7 +3,7 @@
 // as da véspera (D-1, SOP 10) e do próprio dia se o contexto mudou. O texto é
 // gerado no Mac (fila IA); aqui só se classifica, junta o CRM e põe na fila.
 import pool from "../_shared/pg.ts";
-import { sincronizarPreparacoes } from "../_shared/preparacaoCall.ts";
+import { sincronizarPreparacoes, regenerarPreparacoes } from "../_shared/preparacaoCall.ts";
 import { pedirBackfill } from "../_shared/autopreenchimento.ts";
 
 const INTERNAL_API_KEY = Deno.env.get("INTERNAL_API_KEY") || "";
@@ -16,10 +16,17 @@ Deno.serve(async (req) => {
   if (INTERNAL_API_KEY && req.headers.get("x-api-key") !== INTERNAL_API_KEY) {
     return new Response("forbidden", { status: 403 });
   }
-  // Backfill do autopreenchimento (modo só-sugestões), pedido à mão:
-  // ?backfill=autopreenchimento (mesma chave interna do cron).
+  // Backfill do autopreenchimento, pedido à mão (mesma chave interna do cron):
+  // ?backfill=autopreenchimento[&modo=auto|backfill][&so=gravacoes|reunioes]
   if (url.searchParams.get("backfill") === "autopreenchimento") {
-    try { return Response.json({ ok: true, fn: "cron-preparacao-calls", backfill: await pedirBackfill(pool) }); }
+    const modo = url.searchParams.get("modo") || "backfill";
+    const so = url.searchParams.get("so") || null;
+    try { return Response.json({ ok: true, fn: "cron-preparacao-calls", backfill: await pedirBackfill(pool, { modo, so }) }); }
+    catch (e) { return Response.json({ ok: false, error: (e as Error).message }, { status: 500 }); }
+  }
+  // Regenerar à força as preparações de um período: ?regenerar=semana&desde=YYYY-MM-DD&ate=YYYY-MM-DD
+  if (url.searchParams.get("regenerar") === "semana") {
+    try { return Response.json({ ok: true, fn: "cron-preparacao-calls", regenerar: await regenerarPreparacoes(pool, { desde: url.searchParams.get("desde"), ate: url.searchParams.get("ate") }) }); }
     catch (e) { return Response.json({ ok: false, error: (e as Error).message }, { status: 500 }); }
   }
   // Lease de 10 min (ver migração 0103): o advisory lock através do pooler
