@@ -48,6 +48,7 @@ const ChecklistTab = lazy(() => import('./ChecklistTab.jsx').then(m => ({ defaul
 const VisitasTab = lazy(() => import('./VisitasTab.jsx').then(m => ({ default: m.VisitasTab })))
 const DocumentosInvestidorTab = lazy(() => import('./DocumentosInvestidorTab.jsx').then(m => ({ default: m.DocumentosInvestidorTab })))
 const PreparacaoInvestidorTab = lazy(() => import('./PreparacaoCall.jsx').then(m => ({ default: m.PreparacaoInvestidorTab })))
+const PreparacaoChamada = lazy(() => import('./PreparacaoChamada.jsx').then(m => ({ default: m.PreparacaoChamada })))
 const DadosEmpresaInvestidorTab = lazy(() => import('./DadosEmpresaInvestidorTab.jsx').then(m => ({ default: m.DadosEmpresaInvestidorTab })))
 
 function TabFallback() {
@@ -869,6 +870,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       /* Preparação das calls (SOP 4) */
       ) : type === 'Investidores' && activeTab === 'preparacao' ? (
         <div className="p-4 sm:p-6">
+          <Suspense fallback={null}><div className="mb-6"><PreparacaoChamada investidorId={data.id} investidorNome={data.nome} /></div></Suspense>
           <Suspense fallback={null}><PreparacaoInvestidorTab investidorId={data.id} /></Suspense>
         </div>
 
