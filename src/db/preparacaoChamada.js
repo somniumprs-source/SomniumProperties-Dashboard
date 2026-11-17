@@ -16,7 +16,7 @@ import { enfileirarIA, estadoIA, emFilaIA } from "./filaIA.js"
 import { quandoDaTarefa } from "./preparacaoCall.js"
 import {
   TIPO_FILA, VERSAO_PROMPT, LINHA_FORA_SOP23, TIPOS,
-  montarEntradas, preencherPrompt, limparResposta, validarDocumento, preparacaoValida,
+  montarEntradas, preencherPrompt, limparResposta, validarDocumento, preparacaoValida, tipoChamada, tipoValido,
 } from "../../supabase/functions/_shared/preparacaoChamadaRegras.js"
 
 let _tabela = false
@@ -106,15 +106,29 @@ async function ultimaPreparacao(pool, investidorId) {
   return p || null
 }
 
-// Estado para o painel: última preparação, se ainda serve, e a fila IA.
-export async function lerPreparacaoChamada(pool, investidorId) {
+// Tipo pela etapa, com leituras leves (o painel mostra-o no selector).
+async function tipoCalculadoDe(pool, investidorId) {
+  const { rows: [investidor] } = await pool.query('SELECT status, origem FROM investidores WHERE id = $1', [investidorId])
+  if (!investidor) return null
+  const [i, g, r] = await Promise.all([
+    pool.query(`SELECT canal, resultado FROM investidor_interacoes WHERE investidor_id = $1 AND canal IN ('Chamada', 'Reunião', 'Reuniao')`, [investidorId]).catch(() => vazioQ),
+    pool.query(`SELECT resultado, (COALESCE(btrim(transcricao), '') <> '') AS tem_transcricao FROM investidor_gravacoes WHERE investidor_id = $1`, [investidorId]).catch(() => vazioQ),
+    pool.query(`SELECT 1 FROM reunioes WHERE entidade_tipo = 'investidores' AND entidade_id = $1 LIMIT 1`, [investidorId]).catch(() => vazioQ),
+  ])
+  return tipoChamada({ investidor, interacoes: i.rows, gravacoes: g.rows, reunioes: r.rows })
+}
+
+// Estado para o painel: última preparação (do tipo pedido, se houver), se ainda serve, e a fila IA.
+export async function lerPreparacaoChamada(pool, investidorId, { tipo = null } = {}) {
   await ensurePreparacoesChamada(pool)
-  const [preparacao, ultimo, fila] = await Promise.all([
+  const [preparacao, ultimo, fila, tipoCalculado] = await Promise.all([
     ultimaPreparacao(pool, investidorId), ultimoContactoEm(pool, investidorId), estadoIA(pool, TIPO_FILA, investidorId),
+    tipoCalculadoDe(pool, investidorId),
   ])
   return {
     preparacao,
-    valida: preparacaoValida(preparacao, ultimo),
+    tipo_calculado: tipoCalculado,
+    valida: preparacaoValida(preparacao, ultimo, new Date(), tipo),
     em_fila: emFilaIA(fila),
     erro: fila?.estado === 'erro' ? fila.erro : null,
     pedido_em: fila?.created_at || null,
@@ -130,25 +144,26 @@ async function gravar(pool, { investidorId, tipo, conteudo, alertas, geradoPor }
 }
 
 // Pedido do botão. Devolve logo: a preparação válida, a linha do SOP 11, ou "em fila".
-export async function pedirPreparacao(pool, { investidorId, quemConduz, geradoPor, forcar = false, template, anexoA }) {
+export async function pedirPreparacao(pool, { investidorId, quemConduz, geradoPor, tipoChamada: tipoPedido = null, forcar = false, template, anexoA }) {
   await ensurePreparacoesChamada(pool)
-  const estado = await lerPreparacaoChamada(pool, investidorId)
+  const tipoEscolhido = tipoValido(tipoPedido)
+  const estado = await lerPreparacaoChamada(pool, investidorId, { tipo: tipoEscolhido })
   if (!forcar && estado.valida) return estado
   if (!forcar && estado.em_fila) return estado
   const dados = await recolherDados(pool, investidorId, quemConduz)
   if (!dados) return null
-  const entradas = montarEntradas(dados, { quemConduz })
+  const entradas = montarEntradas(dados, { quemConduz, tipoEscolhido })
   if (entradas.tipo === 'fora_sop23') {
     // Resultado igual ao do modelo, sem esperar pela fila.
     await gravar(pool, { investidorId, tipo: 'fora_sop23', conteudo: LINHA_FORA_SOP23, alertas: [], geradoPor })
-    return lerPreparacaoChamada(pool, investidorId)
+    return lerPreparacaoChamada(pool, investidorId, { tipo: tipoEscolhido })
   }
   await enfileirarIA(pool, {
     tipo: TIPO_FILA, ref_id: investidorId, modelo: 'sonnet',
     prompt: preencherPrompt(template, anexoA, entradas),
-    contexto: { tipo_chamada: entradas.tipo, quem_conduz: quemConduz || null, gerado_por: geradoPor || null, versao_prompt: VERSAO_PROMPT },
+    contexto: { tipo_chamada: entradas.tipo, tipo_manual: entradas.tipo_manual, quem_conduz: quemConduz || null, gerado_por: geradoPor || null, versao_prompt: VERSAO_PROMPT },
   })
-  return lerPreparacaoChamada(pool, investidorId)
+  return lerPreparacaoChamada(pool, investidorId, { tipo: tipoEscolhido })
 }
 
 // Aplicador da fila IA: valida no código e grava. O conteúdo não fica em ia_fila.resultado.

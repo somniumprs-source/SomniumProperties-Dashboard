@@ -48,4 +48,18 @@ export const CASOS = {
     investidor: { ...base, id: 'f4', nome: 'Ana Ficticia', status: 'Negociação de Deal', origem: 'Referenciação', created_at: '2026-10-01T10:00:00Z' },
     interacoes: [], gravacoes: [], reunioes: [], blocos: [], ocupados: [], oportunidades: [], proximaTarefa: null,
   },
+
+  // 5. Etapa atrasada: ainda em "Marcar call", mas a discovery já foi marcada na Chamada 1. Tipo escolhido à mão.
+  manual_discovery: {
+    investidor: {
+      ...base, id: 'f5', nome: 'Luis Ensaio', status: 'Marcar call', origem: 'Referenciação', created_at: '2026-11-10T10:00:00Z',
+      capital_min: 60000, capital_max: 90000, experiencia_imobiliario: 'Nunca investiu', decisores: 'Decide sozinho',
+    },
+    interacoes: [
+      { canal: 'Chamada', direcao: 'Enviado', data_hora: '2026-11-16T17:00:00Z', resultado: 'Feito', autor: 'João Abreu', notas: 'Chamada 1 feita. Disse: "Não percebo nada de obras, quero alguém que trate de tudo." Discovery marcada para 18/11 às 15:00.' },
+    ],
+    gravacoes: [], reunioes: [], blocos: [], ocupados: [], oportunidades: [],
+    proximaTarefa: { inicio: '2026-11-18T15:00', tarefa: 'Discovery Call com Luis Ensaio' },
+    tipoEscolhido: 'discovery',
+  },
 }

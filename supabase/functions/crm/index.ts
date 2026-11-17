@@ -3526,7 +3526,7 @@ const lerPromptsPrepChamada = async () => ({
   anexoA: await Deno.readTextFile(new URL(`./prompts/${ANEXO_A_PREP_CHAMADA}`, import.meta.url)),
 });
 app.get("/investidores/:id/preparacao-chamada", semPortalInvestidor, async (c: any) => {
-  try { return c.json(await lerPreparacaoChamada(pool, c.req.param("id"))); }
+  try { return c.json(await lerPreparacaoChamada(pool, c.req.param("id"), { tipo: c.req.query("tipo") || null })); }
   catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 app.post("/investidores/:id/gerar-preparacao", semPortalInvestidor, async (c: any) => {
@@ -3536,7 +3536,7 @@ app.post("/investidores/:id/gerar-preparacao", semPortalInvestidor, async (c: an
     const u = await resolveCrmUser(c);
     const out = await pedirPreparacao(pool, {
       investidorId: id, quemConduz: body?.quem_conduz || u?.nome || null, geradoPor: u?.nome || c.get("user")?.email || null,
-      forcar: !!body?.forcar, ...(await lerPromptsPrepChamada()),
+      tipoChamada: body?.tipo_chamada || null, forcar: !!body?.forcar, ...(await lerPromptsPrepChamada()),
     });
     if (!out) return c.json({ error: "Investidor não encontrado" }, 404);
     return c.json(out);

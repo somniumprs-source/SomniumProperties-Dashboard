@@ -20,6 +20,8 @@ const TIPO_LABEL = {
   recontacto: 'Recontacto (Follow Up)',
   fora_sop23: 'Fora do SOP 23',
 }
+const TIPOS_ESCOLHA = ['qualificacao', 'recontacto', 'discovery']
+const OPCAO_LABEL = { qualificacao: 'Chamada 1 – Qualificação (cold call)', recontacto: 'Recontacto (Follow Up)', discovery: 'Discovery', fora_sop23: 'Fora do SOP 23' }
 
 // ── Markdown simples (sem dependências): títulos, listas, tabelas, negrito, itálico ──
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -104,15 +106,17 @@ export function PreparacaoChamada({ investidorId, investidorNome }) {
   const [erro, setErro] = useState(null)
   const [aPedir, setAPedir] = useState(false)
   const [quem, setQuem] = useState(CONDUTORES.includes(profile?.nome) ? profile.nome : CONDUTORES[0])
+  // null = o tipo calculado pela etapa.
+  const [tipo, setTipo] = useState(null)
 
   const carregar = useCallback(async () => {
     try {
-      const r = await apiFetch(`/api/crm/investidores/${investidorId}/preparacao-chamada`)
+      const r = await apiFetch(`/api/crm/investidores/${investidorId}/preparacao-chamada${tipo ? `?tipo=${tipo}` : ''}`)
       const j = await r.json()
       if (!r.ok || j.error) throw new Error(j.error || 'Falha ao carregar')
       setEstado(j); setErro(null)
     } catch (e) { setErro(e.message) }
-  }, [investidorId])
+  }, [investidorId, tipo])
   useEffect(() => { carregar() }, [carregar])
 
   // Enquanto o Mac gera, actualiza a cada 15 s.
@@ -128,7 +132,7 @@ export function PreparacaoChamada({ investidorId, investidorNome }) {
     try {
       const r = await apiFetch(`/api/crm/investidores/${investidorId}/gerar-preparacao`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quem_conduz: quem, forcar }),
+        body: JSON.stringify({ quem_conduz: quem, tipo_chamada: tipoAtual === 'fora_sop23' ? null : tipoAtual, forcar }),
       })
       const j = await r.json()
       if (!r.ok || j.error) throw new Error(j.error || 'Falha ao pedir a preparação')
@@ -136,7 +140,11 @@ export function PreparacaoChamada({ investidorId, investidorNome }) {
     } catch (e) { setErro(e.message) } finally { setAPedir(false) }
   }
 
-  const prep = estado?.preparacao
+  const calculado = estado?.tipo_calculado || null
+  const tipoAtual = tipo || calculado
+  const opcoes = calculado === 'fora_sop23' ? ['fora_sop23', ...TIPOS_ESCOLHA] : TIPOS_ESCOLHA
+  // Mostra a última preparação só se for do tipo seleccionado.
+  const prep = estado?.preparacao && (!tipoAtual || estado.preparacao.tipo_chamada === tipoAtual) ? estado.preparacao : null
   const mostrar = prep && (estado?.valida || !estado?.em_fila)
   return (
     <section className="rounded-lg border border-line bg-surface-raised p-4 space-y-3">
@@ -149,6 +157,15 @@ export function PreparacaoChamada({ investidorId, investidorNome }) {
             {CONDUTORES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </label>
+        {calculado && (
+          <label className="text-xs text-ink-muted flex items-center gap-1.5">
+            Tipo de chamada
+            <select value={tipoAtual} onChange={(e) => setTipo(e.target.value === calculado ? null : e.target.value)} disabled={estado?.em_fila}
+              className="rounded-md border border-line bg-surface px-2 py-1 text-xs text-ink">
+              {opcoes.map((t) => <option key={t} value={t}>{OPCAO_LABEL[t]}{t === calculado ? ' (pela etapa)' : ''}</option>)}
+            </select>
+          </label>
+        )}
         {!prep || !estado?.valida ? (
           <Button size="sm" onClick={() => pedir(false)} disabled={aPedir || estado?.em_fila}>
             {aPedir ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PhoneCall className="w-3.5 h-3.5" />}Preparar chamada
@@ -187,7 +204,10 @@ export function PreparacaoChamada({ investidorId, investidorNome }) {
           <div className="prep-doc text-sm text-ink" dangerouslySetInnerHTML={{ __html: markdownParaHtml(prep.conteudo) }} />
         </>
       )}
-      {!prep && !estado?.em_fila && estado && <p className="text-sm text-ink-muted">Ainda sem preparação para este investidor.</p>}
+      {tipo && calculado && tipo !== calculado && !estado?.em_fila && (
+        <p className="text-xs text-ink-muted">Tipo escolhido à mão. Pela etapa seria {OPCAO_LABEL[calculado]}: actualiza a etapa depois da chamada.</p>
+      )}
+      {!prep && !estado?.em_fila && estado && <p className="text-sm text-ink-muted">Ainda sem preparação deste tipo para este investidor.</p>}
     </section>
   )
 }

@@ -27,7 +27,7 @@ function claude(prompt) {
   })
 }
 
-const QUEM = { formulario_curto: 'Alexandre Mendes', follow_up_passivo: 'João Abreu', discovery_decisor: 'Alexandre Mendes', negociacao: 'João Abreu' }
+const QUEM = { formulario_curto: 'Alexandre Mendes', follow_up_passivo: 'João Abreu', discovery_decisor: 'Alexandre Mendes', negociacao: 'João Abreu', manual_discovery: 'João Abreu' }
 
 await mkdir(saida, { recursive: true })
 const template = await readFile(path.join(prompts, VERSAO_PROMPT), 'utf8')
@@ -35,7 +35,7 @@ const anexoA = await readFile(path.join(prompts, FICHEIRO_ANEXO_A), 'utf8')
 const nomes = Object.keys(CASOS).filter((n) => !filtro.length || filtro.includes(n))
 
 await Promise.all(nomes.map(async (nome) => {
-  const entradas = montarEntradas(CASOS[nome], { quemConduz: QUEM[nome], agora: AGORA })
+  const entradas = montarEntradas(CASOS[nome], { quemConduz: QUEM[nome], tipoEscolhido: CASOS[nome].tipoEscolhido, agora: AGORA })
   const prompt = preencherPrompt(template, anexoA, entradas)
   await writeFile(path.join(saida, `${nome}.prompt.md`), prompt)
   const conteudo = entradas.tipo === 'fora_sop23' ? LINHA_FORA_SOP23 : limparResposta(await claude(prompt))

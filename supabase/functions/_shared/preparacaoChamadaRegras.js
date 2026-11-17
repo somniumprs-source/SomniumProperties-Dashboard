@@ -8,7 +8,7 @@
  */
 
 export const TIPO_FILA = 'preparacao_chamada'
-export const VERSAO_PROMPT = 'preparacao_chamada_v2.md'
+export const VERSAO_PROMPT = 'preparacao_chamada_v3.md'
 export const FICHEIRO_ANEXO_A = 'anexo_a_sop23_v2.1.md'
 export const SEM_DADOS = 'sem dados'
 export const LINHA_FORA_SOP23 = 'Esta chamada não é do SOP 23. Usar o SOP 11.'
@@ -276,15 +276,29 @@ export function horaChamada(dados) {
 }
 
 // Variáveis do prompt. Campo que não existe passa como "sem dados".
-export function montarEntradas(dados, { quemConduz, agora = new Date() } = {}) {
+// Tipos que se podem escolher à mão no painel (o fora_sop23 só vem da etapa).
+export const TIPOS_ESCOLHA = ['qualificacao', 'recontacto', 'discovery']
+export const tipoValido = (t) => (TIPOS_ESCOLHA.includes(t) ? t : null)
+
+// tipoEscolhido (opcional) corrige o tipo calculado pela etapa.
+export function montarEntradas(dados, { quemConduz, tipoEscolhido = null, agora = new Date() } = {}) {
   const p = partesLisboa(agora)
-  const tipo = tipoChamada(dados)
+  const calculado = tipoChamada(dados)
+  const escolhido = tipoValido(tipoEscolhido)
+  const tipo = escolhido || calculado
+  const manual = !!escolhido && escolhido !== calculado
   const etapa = valor(dados.investidor?.status)
-  const etapaTxt = tipo === 'qualificacao' && !['Potencial Investidor', 'Marcar call'].includes(dados.investidor?.status)
+  const etapaTxt = !manual && tipo === 'qualificacao' && !['Potencial Investidor', 'Marcar call'].includes(dados.investidor?.status)
     ? `${etapa} (lead do formulário sem conversa: tratar como "Marcar call", Chamada 1 – Qualificação)`
     : etapa
+  const tipoTxt = manual
+    ? `${TIPO_LABEL[tipo]} (tipo escolhido à mão; pela etapa seria ${TIPO_LABEL[calculado]}. Escrever no cabeçalho: "Tipo escolhido à mão: ${TIPO_LABEL[tipo]}. Etapa no CRM: ${etapa}." e, no ponto 7, lembrar de actualizar a etapa depois da chamada)`
+    : `${TIPO_LABEL[tipo]} (pela etapa)`
   return {
     tipo,
+    tipo_calculado: calculado,
+    tipo_manual: manual,
+    tipo_chamada: `Tipo de chamada: ${tipoTxt}`,
     data_hoje: `Hoje: ${p.dia} ${p.hora} (${p.semana}, hora de Lisboa)`,
     hora_chamada: `Hora da chamada: ${horaChamada(dados)}`,
     quem_conduz: `Quem conduz: ${valor(quemConduz)}`,
@@ -300,7 +314,7 @@ export function montarEntradas(dados, { quemConduz, agora = new Date() } = {}) {
 }
 
 export function preencherPrompt(template, anexoA, entradas) {
-  return String(template).replace(/\{\{(\w+)\}\}/g, (m, k) => (k === 'anexo_a' ? String(anexoA).trim() : k in entradas && k !== 'tipo' ? entradas[k] : m))
+  return String(template).replace(/\{\{(\w+)\}\}/g, (m, k) => (k === 'anexo_a' ? String(anexoA).trim() : k in entradas && typeof entradas[k] === 'string' && k !== 'tipo' && k !== 'tipo_calculado' ? entradas[k] : m))
 }
 
 // Resposta do Claude: tira cercas de código à volta do documento inteiro.
@@ -343,8 +357,10 @@ export function validarDocumento(texto, tipo) {
 }
 
 // Preparação ainda serve: menos de 24 h e sem contactos registados depois dela.
-export function preparacaoValida(prep, ultimoContactoEm, agora = new Date()) {
+// Com tipo, só serve se for desse tipo.
+export function preparacaoValida(prep, ultimoContactoEm, agora = new Date(), tipo = null) {
   if (!prep?.gerado_em) return false
+  if (tipo && prep.tipo_chamada !== tipo) return false
   const g = ordem(prep.gerado_em)
   if (agora.getTime() - g >= VALIDADE_HORAS * 3_600_000) return false
   return !(ultimoContactoEm && ordem(ultimoContactoEm) > g)

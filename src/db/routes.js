@@ -2635,14 +2635,14 @@ const lerPromptsPrepChamada = async () => ({
   anexoA: await readFile(path.join(PROMPTS_PREP_CHAMADA, ANEXO_A_PREP_CHAMADA), 'utf8'),
 })
 router.get('/investidores/:id/preparacao-chamada', semPortalInvestidor, async (req, res) => {
-  try { res.json(await lerPreparacaoChamada(pool, req.params.id)) } catch (e) { res.status(500).json({ error: e.message }) }
+  try { res.json(await lerPreparacaoChamada(pool, req.params.id, { tipo: req.query.tipo || null })) } catch (e) { res.status(500).json({ error: e.message }) }
 })
 router.post('/investidores/:id/gerar-preparacao', semPortalInvestidor, async (req, res) => {
   try {
     const u = req.appUser || req.user || null
     const out = await pedirPreparacao(pool, {
       investidorId: req.params.id, quemConduz: req.body?.quem_conduz || u?.nome || null, geradoPor: u?.nome || u?.email || null,
-      forcar: !!req.body?.forcar, ...(await lerPromptsPrepChamada()),
+      tipoChamada: req.body?.tipo_chamada || null, forcar: !!req.body?.forcar, ...(await lerPromptsPrepChamada()),
     })
     if (!out) return res.status(404).json({ error: 'Investidor não encontrado' })
     res.json(out)

@@ -18,6 +18,19 @@ test('tipo de chamada pela etapa', () => {
   assert.equal(tipoChamada(comConversa), 'fora_sop23')
 })
 
+test('tipo escolhido à mão corrige o da etapa', () => {
+  const e = montarEntradas(CASOS.manual_discovery, { quemConduz: 'João Abreu', tipoEscolhido: 'discovery', agora: AGORA })
+  assert.equal(e.tipo, 'discovery')
+  assert.equal(e.tipo_calculado, 'qualificacao')
+  assert.equal(e.tipo_manual, true)
+  assert.match(e.tipo_chamada, /escolhido à mão/)
+  // Tipo inválido ou igual ao da etapa = automático.
+  assert.equal(montarEntradas(CASOS.manual_discovery, { tipoEscolhido: 'fora_sop23', agora: AGORA }).tipo, 'qualificacao')
+  assert.equal(montarEntradas(CASOS.manual_discovery, { tipoEscolhido: 'qualificacao', agora: AGORA }).tipo_manual, false)
+  // Etapa do SOP 11 pode ser preparada à mão.
+  assert.equal(montarEntradas(CASOS.negociacao, { tipoEscolhido: 'recontacto', agora: AGORA }).tipo, 'recontacto')
+})
+
 test('escalões de montante: o limite conta no escalão de cima', () => {
   assert.equal(escalaoMontante(49_999), 'menos de 50 mil €')
   assert.equal(escalaoMontante(50_000), '50 mil a menos de 200 mil €')
@@ -84,4 +97,6 @@ test('preparação válida: 24 horas e sem contactos novos', () => {
   assert.equal(preparacaoValida(prep, '2026-11-17T11:00:00Z', AGORA), false)
   assert.equal(preparacaoValida({ gerado_em: '2026-11-16T14:00:00Z' }, null, AGORA), false)
   assert.equal(preparacaoValida(null, null, AGORA), false)
+  assert.equal(preparacaoValida({ ...prep, tipo_chamada: 'qualificacao' }, null, AGORA, 'discovery'), false)
+  assert.equal(preparacaoValida({ ...prep, tipo_chamada: 'discovery' }, null, AGORA, 'discovery'), true)
 })
