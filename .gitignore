@@ -35,3 +35,6 @@ supabase/.temp/
 
 # Lista de revisão com dados pessoais de investidores (SOP 23): só local
 investidores_classe_legado.csv
+
+# Lockfiles locais do Deno (gerados pelo deno check)
+supabase/functions/*/deno.lock
