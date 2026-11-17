@@ -2,7 +2,7 @@
  * API REST routes para o CRM (PostgreSQL).
  */
 import { Router } from 'express'
-import { ALERTAS_FALTA_CONTACTO_PAUSADOS } from '../../supabase/functions/_shared/alertasContacto.js'
+import { diasContados, horasContadas } from '../../supabase/functions/_shared/alertasContacto.js'
 import multer from 'multer'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -1235,13 +1235,14 @@ router.get('/consultores/enriched', async (req, res) => {
       const ultimoContacto = ultimoContactoCandidatos.length
         ? ultimoContactoCandidatos.reduce((max, d) => (new Date(d) > new Date(max) ? d : max))
         : null
-      const diasSemContacto = ultimoContacto ? Math.floor((now - new Date(ultimoContacto)) / 86400000) : null
+      // Contagem reiniciada a 17/11/2026 (supabase/functions/_shared/alertasContacto.js).
+      const diasSemContacto = ultimoContacto ? diasContados(Math.floor((now - new Date(ultimoContacto)) / 86400000), now) : null
       const temContacto = minhasInteracoes.length > 0 || !!c.data_primeira_call || !!followupAggC
 
       const ultimoImovel = [...meusImoveis].sort((a, b) => (b.data_adicionado || '').localeCompare(a.data_adicionado || ''))[0]
       const dataUltimoImovel = ultimoImovel?.data_adicionado
 
-      const horasCriado = (now - new Date(c.created_at)) / 3600000
+      const horasCriado = horasContadas((now - new Date(c.created_at)) / 3600000, now)
       let alertStatus = null
       // Verde: tem imóvel avançado (negociação+, wholesaling, etc.) nos últimos 30 dias
       const avancadoRecente = meusImoveis.some(i =>
@@ -1249,8 +1250,6 @@ router.get('/consultores/enriched', async (req, res) => {
       )
       if (avancadoRecente) {
         alertStatus = 'green'
-      } else if (ALERTAS_FALTA_CONTACTO_PAUSADOS) {
-        alertStatus = null
       } else if (horasCriado > 48 && !temContacto) {
         alertStatus = 'red'
       } else if (diasSemContacto > 15) {
@@ -4397,12 +4396,15 @@ router.get('/relatorio/investidores', async (req, res) => {
       const meusNegocios = negocios.filter(n => meusNegocioIds.has(n.id))
       const minhasReunioes = reunioes.filter(r => r.entidade_id === inv.id)
 
+      // Contagem reiniciada a 17/11/2026: quem ainda não tem contacto registado
+      // conta a partir dessa data.
       const diasSemContacto = inv.data_ultimo_contacto
-        ? Math.floor((now - new Date(inv.data_ultimo_contacto)) / 86400000)
+        ? diasContados(Math.floor((now - new Date(inv.data_ultimo_contacto)) / 86400000), now)
         : null
+      const diasDesdeReinicio = diasContados(Number.MAX_SAFE_INTEGER, now)
 
       // Alertas
-      if (!ALERTAS_FALTA_CONTACTO_PAUSADOS && (!inv.data_ultimo_contacto || diasSemContacto > 30)) report.alertas.sem_contacto_30d++
+      if ((diasSemContacto ?? diasDesdeReinicio) > 30) report.alertas.sem_contacto_30d++
       if (minhasReunioes.length === 0) report.alertas.sem_reuniao++
       if (!capitalMax) report.alertas.sem_capital++
       if (!inv.classificacao) report.alertas.sem_classificacao++
@@ -4656,16 +4658,17 @@ router.get('/relatorio/consultores', async (req, res) => {
       const score = totalIm > 0 ? Math.round(tq * 0.5 + vol * 0.3 + sp * 0.2) : 0
       const classe = totalIm > 0 ? CLASSE_POR_SCORE(score) : 'D'
 
-      const diasCriado = Math.floor((now - new Date(c.created_at)) / 86400000)
+      // Contagem reiniciada a 17/11/2026 (supabase/functions/_shared/alertasContacto.js).
+      const diasCriado = diasContados(Math.floor((now - new Date(c.created_at)) / 86400000), now)
       const ultimaInt = minhasInt.sort((a, b) => new Date(b.data_hora) - new Date(a.data_hora))[0]
-      const diasSemContacto = ultimaInt ? Math.floor((now - new Date(ultimaInt.data_hora)) / 86400000) : null
+      const diasSemContacto = ultimaInt ? diasContados(Math.floor((now - new Date(ultimaInt.data_hora)) / 86400000), now) : null
 
       report.distribuicao[classe]++
       if (totalIm > 0) { comImoveis++; somaScore += score; somaQual += tq }
       if (minhasInt.length > 0) report.metricas_globais.consultores_com_interacoes++
-      if (!ALERTAS_FALTA_CONTACTO_PAUSADOS && diasCriado > 2 && minhasInt.length === 0) report.alertas.sem_contacto_48h++
-      if (!ALERTAS_FALTA_CONTACTO_PAUSADOS && diasSemContacto > 15) report.alertas.inativos_15d++
-      if (!ALERTAS_FALTA_CONTACTO_PAUSADOS && (diasSemContacto > 60 || (diasSemContacto === null && diasCriado > 60))) report.alertas.inativos_60d++
+      if (diasCriado > 2 && minhasInt.length === 0) report.alertas.sem_contacto_48h++
+      if (diasSemContacto > 15) report.alertas.inativos_15d++
+      if (diasSemContacto > 60 || (diasSemContacto === null && diasCriado > 60)) report.alertas.inativos_60d++
 
       const imoveisDetalhe = meusImoveis.map(im => ({
         nome: im.nome_consultor, estado: (im.estado || '').replace(/^\d+-\s*/, ''),

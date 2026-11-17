@@ -3,7 +3,6 @@
  * Port de src/db/cronJobs.js para Edge Functions (Deno).
  * Todos os horários em Europe/Lisbon (a agenda passa para pg_cron; aqui só a lógica).
  */
-import { ALERTAS_FALTA_CONTACTO_PAUSADOS } from "./alertasContacto.js";
 import pool from "../_shared/pg.ts";
 import { isConfigured as emailConfigured, sendEmail } from "./emailService.ts";
 import { generateRelatorioAcompanhamento } from "./pdfProjectoFixFlip.ts";
@@ -232,7 +231,6 @@ async function runReclassificacaoInvestidores() {
 // ── JOB 5: Auto-Inactivo (diário 07:00) ─────────────────────
 // Passa investidores em "Follow Up" sem actividade > 90d para "Inactivo".
 async function runAutoInactivoInvestidores() {
-  if (ALERTAS_FALTA_CONTACTO_PAUSADOS) { console.log("[cron] Auto-Inactivo pausado (recuperação de contactos)"); return; }
   console.log("[cron] Auto-Inactivo investidores — a correr");
   try {
     const { rowCount } = await pool.query(
@@ -241,7 +239,8 @@ async function runAutoInactivoInvestidores() {
          motivo_inatividade = COALESCE(NULLIF(motivo_inatividade, ''), 'Sem actividade há mais de 90 dias'),
          updated_at = NOW()::TEXT
        WHERE status = 'Follow Up'
-         AND COALESCE(data_ultimo_contacto, data_primeiro_contacto, created_at)
+         -- contagem reiniciada a 17/11/2026 (ver _shared/alertasContacto.js)
+         AND GREATEST(COALESCE(data_ultimo_contacto, data_primeiro_contacto, created_at), '2026-11-17')
              < TO_CHAR(NOW() - INTERVAL '90 days', 'YYYY-MM-DD')`,
     );
     console.log(`[cron] Auto-Inactivo: ${rowCount} investidores movidos para Inactivo`);

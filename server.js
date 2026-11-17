@@ -1,6 +1,6 @@
 import 'dotenv/config'
 import express from 'express'
-import { ALERTAS_FALTA_CONTACTO_PAUSADOS } from './supabase/functions/_shared/alertasContacto.js'
+import { INICIO_CONTAGEM_CONTACTOS, diasContados, horasContadas, ultimoContactoContado, proximoContactoContado } from './supabase/functions/_shared/alertasContacto.js'
 import cors from 'cors'
 import compression from 'compression'
 import rateLimit from 'express-rate-limit'
@@ -1762,8 +1762,8 @@ app.get('/api/comercial/metricas-temporais', async (req, res) => {
     const emParceria   = investidores.filter(i => INV_PARCERIA.has(i.status))
 
     const invSemContacto60 = investidores
-      .filter(i => !ALERTAS_FALTA_CONTACTO_PAUSADOS && i.diasSemContacto != null && i.diasSemContacto > 60)
-      .map(i => ({ nome: i.nome, dias: i.diasSemContacto, status: i.status }))
+      .filter(i => i.diasSemContacto != null && diasContados(i.diasSemContacto, now) > 60)
+      .map(i => ({ nome: i.nome, dias: diasContados(i.diasSemContacto, now), status: i.status }))
 
     // LTV por investidor (montante investido + lucro real dos negócios com este investidor)
     const ltvInvestidores = investidores.map(i => {
@@ -1786,14 +1786,12 @@ app.get('/api/comercial/metricas-temporais', async (req, res) => {
     const CONS_ATIVOS_STATUS = new Set(['Discovery Call', 'Follow Up', 'Parceria', 'Aberto Parcerias','Em Parceria','Follow up','Follow Up'])
     const consAtivos = consultoresRaw.filter(c => CONS_ATIVOS_STATUS.has(c.estatuto))
     const consInativos = consultoresRaw.filter(c => c.estatuto === 'Inativo').length
-    const consFollowUpAtrasado = ALERTAS_FALTA_CONTACTO_PAUSADOS ? 0 : consultoresRaw.filter(c =>
-      c.dataProximoFollowUp && new Date(c.dataProximoFollowUp) < now && CONS_ATIVOS_STATUS.has(c.estatuto)
+    const consFollowUpAtrasado = consultoresRaw.filter(c =>
+      c.dataProximoFollowUp && new Date(proximoContactoContado(c.dataProximoFollowUp)) < now && CONS_ATIVOS_STATUS.has(c.estatuto)
     ).length
     const consSemContacto30 = consultoresRaw.filter(c => {
-      if (ALERTAS_FALTA_CONTACTO_PAUSADOS) return false
       if (!CONS_ATIVOS_STATUS.has(c.estatuto)) return false
-      if (!c.dataFollowUp && !c.dataProximoFollowUp) return true
-      const ultima = c.dataProximoFollowUp ?? c.dataFollowUp
+      const ultima = ultimoContactoContado(c.dataProximoFollowUp ?? c.dataFollowUp ?? INICIO_CONTAGEM_CONTACTOS)
       const dias = (now - new Date(ultima)) / 86400000
       return dias > 30
     }).length
@@ -2413,17 +2411,16 @@ app.get('/api/weekly-pulse', async (req, res) => {
     }).length
 
     const investSemContacto = investidores.filter(i => {
-      if (ALERTAS_FALTA_CONTACTO_PAUSADOS) return false
       const dias = i.diasSemContacto ?? (() => {
         const u = i.dataUltimoContacto ?? i.dataReuniao ?? i.dataPrimeiroContacto
         return u ? Math.floor((now - new Date(u)) / 86400000) : null
       })()
-      return dias != null && dias > 14
+      return dias != null && diasContados(dias, now) > 14
     }).length
 
     const CONS_ATIVOS = new Set(['Discovery Call', 'Follow Up', 'Parceria', 'Aberto Parcerias','Em Parceria','Follow up','Follow Up','Acesso imoveis Off market'])
-    const consFollowUpAtrasado = ALERTAS_FALTA_CONTACTO_PAUSADOS ? 0 : consultoresRaw.filter(c =>
-      CONS_ATIVOS.has(c.estatuto) && c.dataProximoFollowUp && new Date(c.dataProximoFollowUp) < now
+    const consFollowUpAtrasado = consultoresRaw.filter(c =>
+      CONS_ATIVOS.has(c.estatuto) && c.dataProximoFollowUp && new Date(proximoContactoContado(c.dataProximoFollowUp)) < now
     ).length
 
     // Cash
@@ -3462,8 +3459,7 @@ app.get('/api/metricas', async (req, res) => {
     const invNovosContactadosSemana = investidores.filter(i => isThisWeek(i.dataPrimeiroContacto)).length
     const invReunioesSemana = investidores.filter(i => isThisWeek(i.dataReuniao)).length
     const invSemContacto30d = investidores.filter(i => {
-      const ult = i.dataUltimoContacto || i.dataReuniao || i.dataPrimeiroContacto
-      if (!ult) return true
+      const ult = ultimoContactoContado(i.dataUltimoContacto || i.dataReuniao || i.dataPrimeiroContacto || INICIO_CONTAGEM_CONTACTOS)
       return Math.floor((now - new Date(ult)) / 86400000) > 30
     }).length
 
@@ -3471,8 +3467,7 @@ app.get('/api/metricas', async (req, res) => {
     const consFollowUpsSemana = consultoresRaw.filter(c => isThisWeek(c.dataFollowUp)).length
     const consSemContacto15d = consultoresRaw.filter(c => {
       if (!CONS_ATIVOS_SET.has(c.estatuto)) return false
-      const ult = c.dataProximoFollowUp || c.dataFollowUp
-      if (!ult) return true
+      const ult = ultimoContactoContado(c.dataProximoFollowUp || c.dataFollowUp || INICIO_CONTAGEM_CONTACTOS)
       return Math.floor((now - new Date(ult)) / 86400000) > 15
     }).length
     const consAtivosFollowUpEmDia = consultoresRaw.filter(c => {
@@ -3559,8 +3554,9 @@ app.get('/api/metricas', async (req, res) => {
 
     const invInativosSem60d = investidores.filter(i => {
       if (ESTADOS_PARCERIA.has(i.status)) return false
-      const ult = i.dataUltimoContacto || i.dataReuniao || i.dataPrimeiroContacto
-      if (!ult) return false
+      const ultReal = i.dataUltimoContacto || i.dataReuniao || i.dataPrimeiroContacto
+      if (!ultReal) return false
+      const ult = ultimoContactoContado(ultReal)
       return Math.floor((now - new Date(ult)) / 86400000) > 60
     }).length
 
@@ -4714,7 +4710,7 @@ const KR_FONTE_QUERIES = {
   negocios_vendidos: "SELECT COUNT(*) as c FROM negocios WHERE fase = 'Vendido'",
   // Excluir cópias duplicadas (duplicado_de aponta para outro investidor) — só
   // contamos pessoas únicas. Origens auto-referenciadas (duplicado_de = id) ficam dentro.
-  investidores_sem_contacto_30d: "SELECT COUNT(*) as c FROM investidores WHERE (duplicado_de IS NULL OR duplicado_de = id) AND (data_ultimo_contacto IS NULL OR data_ultimo_contacto < NOW() - INTERVAL '30 days')",
+  investidores_sem_contacto_30d: "SELECT COUNT(*) as c FROM investidores WHERE (duplicado_de IS NULL OR duplicado_de = id) AND GREATEST(COALESCE(NULLIF(data_ultimo_contacto::text, '')::timestamptz, '2026-11-17'::timestamptz), '2026-11-17'::timestamptz) < NOW() - INTERVAL '30 days'",
   investidores_ab_reuniao: "SELECT COUNT(*) as c FROM investidores WHERE (duplicado_de IS NULL OR duplicado_de = id) AND classificacao IN ('A','B') AND data_reuniao IS NOT NULL",
   investidores_nda: "SELECT COUNT(*) as c FROM investidores WHERE (duplicado_de IS NULL OR duplicado_de = id) AND nda_assinado = 1",
   investidores_capital: "SELECT COUNT(*) as c FROM investidores WHERE (duplicado_de IS NULL OR duplicado_de = id) AND montante_investido > 0",
@@ -5189,14 +5185,15 @@ app.get('/api/alertas', endpointCache(300000), async (req, res) => {
     // ── Investidores sem contacto >7 dias ──
     const ESTADOS_TERMINAIS = new Set(['Inactivo', 'Não qualificado'])
     const ESTADOS_PARCERIA = new Set(['Investidor em parceria', 'Em Parceria', 'Investidor Ativo'])
-    for (const inv of (ALERTAS_FALTA_CONTACTO_PAUSADOS ? [] : investidores)) {
+    for (const inv of investidores) {
       if (inv.status === 'Pendente de Aprovação') continue
       if (ESTADOS_TERMINAIS.has(inv.status)) continue
-      const diasSem = inv.diasSemContacto ?? (() => {
+      const diasSemReal = inv.diasSemContacto ?? (() => {
         const ultima = inv.dataUltimoContacto ?? inv.dataReuniao ?? inv.dataPrimeiroContacto
         if (!ultima) return null
         return Math.floor((now - new Date(ultima)) / 86400000)
       })()
+      const diasSem = diasContados(diasSemReal, now)
       if (diasSem != null && diasSem > 7 && !ESTADOS_PARCERIA.has(inv.status)) {
         alerts.push({
           tipo: 'inatividade_investidor',
@@ -5228,10 +5225,11 @@ app.get('/api/alertas', endpointCache(300000), async (req, res) => {
 
     // ── Consultores com follow-up atrasado ──
     const CONS_ATIVOS = new Set(['Discovery Call', 'Follow Up', 'Parceria', 'Aberto Parcerias', 'Em Parceria', 'Follow up', 'Follow Up', 'Acesso imoveis Off market'])
-    for (const c of (ALERTAS_FALTA_CONTACTO_PAUSADOS ? [] : consultoresRaw)) {
+    for (const c of consultoresRaw) {
       if (!CONS_ATIVOS.has(c.estatuto)) continue
-      if (c.dataProximoFollowUp && new Date(c.dataProximoFollowUp) < now) {
-        const diasAtraso = Math.floor((now - new Date(c.dataProximoFollowUp)) / 86400000)
+      const proximo = proximoContactoContado(c.dataProximoFollowUp)
+      if (proximo && new Date(proximo) < now) {
+        const diasAtraso = Math.floor((now - new Date(proximo)) / 86400000)
         alerts.push({
           tipo: 'followup_consultor',
           severidade: diasAtraso > 14 ? 'critico' : diasAtraso > 7 ? 'aviso' : 'info',
@@ -5244,7 +5242,7 @@ app.get('/api/alertas', endpointCache(300000), async (req, res) => {
     }
 
     // ── Consultores: sem primeiro contacto >48h / inativo >15d ──
-    if (!ALERTAS_FALTA_CONTACTO_PAUSADOS) try {
+    try {
       const { query: pgQuery } = await import('./src/db/pg.js')
       const { rows: pgConsultores } = await pgQuery('SELECT id, nome, estatuto, created_at FROM consultores')
       const { rows: todasInteracoes } = await pgQuery("SELECT consultor_id, data_hora FROM consultor_interacoes WHERE canal IS DISTINCT FROM 'Nota'")
@@ -5256,7 +5254,7 @@ app.get('/api/alertas', endpointCache(300000), async (req, res) => {
 
       const ESTATUTOS_ATIVOS = ['Follow up', 'Discovery Call', 'Follow Up', 'Parceria', 'Aberto Parcerias', 'Acesso imoveis Off market', 'Consultores em Parceria']
       for (const c of pgConsultores) {
-        const horasCriado = (now - new Date(c.created_at)) / 3600000
+        const horasCriado = horasContadas((now - new Date(c.created_at)) / 3600000, now)
         const interacoesCons = interacoesPorConsultor[c.id] || []
 
         // VERMELHO: criado há >48h sem primeiro contacto registado (só consultores activos, não Cold Call)
@@ -5277,7 +5275,7 @@ app.get('/api/alertas', endpointCache(300000), async (req, res) => {
             const d = new Date(i.data_hora)
             return d > max ? d : max
           }, new Date(0))
-          const diasSemContacto = Math.floor((now - ultimaData) / 86400000)
+          const diasSemContacto = diasContados(Math.floor((now - ultimaData) / 86400000), now)
           if (diasSemContacto > 15) {
             const imoveisConsultor = imoveis.filter(im => im.nomeConsultor?.trim().toLowerCase() === c.nome?.trim().toLowerCase())
             const imovelRecente = imoveisConsultor.some(im =>

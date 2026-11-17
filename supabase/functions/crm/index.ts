@@ -9,8 +9,8 @@
 // A ordem dos registos segue o ficheiro original linha-a-linha — Hono faz
 // first-match-wins tal como o Express, por isso os endpoints especificos
 // continuam registados ANTES dos crudRoutes/:id correspondentes.
-import { ALERTAS_FALTA_CONTACTO_PAUSADOS } from "../_shared/alertasContacto.js";
 import { createApp } from "../_shared/hono.ts";
+import { diasContados, horasContadas } from "../_shared/alertasContacto.js";
 import { requireAuth, requireInternalKey } from "../_shared/auth.ts";
 import { assertPublicHttpUrl } from "../_shared/ssrfGuard.ts";
 import { assertSafeUpload, AUDIO_ALLOWED_EXT, OFFICE_ALLOWED_EXT, checkUploadRateLimit, uploadRateLimitKey } from "../_shared/uploadGuard.ts";
@@ -1718,21 +1718,20 @@ app.get("/consultores/enriched", async (c: any) => {
       const ultimoContacto = ultimoContactoCandidatos.length
         ? ultimoContactoCandidatos.reduce((max, d) => (new Date(d) > new Date(max) ? d : max))
         : null;
-      const diasSemContacto = ultimoContacto ? Math.floor((now - new Date(ultimoContacto).getTime()) / 86400000) : null;
+      // Contagem reiniciada a 17/11/2026 (_shared/alertasContacto.js).
+      const diasSemContacto = ultimoContacto ? diasContados(Math.floor((now - new Date(ultimoContacto).getTime()) / 86400000), now) : null;
       const temContacto = minhasInteracoes.length > 0 || !!cn.data_primeira_call || !!followupAggC;
 
       const ultimoImovel = [...meusImoveis].sort((a: any, b: any) => (b.data_adicionado || "").localeCompare(a.data_adicionado || ""))[0];
       const dataUltimoImovel = ultimoImovel?.data_adicionado;
 
-      const horasCriado = (now - new Date(cn.created_at).getTime()) / 3600000;
+      const horasCriado = horasContadas((now - new Date(cn.created_at).getTime()) / 3600000, now);
       let alertStatus: string | null = null;
       const avancadoRecente = meusImoveis.some((i: any) =>
         qualidadeImovel(i.estado) >= 0.75 && i.data_adicionado && (now - new Date(i.data_adicionado).getTime()) / 86400000 <= 30
       );
       if (avancadoRecente) {
         alertStatus = "green";
-      } else if (ALERTAS_FALTA_CONTACTO_PAUSADOS) {
-        alertStatus = null;
       } else if (horasCriado > 48 && !temContacto) {
         alertStatus = "red";
       } else if (diasSemContacto !== null && diasSemContacto > 15) {
@@ -5402,11 +5401,14 @@ app.get("/relatorio/investidores", async (c: any) => {
       const meusNegocios = negocios.filter((n: any) => meusNegocioIds.has(n.id));
       const minhasReunioes = reunioes.filter((r: any) => r.entidade_id === inv.id);
 
+      // Contagem reiniciada a 17/11/2026 (_shared/alertasContacto.js): quem
+      // ainda não tem contacto registado conta a partir dessa data.
       const diasSemContacto = inv.data_ultimo_contacto
-        ? Math.floor((now.getTime() - new Date(inv.data_ultimo_contacto).getTime()) / 86400000)
+        ? diasContados(Math.floor((now.getTime() - new Date(inv.data_ultimo_contacto).getTime()) / 86400000), now)
         : null;
+      const diasDesdeReinicio = diasContados(Number.MAX_SAFE_INTEGER, now);
 
-      if (!ALERTAS_FALTA_CONTACTO_PAUSADOS && (!inv.data_ultimo_contacto || (diasSemContacto !== null && diasSemContacto > 30))) report.alertas.sem_contacto_30d++;
+      if ((diasSemContacto ?? diasDesdeReinicio) > 30) report.alertas.sem_contacto_30d++;
       if (minhasReunioes.length === 0) report.alertas.sem_reuniao++;
       if (!capitalMax) report.alertas.sem_capital++;
       if (!inv.classificacao) report.alertas.sem_classificacao++;
@@ -5560,16 +5562,17 @@ app.get("/relatorio/consultores", async (c: any) => {
       const score = totalIm > 0 ? Math.round(tq * 0.5 + vol * 0.3 + sp * 0.2) : 0;
       const classe = totalIm > 0 ? CLASSE_POR_SCORE(score) : "D";
 
-      const diasCriado = Math.floor((now.getTime() - new Date(cn.created_at).getTime()) / 86400000);
+      // Contagem reiniciada a 17/11/2026 (_shared/alertasContacto.js).
+      const diasCriado = diasContados(Math.floor((now.getTime() - new Date(cn.created_at).getTime()) / 86400000), now);
       const ultimaInt = minhasInt.sort((a: any, b: any) => new Date(b.data_hora).getTime() - new Date(a.data_hora).getTime())[0];
-      const diasSemContacto = ultimaInt ? Math.floor((now.getTime() - new Date(ultimaInt.data_hora).getTime()) / 86400000) : null;
+      const diasSemContacto = ultimaInt ? diasContados(Math.floor((now.getTime() - new Date(ultimaInt.data_hora).getTime()) / 86400000), now) : null;
 
       report.distribuicao[classe]++;
       if (totalIm > 0) { comImoveis++; somaScore += score; somaQual += tq; }
       if (minhasInt.length > 0) report.metricas_globais.consultores_com_interacoes++;
-      if (!ALERTAS_FALTA_CONTACTO_PAUSADOS && diasCriado > 2 && minhasInt.length === 0) report.alertas.sem_contacto_48h++;
-      if (!ALERTAS_FALTA_CONTACTO_PAUSADOS && diasSemContacto !== null && diasSemContacto > 15) report.alertas.inativos_15d++;
-      if (!ALERTAS_FALTA_CONTACTO_PAUSADOS && ((diasSemContacto !== null && diasSemContacto > 60) || (diasSemContacto === null && diasCriado > 60))) report.alertas.inativos_60d++;
+      if (diasCriado > 2 && minhasInt.length === 0) report.alertas.sem_contacto_48h++;
+      if (diasSemContacto !== null && diasSemContacto > 15) report.alertas.inativos_15d++;
+      if ((diasSemContacto !== null && diasSemContacto > 60) || (diasSemContacto === null && diasCriado > 60)) report.alertas.inativos_60d++;
 
       const imoveisDetalhe = meusImoveis.map((im: any) => ({
         nome: im.nome_consultor, estado: (im.estado || "").replace(/^\d+-\s*/, ""),
