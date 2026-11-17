@@ -1,5 +1,6 @@
 // Edge Function "dashboard" — port READ-ONLY (GET) dos handlers do dashboard do server.js Express.
 // Traducao mecanica: logica de negocio identica; so muda a camada wrapper (Express req/res -> Hono).
+import { ALERTAS_FALTA_CONTACTO_PAUSADOS } from "../_shared/alertasContacto.js";
 import { createApp } from "../_shared/hono.ts";
 import { prepararCall, ehCallInvestidor, corrigirTipoCall, CATEGORIAS_CALL_INV } from "../_shared/preparacaoCall.ts";
 import { requireAuth } from "../_shared/auth.ts";
@@ -1221,7 +1222,7 @@ app.get("/comercial/metricas-temporais", async (c: any) => {
     const emParceria = investidores.filter((i) => INV_PARCERIA.has(i.status));
 
     const invSemContacto60 = investidores
-      .filter((i) => i.diasSemContacto != null && i.diasSemContacto > 60)
+      .filter((i) => !ALERTAS_FALTA_CONTACTO_PAUSADOS && i.diasSemContacto != null && i.diasSemContacto > 60)
       .map((i) => ({ nome: i.nome, dias: i.diasSemContacto, status: i.status }));
 
     // LTV por investidor
@@ -1245,10 +1246,11 @@ app.get("/comercial/metricas-temporais", async (c: any) => {
     const CONS_ATIVOS_STATUS = new Set(["Discovery Call", "Follow Up", "Parceria", "Aberto Parcerias", "Em Parceria", "Follow up", "Follow Up"]);
     const consAtivos = consultoresRaw.filter((c2) => CONS_ATIVOS_STATUS.has(c2.estatuto));
     const consInativos = consultoresRaw.filter((c2) => c2.estatuto === "Inativo").length;
-    const consFollowUpAtrasado = consultoresRaw.filter((c2) =>
+    const consFollowUpAtrasado = ALERTAS_FALTA_CONTACTO_PAUSADOS ? 0 : consultoresRaw.filter((c2) =>
       c2.dataProximoFollowUp && new Date(c2.dataProximoFollowUp) < now && CONS_ATIVOS_STATUS.has(c2.estatuto)
     ).length;
     const consSemContacto30 = consultoresRaw.filter((c2) => {
+      if (ALERTAS_FALTA_CONTACTO_PAUSADOS) return false;
       if (!CONS_ATIVOS_STATUS.has(c2.estatuto)) return false;
       if (!c2.dataFollowUp && !c2.dataProximoFollowUp) return true;
       const ultima = c2.dataProximoFollowUp ?? c2.dataFollowUp;
@@ -3711,7 +3713,7 @@ app.get("/alertas", endpointCache(300000), async (c: any) => {
     // ── Investidores sem contacto >7 dias ──
     const ESTADOS_TERMINAIS = new Set(["Inactivo", "Não qualificado"]);
     const ESTADOS_PARCERIA = new Set(["Investidor em parceria", "Em Parceria", "Investidor Ativo"]);
-    for (const inv of investidores) {
+    for (const inv of (ALERTAS_FALTA_CONTACTO_PAUSADOS ? [] : investidores)) {
       if (inv.status === "Pendente de Aprovação") continue;
       if (ESTADOS_TERMINAIS.has(inv.status)) continue;
       const diasSem = inv.diasSemContacto ?? (() => {
@@ -3750,7 +3752,7 @@ app.get("/alertas", endpointCache(300000), async (c: any) => {
 
     // ── Consultores com follow-up atrasado ──
     const CONS_ATIVOS = new Set(["Discovery Call", "Follow Up", "Parceria", "Aberto Parcerias", "Em Parceria", "Follow up", "Follow Up", "Acesso imoveis Off market"]);
-    for (const c2 of consultoresRaw) {
+    for (const c2 of (ALERTAS_FALTA_CONTACTO_PAUSADOS ? [] : consultoresRaw)) {
       if (!CONS_ATIVOS.has(c2.estatuto)) continue;
       if (c2.dataProximoFollowUp && new Date(c2.dataProximoFollowUp) < now) {
         const diasAtraso = Math.floor(((now as any) - (new Date(c2.dataProximoFollowUp) as any)) / 86400000);
@@ -3766,7 +3768,7 @@ app.get("/alertas", endpointCache(300000), async (c: any) => {
     }
 
     // ── Consultores: sem primeiro contacto >48h / inativo >15d ──
-    try {
+    if (!ALERTAS_FALTA_CONTACTO_PAUSADOS) try {
       const { rows: pgConsultores } = await pool.query("SELECT id, nome, estatuto, created_at FROM consultores");
       const { rows: todasInteracoes } = await pool.query("SELECT consultor_id, data_hora FROM consultor_interacoes WHERE canal IS DISTINCT FROM 'Nota'");
       const interacoesPorConsultor: Record<string, any[]> = {};
@@ -4080,6 +4082,7 @@ app.get("/weekly-pulse", async (c: any) => {
     }).length;
 
     const investSemContacto = investidores.filter((i) => {
+      if (ALERTAS_FALTA_CONTACTO_PAUSADOS) return false;
       const dias = i.diasSemContacto ?? (() => {
         const u = i.dataUltimoContacto ?? i.dataReuniao ?? i.dataPrimeiroContacto;
         return u ? Math.floor(((now as any) - (new Date(u) as any)) / 86400000) : null;
@@ -4088,7 +4091,7 @@ app.get("/weekly-pulse", async (c: any) => {
     }).length;
 
     const CONS_ATIVOS = new Set(["Discovery Call", "Follow Up", "Parceria", "Aberto Parcerias", "Em Parceria", "Follow up", "Follow Up", "Acesso imoveis Off market"]);
-    const consFollowUpAtrasado = consultoresRaw.filter((c2) =>
+    const consFollowUpAtrasado = ALERTAS_FALTA_CONTACTO_PAUSADOS ? 0 : consultoresRaw.filter((c2) =>
       CONS_ATIVOS.has(c2.estatuto) && c2.dataProximoFollowUp && new Date(c2.dataProximoFollowUp) < now
     ).length;
 

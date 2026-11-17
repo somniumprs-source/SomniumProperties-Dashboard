@@ -9,6 +9,7 @@
 // A ordem dos registos segue o ficheiro original linha-a-linha — Hono faz
 // first-match-wins tal como o Express, por isso os endpoints especificos
 // continuam registados ANTES dos crudRoutes/:id correspondentes.
+import { ALERTAS_FALTA_CONTACTO_PAUSADOS } from "../_shared/alertasContacto.js";
 import { createApp } from "../_shared/hono.ts";
 import { requireAuth, requireInternalKey } from "../_shared/auth.ts";
 import { assertPublicHttpUrl } from "../_shared/ssrfGuard.ts";
@@ -1730,6 +1731,8 @@ app.get("/consultores/enriched", async (c: any) => {
       );
       if (avancadoRecente) {
         alertStatus = "green";
+      } else if (ALERTAS_FALTA_CONTACTO_PAUSADOS) {
+        alertStatus = null;
       } else if (horasCriado > 48 && !temContacto) {
         alertStatus = "red";
       } else if (diasSemContacto !== null && diasSemContacto > 15) {
@@ -5403,7 +5406,7 @@ app.get("/relatorio/investidores", async (c: any) => {
         ? Math.floor((now.getTime() - new Date(inv.data_ultimo_contacto).getTime()) / 86400000)
         : null;
 
-      if (!inv.data_ultimo_contacto || (diasSemContacto !== null && diasSemContacto > 30)) report.alertas.sem_contacto_30d++;
+      if (!ALERTAS_FALTA_CONTACTO_PAUSADOS && (!inv.data_ultimo_contacto || (diasSemContacto !== null && diasSemContacto > 30))) report.alertas.sem_contacto_30d++;
       if (minhasReunioes.length === 0) report.alertas.sem_reuniao++;
       if (!capitalMax) report.alertas.sem_capital++;
       if (!inv.classificacao) report.alertas.sem_classificacao++;
@@ -5564,9 +5567,9 @@ app.get("/relatorio/consultores", async (c: any) => {
       report.distribuicao[classe]++;
       if (totalIm > 0) { comImoveis++; somaScore += score; somaQual += tq; }
       if (minhasInt.length > 0) report.metricas_globais.consultores_com_interacoes++;
-      if (diasCriado > 2 && minhasInt.length === 0) report.alertas.sem_contacto_48h++;
-      if (diasSemContacto !== null && diasSemContacto > 15) report.alertas.inativos_15d++;
-      if ((diasSemContacto !== null && diasSemContacto > 60) || (diasSemContacto === null && diasCriado > 60)) report.alertas.inativos_60d++;
+      if (!ALERTAS_FALTA_CONTACTO_PAUSADOS && diasCriado > 2 && minhasInt.length === 0) report.alertas.sem_contacto_48h++;
+      if (!ALERTAS_FALTA_CONTACTO_PAUSADOS && diasSemContacto !== null && diasSemContacto > 15) report.alertas.inativos_15d++;
+      if (!ALERTAS_FALTA_CONTACTO_PAUSADOS && ((diasSemContacto !== null && diasSemContacto > 60) || (diasSemContacto === null && diasCriado > 60))) report.alertas.inativos_60d++;
 
       const imoveisDetalhe = meusImoveis.map((im: any) => ({
         nome: im.nome_consultor, estado: (im.estado || "").replace(/^\d+-\s*/, ""),

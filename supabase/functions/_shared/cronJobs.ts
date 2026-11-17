@@ -3,6 +3,7 @@
  * Port de src/db/cronJobs.js para Edge Functions (Deno).
  * Todos os horários em Europe/Lisbon (a agenda passa para pg_cron; aqui só a lógica).
  */
+import { ALERTAS_FALTA_CONTACTO_PAUSADOS } from "./alertasContacto.js";
 import pool from "../_shared/pg.ts";
 import { isConfigured as emailConfigured, sendEmail } from "./emailService.ts";
 import { generateRelatorioAcompanhamento } from "./pdfProjectoFixFlip.ts";
@@ -231,6 +232,7 @@ async function runReclassificacaoInvestidores() {
 // ── JOB 5: Auto-Inactivo (diário 07:00) ─────────────────────
 // Passa investidores em "Follow Up" sem actividade > 90d para "Inactivo".
 async function runAutoInactivoInvestidores() {
+  if (ALERTAS_FALTA_CONTACTO_PAUSADOS) { console.log("[cron] Auto-Inactivo pausado (recuperação de contactos)"); return; }
   console.log("[cron] Auto-Inactivo investidores — a correr");
   try {
     const { rowCount } = await pool.query(

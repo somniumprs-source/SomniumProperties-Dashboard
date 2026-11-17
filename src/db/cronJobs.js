@@ -3,6 +3,7 @@
  * Todos os horários em Europe/Lisbon.
  */
 import cron from 'node-cron'
+import { ALERTAS_FALTA_CONTACTO_PAUSADOS } from '../../supabase/functions/_shared/alertasContacto.js'
 import pool from './pg.js'
 import { randomUUID } from 'crypto'
 import { sendEmail, isConfigured as emailConfigured } from './emailService.js'
@@ -193,6 +194,7 @@ async function runReclassificacaoInvestidores() {
 // ── JOB 5: Auto-Inactivo (diário 07:00) ─────────────────────
 // Passa investidores em "Follow Up" sem actividade > 90d para "Inactivo".
 async function runAutoInactivoInvestidores() {
+  if (ALERTAS_FALTA_CONTACTO_PAUSADOS) { console.log('[cron] Auto-Inactivo pausado (recuperação de contactos)'); return }
   console.log('[cron] Auto-Inactivo investidores — a correr')
   try {
     const { rowCount } = await pool.query(

@@ -2,6 +2,7 @@
  * API REST routes para o CRM (PostgreSQL).
  */
 import { Router } from 'express'
+import { ALERTAS_FALTA_CONTACTO_PAUSADOS } from '../../supabase/functions/_shared/alertasContacto.js'
 import multer from 'multer'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -1248,6 +1249,8 @@ router.get('/consultores/enriched', async (req, res) => {
       )
       if (avancadoRecente) {
         alertStatus = 'green'
+      } else if (ALERTAS_FALTA_CONTACTO_PAUSADOS) {
+        alertStatus = null
       } else if (horasCriado > 48 && !temContacto) {
         alertStatus = 'red'
       } else if (diasSemContacto > 15) {
@@ -4399,7 +4402,7 @@ router.get('/relatorio/investidores', async (req, res) => {
         : null
 
       // Alertas
-      if (!inv.data_ultimo_contacto || diasSemContacto > 30) report.alertas.sem_contacto_30d++
+      if (!ALERTAS_FALTA_CONTACTO_PAUSADOS && (!inv.data_ultimo_contacto || diasSemContacto > 30)) report.alertas.sem_contacto_30d++
       if (minhasReunioes.length === 0) report.alertas.sem_reuniao++
       if (!capitalMax) report.alertas.sem_capital++
       if (!inv.classificacao) report.alertas.sem_classificacao++
@@ -4660,9 +4663,9 @@ router.get('/relatorio/consultores', async (req, res) => {
       report.distribuicao[classe]++
       if (totalIm > 0) { comImoveis++; somaScore += score; somaQual += tq }
       if (minhasInt.length > 0) report.metricas_globais.consultores_com_interacoes++
-      if (diasCriado > 2 && minhasInt.length === 0) report.alertas.sem_contacto_48h++
-      if (diasSemContacto > 15) report.alertas.inativos_15d++
-      if (diasSemContacto > 60 || (diasSemContacto === null && diasCriado > 60)) report.alertas.inativos_60d++
+      if (!ALERTAS_FALTA_CONTACTO_PAUSADOS && diasCriado > 2 && minhasInt.length === 0) report.alertas.sem_contacto_48h++
+      if (!ALERTAS_FALTA_CONTACTO_PAUSADOS && diasSemContacto > 15) report.alertas.inativos_15d++
+      if (!ALERTAS_FALTA_CONTACTO_PAUSADOS && (diasSemContacto > 60 || (diasSemContacto === null && diasCriado > 60))) report.alertas.inativos_60d++
 
       const imoveisDetalhe = meusImoveis.map(im => ({
         nome: im.nome_consultor, estado: (im.estado || '').replace(/^\d+-\s*/, ''),
