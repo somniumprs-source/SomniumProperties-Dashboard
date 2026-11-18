@@ -164,7 +164,7 @@ function calcIRSCatBOrganizada(lucroBruto: number, taxaMarginal: number): number
   return round2(lucroBruto * taxa)
 }
 
-export function calcIRS({ categoria, maisValia, vvr, lucroBruto, englobamento, taxaMarginal }: any): number {
+export function calcIRS({ categoria, maisValia, vvr, lucroBruto, englobamento, taxaMarginal, aru }: any): number {
   switch (categoria) {
     case 'B-simplificado': return calcIRSCatBSimplificado(vvr, taxaMarginal)
     case 'B-organizada':   return calcIRSCatBOrganizada(lucroBruto, taxaMarginal)
