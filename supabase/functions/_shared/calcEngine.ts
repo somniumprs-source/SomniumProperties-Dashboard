@@ -137,9 +137,14 @@ function calcRetencaoDividendos(lucroLiquido: number, percDividendos: number): n
 // não derivável do imóvel. Faz-se via campo categoria_irs (default 'G').
 const COEF_B_VENDAS = 0.15
 const IRS_TAXA_AUTONOMA_MV = 0.28
+const IRS_TAXA_ARU_MV = 0.05
 
-function calcIRSCatG(maisValia: number, englobamento: boolean, taxaMarginal: number): number {
+function calcIRSCatG(maisValia: number, englobamento: boolean, taxaMarginal: number, aru = false): number {
   if (maisValia <= 0) return 0
+  // Art. 71.º n.º 5 EBF — mais-valias de imóveis reabilitados em ARU, obtidas por
+  // residentes, tributadas à taxa autónoma de 5% (salvo opção pelo englobamento).
+  // Aplicada sobre a mais-valia total, por prudência, sem a redução de 50%.
+  if (aru && !englobamento) return round2(maisValia * IRS_TAXA_ARU_MV)
   // Art. 43.º n.º 2 CIRS — saldo das mais-valias considerado em 50% para residentes (sempre).
   const base = maisValia * 0.5
   if (englobamento && taxaMarginal > 0) return round2(base * (taxaMarginal / 100))
@@ -164,7 +169,7 @@ export function calcIRS({ categoria, maisValia, vvr, lucroBruto, englobamento, t
     case 'B-simplificado': return calcIRSCatBSimplificado(vvr, taxaMarginal)
     case 'B-organizada':   return calcIRSCatBOrganizada(lucroBruto, taxaMarginal)
     case 'G':
-    default:               return calcIRSCatG(maisValia, englobamento, taxaMarginal)
+    default:               return calcIRSCatG(maisValia, englobamento, taxaMarginal, aru)
   }
 }
 
@@ -234,7 +239,10 @@ export function calcAnalise(inputs: any): any {
 
   // ── A. Aquisição ──────────────────────────────────────────
   const baseIMT = Math.max(compra, vpt)
-  const imt = calcIMT(baseIMT, finalidade)
+  // Zona ARU — Art. 45.º n.º 2 al. b) EBF: isenção de IMT na aquisição de imóvel
+  // destinado a reabilitação (obras iniciadas até 3 anos após a compra). Quando já
+  // foi pago, há lugar a restituição (n.º 3), pelo que o custo líquido é zero.
+  const imt = aru ? 0 : calcIMT(baseIMT, finalidade)
   const impostoSelo = calcIS(baseIMT)
   const totalAquisicao = round2(compra + imt + impostoSelo + escritura + cpcvCompra + dueDiligence)
 
@@ -303,6 +311,7 @@ export function calcAnalise(inputs: any): any {
       lucroBruto,
       englobamento,
       taxaMarginal: taxaIrsMarginal,
+      aru,
     })
   }
 

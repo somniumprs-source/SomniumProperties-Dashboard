@@ -85,6 +85,8 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
 
   return (
     <div className="space-y-3">
+      <CaracterizacaoARU form={form} concelhoRef={concelhoRef} onChange={handleChange} />
+
       {/* A. Custos de Aquisição */}
       <Section title="Aquisição" tag="A" open={openSections.aquisicao} onToggle={() => toggleSection('aquisicao')}
         summary={analise.total_aquisicao > 0 ? EUR(analise.total_aquisicao) : null}
@@ -116,7 +118,7 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
         </div>
         <CalcRow items={[
           ...(wholesaling ? [{ label: 'Compra apresentada ao investidor', value: compraApresentada, bold: true }] : []),
-          { label: 'IMT', value: analise.imt },
+          { label: form.aru ? 'IMT (isento, zona ARU)' : 'IMT', value: analise.imt },
           { label: 'Imposto Selo', value: analise.imposto_selo },
           { label: 'Total Aquisição', value: analise.total_aquisicao, bold: true },
         ]} />
@@ -161,6 +163,7 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
             </div>
             <div className="mt-2 text-xs text-ink-muted">
               Valor usado tal e qual — sem IVA computado, sem PMO % nem regimes ARU/Ampliação.
+              {form.aru && <> Como o imóvel está em zona ARU, confirme que o orçamento do empreiteiro já aplica o IVA a 6%.</>}
             </div>
             <CalcRow items={[
               { label: 'Obra (valor fixo)', value: analise.obra_com_iva, bold: true },
@@ -171,17 +174,13 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <Input label="Custo da Obra (s/ IVA)" field="obra" value={form.obra} onChange={handleChange} placeholder="Ex: 30000" />
               <Input label="% Mão-de-obra" field="pmo_perc" value={form.pmo_perc} onChange={handleChange} step="5" placeholder="65" />
-              <Toggle label="Zona ARU (IVA 6%)" field="aru" value={form.aru} onChange={handleChange} />
-              <Toggle label="Ampliação (IVA 23%)" field="ampliacao" value={form.ampliacao} onChange={handleChange} />
+              {!form.aru && <Toggle label="Ampliação (IVA 23%)" field="ampliacao" value={form.ampliacao} onChange={handleChange} />}
             </div>
-            {concelhoRef && (
-              <p className="mt-2 text-xs text-ink-muted">
-                {concelhoRef.zona_aru
-                  ? <>{concelhoRef.concelho} tem zonas ARU: confirmar se o imóvel fica dentro antes de ativar o IVA a 6%.</>
-                  : <>{concelhoRef.concelho} não tem ARU registada.</>}
-                {concelhoRef.notas_legais && <span className="block mt-0.5">{concelhoRef.notas_legais}</span>}
-              </p>
-            )}
+            <p className="mt-2 text-xs text-ink-muted">
+              {form.aru
+                ? <>Imóvel em zona ARU: IVA a 6% sobre toda a obra (verba 2.27 da Lista I do CIVA).</>
+                : <>IVA a 6% na mão-de-obra e 23% nos materiais. Se o imóvel estiver em zona ARU, indique-o no topo da análise.</>}
+            </p>
             {(form.pmo_perc > 0) && (
               <div className="mt-3 pl-3 border-l-2" style={{ borderColor: GOLD + '60' }}>
                 <div className="text-xs text-ink-muted mb-2">Desagregação do PMO (opcional — mostra detalhe no relatório):</div>
@@ -281,7 +280,9 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
         )}
         {form.regime_fiscal === 'Particular' && (
           <div className="mt-2 text-xs text-ink-muted leading-relaxed">
-            <strong>Cat. G</strong>: mais-valia ocasional — 50% × 28% (autónoma) ou × marginal (englobada). Art. 43.º n.º 2 CIRS.<br />
+            {form.aru
+              ? <><strong>Cat. G em zona ARU</strong>: mais-valia tributada à taxa autónoma de 5% (art. 71.º n.º 5 do EBF), salvo opção pelo englobamento.<br /></>
+              : <><strong>Cat. G</strong>: mais-valia ocasional — 50% × 28% (autónoma) ou × marginal (englobada). Art. 43.º n.º 2 CIRS.<br /></>}
             <strong>Cat. B simplificado</strong>: atividade habitual de revenda — base = VVR × 0,15 (Art. 31.º), tributada à marginal IRS.<br />
             <strong>Cat. B organizada</strong>: contabilidade organizada — base = lucro bruto × marginal IRS.<br />
             Em dúvida, consultar o contabilista. A AT pode reclassificar Cat. G→B em caso de habitualidade.
@@ -306,6 +307,71 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
           Ativa a secção "K. Exit Alternativo" no relatório PDF.
         </div>
       </Section>
+    </div>
+  )
+}
+
+// Caracterização do imóvel quanto à zona ARU. É um atributo do imóvel, não da obra:
+// o mesmo campo (aru) altera o IVA da obra, o IMT e a tributação das mais-valias,
+// e é espelhado no orçamento de obra (zona_aru) pelo backend.
+function CaracterizacaoARU({ form, concelhoRef, onChange }) {
+  const aru = !!form.aru
+  const particularG = form.regime_fiscal === 'Particular' && (form.categoria_irs || 'G') === 'G'
+  const efeitos = [
+    {
+      titulo: 'IVA da obra a 6%',
+      texto: form.modo_obra === 'fixo'
+        ? 'Em valor fixo, o motor não recalcula o IVA: confirmar que o orçamento do empreiteiro já o aplica.'
+        : 'Taxa reduzida sobre toda a empreitada (verba 2.27 da Lista I do CIVA), em vez de 6% só na mão-de-obra.',
+    },
+    {
+      titulo: 'IMT isento',
+      texto: 'Art. 45.º n.º 2 al. b) do EBF, desde que as obras comecem até 3 anos após a compra. Se o IMT já tiver sido pago na escritura, pode pedir-se a restituição (n.º 3).',
+    },
+    {
+      titulo: 'Mais-valias a 5%',
+      texto: particularG
+        ? 'Em IRS, categoria G, a mais-valia passa a ser tributada à taxa autónoma de 5% (art. 71.º n.º 5 do EBF), salvo opção pelo englobamento.'
+        : 'Só se aplica a particulares em IRS, categoria G. Em IRC não há alteração.',
+    },
+    {
+      titulo: 'IMI isento depois da obra',
+      texto: 'Três anos a contar do ano em que a reabilitação termina, renováveis por mais cinco (art. 45.º n.º 2 al. a) do EBF). Não reduz o IMI durante a detenção, por isso não entra no cálculo.',
+    },
+  ]
+  return (
+    <div className="rounded-xl border border-line px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold text-ink">Caracterização do imóvel</div>
+          <div className="text-xs text-ink-muted">
+            {concelhoRef
+              ? (concelhoRef.zona_aru
+                  ? <>{concelhoRef.concelho} tem zonas ARU: confirmar se o imóvel fica dentro antes de o assinalar (SOP 21).</>
+                  : <>{concelhoRef.concelho} não tem ARU registada.</>)
+              : <>Assinale se o imóvel se situa numa Área de Reabilitação Urbana.</>}
+          </div>
+        </div>
+        <Toggle label="Imóvel em zona ARU" field="aru" value={aru} onChange={onChange} />
+      </div>
+      {concelhoRef?.notas_legais && <p className="mt-1 text-xs text-ink-muted">{concelhoRef.notas_legais}</p>}
+      {aru && (
+        <div className="mt-3 pt-3 border-t border-line">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {efeitos.map(e => (
+              <div key={e.titulo} className="pl-3 border-l-2" style={{ borderColor: GOLD + '80' }}>
+                <div className="text-xs font-semibold text-ink">{e.titulo}</div>
+                <div className="text-xs text-ink-muted leading-relaxed">{e.texto}</div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-ink-muted leading-relaxed">
+            Os benefícios dependem de a reabilitação subir o estado de conservação em dois níveis, com nível final
+            mínimo de «Bom» (MAEC), e da certidão de localização em ARU emitida pela Câmara. O custo da certidão
+            regista-se em «Certificação ARU», na secção Obra.
+          </p>
+        </div>
+      )}
     </div>
   )
 }
