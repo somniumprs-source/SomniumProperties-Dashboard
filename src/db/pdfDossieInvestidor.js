@@ -370,7 +370,7 @@ export async function gerarDossieInvestidor(dados, { deps, baixar }) {
   const helv = await final.embedFont(StandardFonts.Helvetica)
   const helvB = await final.embedFont(StandardFonts.HelveticaBold)
   const hex = (h) => { const n = parseInt(String(h).replace('#', ''), 16); return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255) }
-  const limpar = (s) => String(s || '').replace(/[^\x20-\x7E -ÿ]/g, '')
+  const limpar = (s) => String(s || '').replace(/[^\x20-\x7E\xA0-\xFF]/g, '')
   for (let i = 0; i < anexos.length; i++) {
     const a = anexos[i]
     if (a.erro) continue
