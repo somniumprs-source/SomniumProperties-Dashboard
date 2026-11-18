@@ -70,8 +70,9 @@ const KanbanCard = memo(function KanbanCard({ item, dragging, onDragStart, onDra
  * @param {Function} props.onCardClick - callback quando um card é clicado (id)
  * @param {Object} [props.colorMap] - cor por coluna (mapas de constants.js); sem ele usa COLUMN_COLORS
  * @param {Function} [props.etapaDe] - etapa de cada coluna (agrupa colunas no cabeçalho e no painel de fases)
+ * @param {Function} [props.sortItems] - comparador (a, b) para ordenar os cartões dentro de cada coluna
  */
-function KanbanBoardImpl({ columns, items, groupField, renderCard, onMove, onCardClick, onDelete, colorMap, etapaDe }) {
+function KanbanBoardImpl({ columns, items, groupField, renderCard, onMove, onCardClick, onDelete, colorMap, etapaDe, sortItems }) {
   const [dragging, setDragging] = useState(null)
   const [dragOver, setDragOver] = useState(null)
   // Painel de fases: abre um instante depois de pegar no cartão (mexer no DOM
@@ -135,8 +136,9 @@ function KanbanBoardImpl({ columns, items, groupField, renderCard, onMove, onCar
       if (col && acc[col]) acc[col].push(item)
       else if (acc[columns[columns.length - 1]]) acc[columns[columns.length - 1]].push(item)
     }
+    if (sortItems) for (const col of columns) acc[col].sort(sortItems)
     return acc
-  }, [columns, items, groupField])
+  }, [columns, items, groupField, sortItems])
 
   // Colunas seguidas da mesma etapa formam um grupo (painel de fases).
   const grupos = useMemo(() => {

@@ -66,6 +66,16 @@ function areasInvestidor(inv) {
   return areas
 }
 
+// Kanban de consultores: data do próximo contacto mais cedo primeiro; sem data no fim.
+const ordenarPorProximoContacto = (a, b) => {
+  const da = (a.data_proximo_follow_up || '').slice(0, 10)
+  const db = (b.data_proximo_follow_up || '').slice(0, 10)
+  if (da && db && da !== db) return da < db ? -1 : 1
+  if (da && !db) return -1
+  if (!da && db) return 1
+  return (a.nome || '').localeCompare(b.nome || '', 'pt')
+}
+
 const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Construtores', 'Parceiros', 'Oportunidades']
 // Sub-tabs que requerem distinção regional (modal ao entrar). Investidores
 // é pool unificado (sem filtro).
@@ -837,7 +847,18 @@ export function CRM() {
       columns: ['Cold Call','Discovery Call','Follow Up','Parceria'],
       colorMap: CONS_ESTATUTO_COLOR,
       groupField: 'estatuto',
+      // Dentro de cada fase: primeiro o contacto agendado mais cedo (os atrasados
+      // ficam no topo); quem não tem contacto agendado vai para o fim, por nome.
+      sortItems: ordenarPorProximoContacto,
       renderCard: (item) => {
+        const proxIso = (item.data_proximo_follow_up || '').slice(0, 10)
+        const hoje = new Date().toISOString().slice(0, 10)
+        const amanha = new Date(Date.now() + 86400000).toISOString().slice(0, 10)
+        const proxAtrasado = proxIso && proxIso < hoje
+        const proxLabel = !proxIso ? null
+          : proxIso === hoje ? 'hoje'
+          : proxIso === amanha ? 'amanhã'
+          : `${proxIso.slice(8, 10)}/${proxIso.slice(5, 7)}${proxIso.slice(0, 4) !== hoje.slice(0, 4) ? '/' + proxIso.slice(2, 4) : ''}`
         const imobs = (() => { try { return JSON.parse(item.imobiliaria || '[]').join(', ') } catch { return '' } })()
         const alertDot = item._alertStatus === 'red' ? 'bg-danger' : item._alertStatus === 'orange' ? 'bg-orange-500' : item._alertStatus === 'green' ? 'bg-success' : null
         return (
@@ -853,6 +874,13 @@ export function CRM() {
               <p className="text-[11px] text-ink mt-0.5">{item._leadsReferencia ?? item.imoveis_enviados} leads por referência</p>
             )}
             {item.score_prioridade > 0 && <p className="text-[11px] text-warning mt-0.5">Score: {item.score_prioridade}</p>}
+            {proxLabel && (
+              <span className={`inline-flex items-center gap-1 mt-1.5 text-[10px] px-1.5 py-0.5 rounded-md font-medium num ${proxAtrasado ? 'bg-danger/10 text-danger' : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'}`}
+                title={proxAtrasado ? 'Contacto agendado já passou' : 'Próximo contacto agendado'}>
+                {proxAtrasado ? <AlertTriangle className="w-2.5 h-2.5" /> : <CalendarClock className="w-2.5 h-2.5" />}
+                {proxAtrasado ? `atrasado · ${proxLabel}` : proxLabel}
+              </span>
+            )}
           </div>
         )
       },
@@ -1330,6 +1358,7 @@ export function CRM() {
                 onCardClick={kanbanOnCardClick}
                 colorMap={kanbanConfig.colorMap}
                 etapaDe={kanbanConfig.etapaDe}
+                sortItems={kanbanConfig.sortItems}
               />
             )}
 
