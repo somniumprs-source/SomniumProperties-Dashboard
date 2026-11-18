@@ -4435,6 +4435,11 @@ app.put('/api/tarefas/:id', async (req, res) => {
       `UPDATE tarefas SET ${sets.join(', ')} WHERE id = $${params.length}`, params
     )
     if (!rowCount) return res.status(404).json({ error: 'Não encontrada' })
+    // Contacto movido na Agenda: a data da pessoa e dos imóveis em assunto acompanham.
+    if (atual.origem_campo === 'proximo_contacto' && (inicio !== undefined || fim !== undefined)) {
+      const { espelharTarefaContacto } = await import('./src/db/contactoPessoa.js')
+      await espelharTarefaContacto(pgPool, atual.id).catch(e => console.error('[espelho]', e.message))
+    }
     // Call com investidor: reprogramada => refaz a preparação; categoria mudada à mão => correção manual do tipo.
     {
       const { prepararCall, ehCallInvestidor, corrigirTipoCall, CATEGORIAS_CALL_INV } = await import('./src/db/preparacaoCall.js')

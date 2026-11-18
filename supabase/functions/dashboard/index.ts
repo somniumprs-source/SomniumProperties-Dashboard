@@ -3,6 +3,7 @@
 import { INICIO_CONTAGEM_CONTACTOS, diasContados, horasContadas, ultimoContactoContado, proximoContactoContado } from "../_shared/alertasContacto.js";
 import { createApp } from "../_shared/hono.ts";
 import { prepararCall, ehCallInvestidor, corrigirTipoCall, CATEGORIAS_CALL_INV } from "../_shared/preparacaoCall.ts";
+import { espelharTarefaContacto } from "../_shared/contactoPessoa.ts";
 import { requireAuth } from "../_shared/auth.ts";
 import { RECORD_RESTRICTED_ROLES } from "../_shared/roles.ts";
 import { resolveOrProvisionUser } from "../_shared/userResolve.ts";
@@ -3298,6 +3299,11 @@ app.put("/tarefas/:id", async (c: any) => {
       params,
     );
     if (!rowCount) return c.json({ error: "Não encontrada" }, 404);
+    // Contacto movido na Agenda: a data da pessoa e dos imóveis em assunto
+    // acompanham (o Google Calendar recebe a tarefa no push seguinte).
+    if (atual.origem_campo === "proximo_contacto" && (inicio !== undefined || fim !== undefined)) {
+      await espelharTarefaContacto(pool, atual.id).catch((e: any) => console.error("[espelho]", e.message));
+    }
     // Call com investidor reprogramada: refaz a preparação (tipo + documento).
     // Mudar a categoria entre Cold Call / Follow-up / Discovery à mão é uma
     // correção manual do tipo (nunca mais recalculada).

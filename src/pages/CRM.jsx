@@ -66,13 +66,17 @@ function areasInvestidor(inv) {
   return areas
 }
 
-// Kanban de consultores: data do próximo contacto mais cedo primeiro; sem data no fim.
+// Kanban de consultores: segue a ordem de agendamento (dia e, no mesmo dia, a
+// hora da tarefa do contacto); sem contacto marcado vai para o fim, por nome.
 const ordenarPorProximoContacto = (a, b) => {
   const da = (a.data_proximo_follow_up || '').slice(0, 10)
   const db = (b.data_proximo_follow_up || '').slice(0, 10)
   if (da && db && da !== db) return da < db ? -1 : 1
   if (da && !db) return -1
   if (!da && db) return 1
+  const ha = a._proximoContactoInicio ? new Date(a._proximoContactoInicio).getTime() : Infinity
+  const hb = b._proximoContactoInicio ? new Date(b._proximoContactoInicio).getTime() : Infinity
+  if (ha !== hb) return ha < hb ? -1 : 1
   return (a.nome || '').localeCompare(b.nome || '', 'pt')
 }
 
@@ -859,6 +863,9 @@ export function CRM() {
           : proxIso === hoje ? 'hoje'
           : proxIso === amanha ? 'amanhã'
           : `${proxIso.slice(8, 10)}/${proxIso.slice(5, 7)}${proxIso.slice(0, 4) !== hoje.slice(0, 4) ? '/' + proxIso.slice(2, 4) : ''}`
+        const proxHora = String(item._proximoContactoInicio || '').length > 10
+          ? new Date(item._proximoContactoInicio).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Lisbon' })
+          : null
         const imobs = (() => { try { return JSON.parse(item.imobiliaria || '[]').join(', ') } catch { return '' } })()
         const alertDot = item._alertStatus === 'red' ? 'bg-danger' : item._alertStatus === 'orange' ? 'bg-orange-500' : item._alertStatus === 'green' ? 'bg-success' : null
         return (
@@ -878,7 +885,7 @@ export function CRM() {
               <span className={`inline-flex items-center gap-1 mt-1.5 text-[10px] px-1.5 py-0.5 rounded-md font-medium num ${proxAtrasado ? 'bg-danger/10 text-danger' : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'}`}
                 title={proxAtrasado ? 'Contacto agendado já passou' : 'Próximo contacto agendado'}>
                 {proxAtrasado ? <AlertTriangle className="w-2.5 h-2.5" /> : <CalendarClock className="w-2.5 h-2.5" />}
-                {proxAtrasado ? `atrasado · ${proxLabel}` : proxLabel}
+                {proxAtrasado ? `atrasado · ${proxLabel}` : proxLabel}{proxHora ? ` · ${proxHora}` : ''}
               </span>
             )}
           </div>

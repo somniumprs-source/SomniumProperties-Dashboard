@@ -301,6 +301,12 @@ export async function pullGCalToTarefas(gcal, calendarId, { days = 30 } = {}) {
             [titulo, inicio, fim, Math.round(horas * 100) / 100,
              funcionario, new Date().toISOString(), new Date().toISOString(), existing.id]
           )
+          // Contacto movido no Google Calendar: a data da pessoa (Kanban, listas,
+          // alertas) e a dos imóveis em assunto acompanham a tarefa.
+          if (existing.origem_campo === 'proximo_contacto') {
+            const { espelharTarefaContacto } = await import('./contactoPessoa.js')
+            await espelharTarefaContacto(pool, existing.id).catch(e => console.error('[gcal-sync] espelho:', e.message))
+          }
           updated++
         } else {
           skipped++

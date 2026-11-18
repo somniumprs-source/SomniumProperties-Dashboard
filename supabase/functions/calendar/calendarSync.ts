@@ -3,6 +3,7 @@
 // crypto.randomUUID() e global no Deno (substitui o import('crypto')).
 import pool from "../_shared/pg.ts";
 import { sendEmail } from "../_shared/emailService.ts";
+import { espelharTarefaContacto } from "../_shared/contactoPessoa.ts";
 
 const GCAL_TZ = "Europe/Lisbon";
 const CONFLICT_ALERT_EMAIL = "somniumprs@gmail.com";
@@ -267,6 +268,11 @@ export async function pullGCalToTarefas(gcal: any, calendarId: string, { days = 
              WHERE id = $8`,
             [titulo, inicio, fim, Math.round(horas * 100) / 100, funcionario, new Date().toISOString(), new Date().toISOString(), existing.id],
           );
+          // Contacto movido no Google Calendar: a data da pessoa (Kanban, listas,
+          // alertas) e a dos imóveis em assunto acompanham a tarefa.
+          if (existing.origem_campo === "proximo_contacto") {
+            await espelharTarefaContacto(pool, existing.id).catch((e: any) => console.error("[gcal-sync] espelho:", e.message));
+          }
           updated++;
         } else {
           skipped++;

@@ -882,6 +882,16 @@ crudRoutes('/investidores', Investidores, {
     }
   },
   beforeUpdate: async (id, body) => {
+    // Data da próxima ação mudada no formulário: a tarefa do contacto (e o
+    // Google Calendar) passa para esse dia, com a mesma hora.
+    if (body.data_proxima_acao) {
+      const { rows: [antes] } = await pool.query('SELECT data_proxima_acao FROM investidores WHERE id = $1', [id])
+      if (antes && String(antes.data_proxima_acao || '').slice(0, 10) !== String(body.data_proxima_acao).slice(0, 10)) {
+        const { alinharContactoComPessoa } = await import('./contactoPessoa.js')
+        await alinharContactoComPessoa(pool, 'investidor', id, body.data_proxima_acao)
+          .catch(e => console.error('[espelho] investidor:', e.message))
+      }
+    }
     if (body.status === undefined && body.classificacao === undefined) return null
     const { rows: [inv] } = await pool.query('SELECT * FROM investidores WHERE id = $1', [id])
     if (!inv) return null
@@ -1206,17 +1216,20 @@ router.get('/consultores/enriched', async (req, res) => {
     const consultoresWhere = regiao ? 'WHERE regiao = $1' : ''
     const imoveisWhere = `WHERE consultor_id IS NOT NULL${regiao ? ' AND regiao = $1' : ''}`
     const params = regiao ? [regiao] : []
-    const [resConsultores, resImoveis, resInteracoes, resFollowupAgg] = await Promise.all([
+    const [resConsultores, resImoveis, resInteracoes, resFollowupAgg, resProxContacto] = await Promise.all([
       pool.query(`SELECT * FROM consultores ${consultoresWhere} ORDER BY score_prioridade DESC NULLS LAST, updated_at DESC`, params),
       pool.query(`SELECT consultor_id, origem, estado, check_qualidade, data_adicionado FROM imoveis ${imoveisWhere}`, params),
       pool.query("SELECT consultor_id, data_hora, direcao FROM consultor_interacoes WHERE canal IS DISTINCT FROM 'Nota' ORDER BY data_hora DESC"),
       pool.query('SELECT consultor_id, MIN(data) AS primeiro_followup, MAX(data) AS ultimo_followup FROM consultor_followups GROUP BY consultor_id'),
+      // Hora do contacto marcado: ordena os cartões do Kanban dentro do mesmo dia.
+      pool.query("SELECT DISTINCT ON (origem_id) origem_id, inicio FROM tarefas WHERE origem_tipo = 'consultor' AND origem_campo = 'proximo_contacto' AND status NOT IN ('Concluída', 'Concluida') AND COALESCE(arquivada, false) = false ORDER BY origem_id, created_at DESC"),
     ])
     const consultores = resConsultores.rows
     const imoveis = resImoveis.rows
     const interacoes = resInteracoes.rows
     const followupAgg = resFollowupAgg.rows
     const followupsByConsultor = new Map(followupAgg.map(f => [f.consultor_id, f]))
+    const proxContactoPor = new Map(resProxContacto.rows.map(t => [t.origem_id, t.inicio]))
 
     const now = Date.now()
     const enriched = consultores.map(c => {
@@ -1269,6 +1282,7 @@ router.get('/consultores/enriched', async (req, res) => {
         _diasSemContacto: diasSemContacto,
         _alertStatus: alertStatus,
         _agencia: imobs.join(', ') || '—',
+        _proximoContactoInicio: proxContactoPor.get(c.id) || null,
       }
     })
 
@@ -1293,6 +1307,16 @@ rotasBaseLegal('/consultores', 'consultor')
 // (classificacaoConsultor.validarAvaliacao), nunca pelo formulário ou API direta.
 crudRoutes('/consultores', Consultores, {
   beforeUpdate: async (id, body) => {
+    // Data do próximo contacto mudada no formulário: a tarefa da Agenda (e o
+    // Google Calendar) passa para esse dia, com a mesma hora.
+    if (body.data_proximo_follow_up) {
+      const { rows: [antes] } = await pool.query('SELECT data_proximo_follow_up FROM consultores WHERE id = $1', [id])
+      if (antes && String(antes.data_proximo_follow_up || '').slice(0, 10) !== String(body.data_proximo_follow_up).slice(0, 10)) {
+        const { alinharContactoComPessoa } = await import('./contactoPessoa.js')
+        await alinharContactoComPessoa(pool, 'consultor', id, body.data_proximo_follow_up)
+          .catch(e => console.error('[espelho] consultor:', e.message))
+      }
+    }
     const fixos = ['classificacao', 'validacao', 'pontuacao', 'cobertura'].filter(k => body[k] !== undefined)
     if (!fixos.length) return null
     const { rows: [c] } = await pool.query('SELECT classificacao, validacao, pontuacao, cobertura FROM consultores WHERE id = $1', [id])

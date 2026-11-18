@@ -86,7 +86,7 @@ async function carregarPessoa(pool, tipo, id) {
 
 async function tarefaAberta(pool, tipo, id) {
   const { rows: [t] } = await pool.query(
-    `SELECT id, inicio, data_limite, funcionario, categoria FROM tarefas
+    `SELECT id, inicio, fim, data_limite, funcionario, categoria FROM tarefas
      WHERE origem_tipo = $1 AND origem_id = $2 AND origem_campo = $3 AND ${ABERTA}
      ORDER BY created_at DESC LIMIT 1`,
     [tipo, id, CAMPO]
@@ -282,8 +282,11 @@ async function agendarContactoPessoaTx(pool, tipo, id, { data, quando = null, as
   const hora = quando ? new Date(quando) : null
   const comHora = !!hora && !isNaN(hora.getTime())
   const inicio = comHora ? hora.toISOString() : data
-  const fim = comHora ? new Date(hora.getTime() + 0.5 * 3600000).toISOString() : data
   let t = await tarefaAberta(pool, tipo, id)
+  // Mudar a hora mantém a duração que o contacto já tinha (ex.: blocos de 15 min).
+  const durAnterior = t?.inicio && t?.fim && String(t.inicio).length > 10 ? new Date(t.fim).getTime() - new Date(t.inicio).getTime() : 0
+  const duracao = durAnterior > 0 && durAnterior <= 4 * 3600000 ? durAnterior : 0.5 * 3600000
+  const fim = comHora ? new Date(hora.getTime() + duracao).toISOString() : data
   if (t) {
     await pool.query('UPDATE tarefas SET data_limite = $1, inicio = $2, fim = $3, updated_at = NOW() WHERE id = $4', [data, inicio, fim, t.id])
   } else {
@@ -534,4 +537,82 @@ async function juntarImovelAoContactoTx(pool, imovelId, { data = null, quando = 
     [imovelId]
   )
   return { tarefa_id: t.id, data: dataFinal, consultor: { id: p.id, nome: p.nome } }
+}
+
+// ── Espelho CRM ↔ Agenda ↔ Google Calendar (18/11/2026) ──────
+// O contacto marcado vive em três sítios: a tarefa (inicio/fim, que o Google
+// Calendar espelha), o campo de data da pessoa (o que as listas, o Kanban e os
+// alertas leem) e o data_follow_up dos imóveis que são assunto do contacto.
+// Mudar num deles tem de mudar os outros.
+
+const TZ = 'Europe/Lisbon'
+
+// Dia (AAAA-MM-DD) de um instante, à hora de Lisboa; datas sem hora ficam como estão.
+export function diaLisboa(v) {
+  if (!v) return null
+  const s = String(v)
+  if (eData(s.slice(0, 10)) && s.length <= 10) return s.slice(0, 10)
+  const d = new Date(s)
+  if (isNaN(d.getTime())) return null
+  return d.toLocaleDateString('en-CA', { timeZone: TZ })
+}
+
+// Hora (HH:MM) de um instante, à hora de Lisboa; null para datas sem hora.
+function horaLisboa(v) {
+  const s = String(v || '')
+  if (s.length <= 10) return null
+  const d = new Date(s)
+  if (isNaN(d.getTime())) return null
+  return d.toLocaleTimeString('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+}
+
+// Instante ISO de "dia às hh:mm" em Lisboa (UTC+0 no inverno, UTC+1 no verão).
+export function instanteLisboa(dia, hhmm) {
+  const [h, m] = String(hhmm).split(':').map(Number)
+  const [a, mes, d] = dia.split('-').map(Number)
+  for (const off of [0, 1]) {
+    const t = new Date(Date.UTC(a, mes - 1, d, h - off, m))
+    if (diaLisboa(t.toISOString()) === dia && horaLisboa(t.toISOString()) === String(hhmm).slice(0, 5)) return t.toISOString()
+  }
+  return new Date(Date.UTC(a, mes - 1, d, h, m)).toISOString()
+}
+
+// Tarefa → pessoa: depois de a tarefa do contacto mudar de hora (na Agenda do
+// CRM ou no Google Calendar), o prazo da tarefa, a data da pessoa e a dos
+// imóveis em assunto passam a ser o dia da tarefa. Não mexe no updated_at da
+// tarefa, para não voltar a empurrar para o Google o que dele acabou de vir.
+export async function espelharTarefaContacto(pool, tarefaId) {
+  const { rows: [t] } = await pool.query(
+    `SELECT id, origem_tipo, origem_id, inicio, data_limite FROM tarefas
+     WHERE id = $1 AND origem_campo = $2 AND ${ABERTA}`,
+    [tarefaId, CAMPO]
+  )
+  const cfg = t && PESSOAS[t.origem_tipo]
+  if (!cfg || !t.origem_id) return null
+  const dia = diaLisboa(t.inicio) || diaLisboa(t.data_limite)
+  if (!dia) return null
+  await pool.query('UPDATE tarefas SET data_limite = $1 WHERE id = $2 AND data_limite IS DISTINCT FROM $1', [dia, t.id])
+  await pool.query(`UPDATE ${cfg.tabela} SET ${cfg.espelho} = $1 WHERE id = $2 AND ${cfg.espelho} IS DISTINCT FROM $1`, [dia, t.origem_id])
+  await pool.query(
+    `UPDATE imoveis SET data_follow_up = $1
+     WHERE id IN (SELECT imovel_id FROM contacto_assuntos WHERE origem = 'tarefa' AND origem_id = $2 AND imovel_id IS NOT NULL)
+       AND data_follow_up IS DISTINCT FROM $1`,
+    [dia, t.id]
+  )
+  return dia
+}
+
+// Pessoa → tarefa: a data do próximo contacto mudou na ficha (formulário).
+// A tarefa aberta muda para esse dia e mantém a hora; sem tarefa, cria-se uma
+// para o dia (só para hoje em diante: datas antigas não geram tarefas).
+// O Google Calendar recebe a mudança no push seguinte (updated_at da tarefa).
+export async function alinharContactoComPessoa(pool, tipo, id, dia, { user = null } = {}) {
+  const cfg = PESSOAS[tipo]
+  if (!cfg || !eData(String(dia || '').slice(0, 10))) return null
+  dia = String(dia).slice(0, 10)
+  const t = await tarefaAberta(pool, tipo, id)
+  if (t && (diaLisboa(t.inicio) || diaLisboa(t.data_limite)) === dia) return t.id
+  if (!t && dia < new Date().toLocaleDateString('en-CA', { timeZone: TZ })) return null
+  const hora = t ? horaLisboa(t.inicio) : null
+  return agendarContactoPessoa(pool, tipo, id, { data: dia, quando: hora ? instanteLisboa(dia, hora) : null, user })
 }
