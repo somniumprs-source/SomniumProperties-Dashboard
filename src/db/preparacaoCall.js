@@ -22,7 +22,7 @@
  * Gémeo Deno em supabase/functions/_shared/preparacaoCall.ts — o código é o mesmo, só mudam os
  * imports. Portar qualquer alteração para os dois.
  */
-import { enfileirarIA, estadoIA, emFilaIA, jsonDaResposta } from "./filaIA.js"
+import { enfileirarIA, estadoIA, emFilaIA, jsonDaResposta, compactarTranscricao } from "./filaIA.js"
 import { definirTipoContacto } from "./contactoPessoa.js"
 import { CRITERIOS_DISCOVERY, linhasScorecardMao } from '../../supabase/functions/_shared/classeInvestidor.js'
 
@@ -35,6 +35,8 @@ export const TIPO_CALL_LABEL = { cold_call: 'Cold Call', follow_up: 'Follow-up',
 export const TIPOS_CALL = ['cold_call', 'follow_up', 'discovery_call']
 export const TIPO_FILA_PREPARACAO = 'preparacao_call'
 export const TIPO_FILA_RESUMO = 'resumo_reuniao'
+// Preparações e resumos de reunião não precisam do Sonnet: o Haiku gasta bem menos do plano.
+export const MODELO_LEVE = 'haiku'
 const VERSAO_PROMPT = 'v4'
 // Objetivo de cada tipo de call segundo o SOP 23 v2.1.
 const OBJETIVO_SOP23 = {
@@ -523,7 +525,7 @@ Responde APENAS com JSON válido:
 }
 
 --- TRANSCRIÇÃO ---
-${transcricao}`
+${compactarTranscricao(transcricao)}`
 }
 
 function resumoGravacao(g) {
@@ -722,7 +724,9 @@ export async function prepararCall(pool, tarefaId, { gerar = true, forcar = fals
   }
   const jaPedido = !travado && prep.hash_gerado === hash && ['gerado', 'a_gerar', 'aguarda_resumos'].includes(prep.estado)
   if (jaPedido && !forcar) return prep
-  if (!gerar && prep.conteudo_json && !forcar) {
+  if (!gerar && !forcar) {
+    // Sem texto ainda: fica só com as secções do CRM até à véspera (poupança de tokens).
+    if (!prep.conteudo_json) return prep
     if (prep.estado !== 'desatualizado') prep = (await pool.query(`UPDATE preparacao_calls SET estado = 'desatualizado' WHERE id = $1 RETURNING *`, [prep.id])).rows[0]
     return prep
   }
@@ -737,7 +741,7 @@ export async function prepararCall(pool, tarefaId, { gerar = true, forcar = fals
     aEsperar.push(r)
     if (!emFilaIA(est)) {
       const { rows: [comTexto] } = await pool.query('SELECT transcricao FROM reunioes WHERE id = $1', [r.id])
-      await enfileirarIA(pool, { tipo: TIPO_FILA_RESUMO, ref_id: r.id, prompt: promptResumoReuniao(r, comTexto?.transcricao || '', ctx.investidor.nome), contexto: { investidor_id: tarefa.origem_id } })
+      await enfileirarIA(pool, { tipo: TIPO_FILA_RESUMO, ref_id: r.id, prompt: promptResumoReuniao(r, comTexto?.transcricao || '', ctx.investidor.nome), modelo: MODELO_LEVE, contexto: { investidor_id: tarefa.origem_id } })
     }
   }
   if (aEsperar.length) {
@@ -749,7 +753,7 @@ export async function prepararCall(pool, tarefaId, { gerar = true, forcar = fals
     const { rows: [x] } = await pool.query('SELECT left(transcricao, 6000) AS t FROM reunioes WHERE id = $1', [r.id])
     brutas += `\n[Reunião ${fmtData(r.data)}]\n${x?.t || ''}\n`
   }
-  const pedido = await enfileirarIA(pool, { tipo: TIPO_FILA_PREPARACAO, ref_id: tarefaId, prompt: promptPreparacao(ctx, base, brutas), contexto: { hash } })
+  const pedido = await enfileirarIA(pool, { tipo: TIPO_FILA_PREPARACAO, ref_id: tarefaId, prompt: promptPreparacao(ctx, base, brutas), modelo: MODELO_LEVE, contexto: { hash } })
   return (await pool.query(`UPDATE preparacao_calls SET estado = 'a_gerar', hash_gerado = $2, modelo = $3, erro = NULL, updated_at = $4 WHERE id = $1 RETURNING *`,
     [prep.id, hash, pedido.modelo || 'sonnet', agora()])).rows[0]
 }
@@ -910,7 +914,10 @@ export async function sincronizarPreparacoes(pool) {
     try {
       const antes = await lerPrep(pool, t.id)
       const d = quandoDaTarefa(t).dia
-      const p = await prepararCall(pool, t.id, { gerar: !antes || !antes.conteudo_json || d <= amanha })
+      // Poupança de tokens: texto pela IA só para as calls de hoje e amanhã (D-1,
+      // SOP 10). As mais distantes ficam com as secções do CRM até à véspera
+      // (antes geravam-se 2 vezes: ao serem marcadas e outra vez na véspera).
+      const p = await prepararCall(pool, t.id, { gerar: d <= amanha })
       if (p && ['a_gerar', 'aguarda_resumos'].includes(p.estado) && p.hash_gerado !== antes?.hash_gerado) res.geradas++
       if (p?.estado === 'desatualizado') res.desatualizadas++
     } catch (e) { res.erros++; console.error('[preparacao cron]', t.id, e.message) }

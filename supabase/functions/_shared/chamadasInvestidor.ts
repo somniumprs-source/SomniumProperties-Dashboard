@@ -17,7 +17,8 @@
  * qualquer alteração para os dois.
  */
 
-import { aposAnaliseGravacao } from "./autopreenchimento.ts"
+import { aposAnaliseGravacao, instrucoesExtracaoGravacao } from "./autopreenchimento.ts"
+import { compactarTranscricao, RE_LIMITE_PLANO } from "./filaIA.ts"
 import { CRITERIOS_DISCOVERY } from "./classeInvestidor.js"
 
 export const TIPOS_CHAMADA_INV = ['cold_call', 'follow_up', 'discovery']
@@ -325,20 +326,35 @@ export async function passoAnaliseInvestidor(pool, id, resposta) {
         WHERE id = $1 AND (estado = 'aguarda_analise' OR (estado = 'a_analisar' AND updated_at < $3))`, [id, agora(), limiteObsoleto()])
     if (!rowCount) return { ocupado: true }
     const { rows: [inv] } = await pool.query('SELECT * FROM investidores WHERE id = $1', [g.investidor_id])
-    return { pedido: { passo: 'analise', modelo: MODELO_IA_INV, prompt: `${buildPrompt(g.tipo_chamada, inv)}\n\n--- TRANSCRICAO ---\n${g.transcricao}` } }
+    // Poupança de tokens: análise SOP 23 e extração para a ficha no MESMO pedido,
+    // com a transcrição (compactada) enviada uma só vez.
+    const ficha = await instrucoesExtracaoGravacao(pool, g).catch(() => null)
+    const prompt = ficha
+      ? `PARTE 1: ANÁLISE SOP 23\n${buildPrompt(g.tipo_chamada, inv)}\n\nPARTE 2: DADOS PARA A FICHA\n${ficha}\n\n` +
+        `FORMATO FINAL (substitui os formatos acima): responde APENAS com um JSON {"analise": <JSON da parte 1>, "ficha": <JSON da parte 2>}\n\n--- TRANSCRICAO ---\n${compactarTranscricao(g.transcricao)}`
+      : `${buildPrompt(g.tipo_chamada, inv)}\n\n--- TRANSCRICAO ---\n${compactarTranscricao(g.transcricao)}`
+    return { pedido: { passo: 'analise', modelo: MODELO_IA_INV, prompt } }
   }
-  const analise = parseJson(resposta)
+  const bruto = parseJson(resposta)
+  const combinado = bruto && typeof bruto.analise === 'object' && bruto.analise !== null
+  const analise = combinado ? bruto.analise : bruto
   const { rows: [final] } = await pool.query(
     `UPDATE investidor_gravacoes SET analise = $2, nota_sop = $3, estado = 'analisado', erro = NULL, updated_at = $4 WHERE id = $1 RETURNING *`,
     [id, JSON.stringify(analise), notaSop(analise, g.tipo_chamada), agora()],
   )
   // Registo automático da call + extração para a ficha (autopreenchimento).
-  await aposAnaliseGravacao(pool, id)
+  await aposAnaliseGravacao(pool, id, { extracao: combinado ? bruto.ficha : null })
   return { concluido: true, gravacao: final }
 }
 
-// Em erro repõe 'transcrito' para se poder tentar de novo.
+// Em erro repõe 'transcrito' para se poder tentar de novo. Limite do plano
+// Claude não é falha: volta à fila e é retomada quando o limite repõe.
 export async function falhaAnaliseInvestidor(pool, id, erro) {
+  if (RE_LIMITE_PLANO.test(String(erro || ''))) {
+    await pool.query(`UPDATE investidor_gravacoes SET estado = 'aguarda_analise', erro = $2, updated_at = $3 WHERE id = $1`,
+      [id, `Adiado (limite do plano): ${String(erro).slice(0, 300)}`, agora()])
+    return
+  }
   await pool.query(`UPDATE investidor_gravacoes SET estado = 'transcrito', erro = $2, updated_at = $3 WHERE id = $1`,
     [id, `Analise: ${String(erro || 'falhou').slice(0, 480)}`, agora()])
 }

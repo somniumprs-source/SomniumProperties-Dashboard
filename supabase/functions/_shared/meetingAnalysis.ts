@@ -11,7 +11,7 @@
  * imports. Portar qualquer alteração para os dois.
  */
 import pool from "./pg.ts"
-import { enfileirarIA, jsonDaResposta } from "./filaIA.ts"
+import { enfileirarIA, jsonDaResposta, compactarTranscricao } from "./filaIA.ts"
 import { pedirExtracao } from "./autopreenchimento.ts"
 import { buildPrompt } from "./chamadasInvestidor.ts"
 import { classificarAutomaticamente } from "./classificacaoInvestidor.ts"
@@ -76,7 +76,7 @@ TÍTULO: ${reuniao.titulo || ''}
 DATA: ${reuniao.data || ''}
 ${reuniao.resumo ? `RESUMO EXISTENTE: ${String(reuniao.resumo).slice(0, 2000)}\n` : ''}
 --- TRANSCRIÇÃO ---
-${transcricao.slice(0, 120000)}`
+${compactarTranscricao(transcricao).slice(0, 120000)}`
 }
 
 /**

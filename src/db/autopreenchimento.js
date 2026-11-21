@@ -24,7 +24,7 @@
  * Gémeo Deno em supabase/functions/_shared/autopreenchimento.ts — o código é o mesmo, só mudam os
  * imports. Portar qualquer alteração para os dois.
  */
-import { enfileirarIA, jsonDaResposta } from "./filaIA.js"
+import { enfileirarIA, jsonDaResposta, compactarTranscricao } from "./filaIA.js"
 import { withAuditUser } from "./audit.js"
 import { registarContactoPessoa, agendarContactoPessoa, definirTipoContacto } from "./contactoPessoa.js"
 import { prepararCall } from "./preparacaoCall.js"
@@ -282,11 +282,29 @@ export async function pedirExtracao(pool, origemRef, { modo = 'auto' } = {}) {
   const { rows: [inv] } = await pool.query('SELECT * FROM investidores WHERE id = $1', [investidorId])
   if (!inv) return null
   const formularios = await formulariosDe(pool, investidorId)
+  // Poupança de tokens: transcrição compactada, Haiku e sem repetir um pedido igual já feito.
   return enfileirarIA(pool, {
-    tipo: TIPO_FILA_EXTRACAO, ref_id: origemRef,
-    prompt: promptExtracao({ investidor: inv, transcricao, origem, formularios }),
+    tipo: TIPO_FILA_EXTRACAO, ref_id: origemRef, modelo: 'haiku', dedupe: true,
+    prompt: promptExtracao({ investidor: inv, transcricao: compactarTranscricao(transcricao), origem, formularios }),
     contexto: { modo, investidor_id: investidorId, origem_data: dia(origem.data) },
   })
+}
+
+// Instruções da extração sem a transcrição: vão dentro do pedido da análise
+// SOP 23 da gravação, para a transcrição só ser enviada uma vez à IA.
+export async function instrucoesExtracaoGravacao(pool, g) {
+  await ensureAutopreenchimento(pool)
+  const { rows: [inv] } = await pool.query('SELECT * FROM investidores WHERE id = $1', [g.investidor_id])
+  if (!inv) return null
+  const formularios = await formulariosDe(pool, g.investidor_id)
+  const txt = promptExtracao({ investidor: inv, transcricao: '', origem: { tipo: 'gravacao', data: g.data_chamada, tipo_chamada: g.tipo_chamada }, formularios })
+  return txt.replace(/\n*--- TRANSCRIÇÃO ---\s*$/, '')
+}
+
+// Extração que veio junto com a análise: aplica-se como se viesse da fila.
+export async function aplicarExtracaoDaGravacao(pool, g, extracao) {
+  const pedido = { ref_id: `gravacao:${g.id}`, contexto: { modo: 'auto', investidor_id: g.investidor_id, origem_data: dia(g.data_chamada) } }
+  return aplicarRespostaExtracao(pool, pedido, JSON.stringify(extracao))
 }
 
 // ── Aplicar a extração ───────────────────────────────────────
@@ -540,9 +558,16 @@ export async function aplicarRegistoCall(pool, gravacaoId) {
 }
 
 // Depois da análise SOP 23 de uma gravação: registo + extração.
-export async function aposAnaliseGravacao(pool, gravacaoId) {
+// Com `extracao` (veio no mesmo pedido da análise) aplica-a já; sem ela
+// (respostas no formato antigo) põe a extração na fila, como antes.
+export async function aposAnaliseGravacao(pool, gravacaoId, { extracao = null } = {}) {
   try { await aplicarRegistoCall(pool, gravacaoId) } catch (e) { console.error('[autopreenchimento] registo:', e.message) }
-  try { await pedirExtracao(pool, `gravacao:${gravacaoId}`) } catch (e) { console.error('[autopreenchimento] extração:', e.message) }
+  try {
+    if (extracao && typeof extracao === 'object') {
+      const { rows: [g] } = await pool.query('SELECT id, investidor_id, data_chamada FROM investidor_gravacoes WHERE id = $1', [gravacaoId])
+      if (g) await aplicarExtracaoDaGravacao(pool, g, extracao)
+    } else await pedirExtracao(pool, `gravacao:${gravacaoId}`)
+  } catch (e) { console.error('[autopreenchimento] extração:', e.message) }
 }
 
 // ── Decisões sobre sugestões ──────────────────────────────────

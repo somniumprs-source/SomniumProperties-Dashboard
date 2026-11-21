@@ -10,7 +10,7 @@
  * mesmo, só mudam os imports. Portar qualquer alteração para os dois.
  */
 import pool from './pg.js'
-import { enfileirarIA, jsonDaResposta } from './filaIA.js'
+import { enfileirarIA, jsonDaResposta, compactarTranscricao } from './filaIA.js'
 import { pedirExtracao } from './autopreenchimento.js'
 import { buildPrompt } from './chamadasInvestidor.js'
 import { classificarAutomaticamente } from './classificacaoInvestidor.js'
@@ -75,7 +75,7 @@ TÍTULO: ${reuniao.titulo || ''}
 DATA: ${reuniao.data || ''}
 ${reuniao.resumo ? `RESUMO EXISTENTE: ${String(reuniao.resumo).slice(0, 2000)}\n` : ''}
 --- TRANSCRIÇÃO ---
-${transcricao.slice(0, 120000)}`
+${compactarTranscricao(transcricao).slice(0, 120000)}`
 }
 
 /**

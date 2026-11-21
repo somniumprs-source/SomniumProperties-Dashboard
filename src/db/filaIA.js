@@ -47,8 +47,17 @@ export function jsonDaResposta(texto) {
 
 // ficheiro: { bucket, path, nome } no Supabase Storage, descarregado pelo worker.
 // Um pedido ainda em fila para o mesmo tipo/ref é actualizado em vez de duplicado.
-export async function enfileirarIA(pool, { tipo, ref_id, prompt, modelo = 'sonnet', ficheiro = null, contexto = null }) {
+export async function enfileirarIA(pool, { tipo, ref_id, prompt, modelo = 'sonnet', ficheiro = null, contexto = null, dedupe = false }) {
   await ensureFilaIA(pool)
+  // Poupança de tokens: o mesmo pedido (tipo, ref e prompt iguais) já feito ou
+  // em curso não volta a correr. Só para quem pede com dedupe (extracções):
+  // quem espera por uma resposta nova não pode receber uma antiga.
+  if (dedupe && !ficheiro) {
+    const { rows: [igual] } = await pool.query(
+      `SELECT * FROM ia_fila WHERE tipo = $1 AND ref_id = $2 AND estado IN ('concluido', 'a_processar') AND md5(prompt) = md5($3)
+       ORDER BY created_at DESC LIMIT 1`, [tipo, String(ref_id), prompt])
+    if (igual) return igual
+  }
   const { rows: [existente] } = await pool.query(
     `UPDATE ia_fila SET prompt = $3, modelo = $4, ficheiro = $5, contexto = $6, erro = NULL, updated_at = $7
      WHERE tipo = $1 AND ref_id = $2 AND estado = 'aguarda' RETURNING *`,
@@ -91,9 +100,37 @@ export async function iniciarIA(pool, id) {
   return !!r
 }
 
+// Transcrição mais curta para a IA, sem perder conteúdo: tira hesitações
+// ("hum", "eh"), palavras repetidas seguidas ("sim, sim, sim"), linhas
+// repetidas (ciclos do Whisper) e espaços a mais. A original fica na BD.
+export function compactarTranscricao(texto) {
+  if (!texto) return texto
+  const linhas = []
+  let anterior = ''
+  for (const bruta of String(texto).split('\n')) {
+    let l = bruta
+      .replace(/(^|[\s,.;!?])(h+u+m+|h+[ãa]+|[ãa]+h+|e+h+|u+h+|ahn|hmm+)(?=[\s,.;!?]|$)[,.]?/gi, '$1')
+      .replace(/\b(\p{L}+)(?:[,\s]+\1\b){1,}/giu, '$1')
+      .replace(/[ \t]{2,}/g, ' ')
+      .replace(/\s+([,.;!?])/g, '$1')
+      .trim()
+    if (!l || l === anterior) continue
+    linhas.push(l); anterior = l
+  }
+  return linhas.join('\n')
+}
+
+// Limite de uso do plano Claude: não é falha do pedido, volta para a fila e é
+// retomado quando o limite repõe (antes ficava em 'erro' e perdia-se).
+export const RE_LIMITE_PLANO = /out of (extra )?usage|usage limit|rate limit|limit reached|resets? (at )?\d/i
+
 export async function falharIA(pool, id, erro) {
-  await pool.query(`UPDATE ia_fila SET estado = 'erro', erro = $2, updated_at = $3 WHERE id = $1`,
-    [id, String(erro || 'Falha na IA').slice(0, 500), agora()])
+  const msg = String(erro || 'Falha na IA').slice(0, 500)
+  if (RE_LIMITE_PLANO.test(msg)) {
+    await pool.query(`UPDATE ia_fila SET estado = 'aguarda', erro = $2, updated_at = $3 WHERE id = $1`, [id, `Adiado: ${msg}`, agora()])
+    return
+  }
+  await pool.query(`UPDATE ia_fila SET estado = 'erro', erro = $2, updated_at = $3 WHERE id = $1`, [id, msg, agora()])
 }
 
 // Aplica a resposta com o aplicador do tipo; o que ele devolver fica em `resultado`.
