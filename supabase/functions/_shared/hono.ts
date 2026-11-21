@@ -43,6 +43,20 @@ export function createApp(basePath: string) {
     maxAge: 86400, // cacheia o preflight 24h — evita um OPTIONS por cada GET de documento/lista
   }));
 
+  // Uploads recusados antes de lerem o corpo (401/403/404/429...) deixavam o
+  // pedido pendurado até ao limite do runtime (503 aos 160s): o edge runtime
+  // não envia a resposta enquanto o corpo multipart grande não for consumido.
+  // Descartamos o corpo não lido, por blocos, antes de devolver a resposta.
+  app.use("*", async (c, next) => {
+    await next();
+    const raw = c.req.raw;
+    if (!raw.body || raw.bodyUsed) return;
+    try {
+      const reader = raw.body.getReader();
+      while (!(await reader.read()).done) { /* descartar */ }
+    } catch { /* corpo já fechado/consumido por outro caminho */ }
+  });
+
   app.onError((err, c) => {
     console.error(`[${basePath}] erro:`, err?.message);
     return c.json({ error: err?.message || "Erro interno" }, 500);
