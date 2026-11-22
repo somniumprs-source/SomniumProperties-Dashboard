@@ -253,7 +253,7 @@ ${passosJson}
   "conformidade": { "promessa_rentabilidade_garantida": true|false, "informacao_financeira_detalhada_cedo": true|false (oportunidades concretas, números ou retornos ditos antes da apresentação), "abriu_com_tem_2_minutos": true|false, "fala_mais_de_metade": true|false (quem liga falou mais de metade do tempo), "urgencia_inventada": true|false, "comentario": "texto ou null" },
   "pontos_fortes": ["o que correu bem"],
   "pontos_fracos": ["onde falhámos face ao SOP 23"],
-  "objeccoes": [{ "objeccao": "dúvida ou objecção do investidor", "resposta_dada": "como respondemos", "eficaz": true|false, "sugestao": "resposta da secção 5 do SOP 23 adaptada" }],
+  "objeccoes": [{ "objeccao": "dúvida ou objecção do investidor, reescrita por ti numa frase clara (nunca copiada da transcrição; perguntas nossas não são objecções)", "resposta_dada": "como respondemos, resumido por ti numa frase clara", "eficaz": true|false, "sugestao": "resposta da secção 5 do SOP 23 adaptada" }],
   "melhorias_script": [{ "momento": "abertura | qualificacao | discovery | bifurcacao | objeccao | fecho | outro", "em_vez_de": "o que foi dito", "dizer": "frase concreta do guião do SOP 23 a usar da próxima vez" }],
   "dados_recolhidos": {
     "fonte": "referencia | rede | conteudo | formulario | evento | null",
@@ -282,7 +282,9 @@ ${discovery ? `  "scorecard_discovery": {\n${scorecardJson}\n  },\n` : ''}  "pro
   "sugestao_justificacao": "1-2 frases a justificar as sugestões com o SOP 23 (3.5, 3.8, 3.9 ou 4.11)"
 }
 
-SCORECARD DE QUALIFICAÇÃO (SOP 23, 4.10), em qualquer tipo de contacto: dá uma nota de 0 a 2 por critério SÓ quando ESTA conversa traz prova (frase do investidor e minuto). Sem prova nesta conversa, usa null: a app mantém a nota do contacto anterior. Se o investidor disse algo que muda uma nota anterior (ex.: o capital deixou de estar disponível), dá a nota nova. Nunca adivinhes.\n${scorecardTxt}\nA app junta estas notas às dos contactos anteriores e, com os 6 critérios, define a classe automaticamente (11-12 A, 9-10 B, 7-8 C, 0-6 D), sem validação.\n\nEscreve em português de Portugal, directo e profissional. Não inventes: se algo não aparece na transcrição, usa null.`
+SCORECARD DE QUALIFICAÇÃO (SOP 23, 4.10), em qualquer tipo de contacto: dá uma nota de 0 a 2 por critério SÓ quando ESTA conversa traz prova (frase do investidor e minuto). Sem prova nesta conversa, usa null: a app mantém a nota do contacto anterior. Se o investidor disse algo que muda uma nota anterior (ex.: o capital deixou de estar disponível), dá a nota nova. Nunca adivinhes.\n${scorecardTxt}\nA app junta estas notas às dos contactos anteriores e, com os 6 critérios, define a classe automaticamente (11-12 A, 9-10 B, 7-8 C, 0-6 D), sem validação.\n\nEscreve em português de Portugal, directo e profissional. Não inventes: se algo não aparece na transcrição, usa null.
+
+A transcrição é automática e tem erros (palavras trocadas, frases cortadas, nomes e locais deturpados). Os textos que escreves (resumo, objecções, respostas, próximo passo) aparecem na ficha do investidor e têm de se perceber sem ouvir a call: escreve-os sempre por palavras tuas, em frases completas e com sentido. Nunca copies frases soltas da transcrição para esses campos. Se uma passagem é ininteligível, omite-a. Se um nome, local ou data não é claro, não o reproduzas deturpado: escreve "(não claro na gravação)". Confirma que as datas que escreves são futuras quando falam de recontactos ou disponibilidade de capital (hoje é ${new Date().toISOString().slice(0, 10)}).`
 }
 
 function parseJson(texto) {
