@@ -1,9 +1,0 @@
-@@ -22,7 +22,7 @@
-  * Gémeo Node em src/db/preparacaoCall.js — o código é o mesmo, só mudam os
-  * imports. Portar qualquer alteração para os dois.
-  */
--import { enfileirarIA, estadoIA, emFilaIA, jsonDaResposta } from "./filaIA.js"
-+import { enfileirarIA, estadoIA, emFilaIA, jsonDaResposta, compactarTranscricao } from "./filaIA.js"
- import { definirTipoContacto } from "./contactoPessoa.ts"
- import { CRITERIOS_DISCOVERY, linhasScorecardMao } from "./classeInvestidor.js"
- 
