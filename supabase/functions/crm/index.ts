@@ -3690,10 +3690,10 @@ app.post("/investidores/:id/chamadas", async (c: any) => {
     const u = await resolveCrmUser(c);
     const now = new Date().toISOString();
     const { rows: [row] } = await pool.query(
-      `INSERT INTO investidor_gravacoes (id, investidor_id, tipo_chamada, titulo, data_chamada, realizada_por, ficheiro_path, ficheiro_nome, estado, created_at, updated_at, tarefa_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pendente',$9,$9,$10) RETURNING *`,
+      `INSERT INTO investidor_gravacoes (id, investidor_id, tipo_chamada, titulo, data_chamada, realizada_por, ficheiro_path, ficheiro_nome, estado, created_at, updated_at, tarefa_id, interacao_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pendente',$9,$9,$10,$11) RETURNING *`,
       [id, investidorId, tipo, daTarefa?.titulo || `${tipo === "follow_up" ? "Recontacto" : tipo === "discovery" ? "Discovery" : "Chamada 1"} ${dataChamada}`, dataChamada,
-       u?.nome || u?.email || null, storagePath, file.name, now, daTarefa?.tarefa_id || null],
+       u?.nome || u?.email || null, storagePath, file.name, now, daTarefa?.tarefa_id || null, String(form.get("interacao_id") || "") || null],
     );
     if (daTarefa?.tarefa_id) await concluirTarefaDaGravacao(pool, daTarefa.tarefa_id);
     return c.json(row);

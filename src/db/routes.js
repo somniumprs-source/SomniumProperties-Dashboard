@@ -2771,10 +2771,10 @@ router.post('/investidores/:id/chamadas', uploadRateLimit, uploadAudio.single('a
     const u = await resolveCrmUser(req).catch(() => null)
     const now = new Date().toISOString()
     const { rows: [row] } = await pool.query(
-      `INSERT INTO investidor_gravacoes (id, investidor_id, tipo_chamada, titulo, data_chamada, realizada_por, ficheiro_path, ficheiro_nome, estado, created_at, updated_at, tarefa_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pendente',$9,$9,$10) RETURNING *`,
+      `INSERT INTO investidor_gravacoes (id, investidor_id, tipo_chamada, titulo, data_chamada, realizada_por, ficheiro_path, ficheiro_nome, estado, created_at, updated_at, tarefa_id, interacao_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pendente',$9,$9,$10,$11) RETURNING *`,
       [id, req.params.id, tipo, daTarefa?.titulo || `${tipo === 'follow_up' ? 'Recontacto' : tipo === 'discovery' ? 'Discovery' : 'Chamada 1'} ${dataChamada}`, dataChamada,
-       u?.nome || u?.email || null, storagePath, req.file.originalname, now, daTarefa?.tarefa_id || null]
+       u?.nome || u?.email || null, storagePath, req.file.originalname, now, daTarefa?.tarefa_id || null, req.body?.interacao_id || null]
     )
     if (daTarefa?.tarefa_id) await concluirTarefaDaGravacao(pool, daTarefa.tarefa_id)
     res.json(row)

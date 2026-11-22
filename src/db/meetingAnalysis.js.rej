@@ -1,0 +1,9 @@
+@@ -11,7 +11,7 @@
+  * imports. Portar qualquer alteração para os dois.
+  */
+ import pool from "./pg.ts"
+-import { enfileirarIA, jsonDaResposta } from "./filaIA.js"
++import { enfileirarIA, jsonDaResposta, compactarTranscricao } from "./filaIA.js"
+ import { pedirExtracao } from "./autopreenchimento.js"
+ import { buildPrompt } from "./chamadasInvestidor.ts"
+ import { classificarAutomaticamente } from "./classificacaoInvestidor.ts"

@@ -1,0 +1,10 @@
+@@ -17,7 +17,8 @@
+  * qualquer alteração para os dois.
+  */
+ 
+-import { aposAnaliseGravacao } from "./autopreenchimento.js"
++import { aposAnaliseGravacao, instrucoesExtracaoGravacao } from "./autopreenchimento.js"
++import { compactarTranscricao, RE_LIMITE_PLANO } from "./filaIA.js"
+ import { CRITERIOS_DISCOVERY } from "./classeInvestidor.js"
+ 
+ export const TIPOS_CHAMADA_INV = ['cold_call', 'follow_up', 'discovery']

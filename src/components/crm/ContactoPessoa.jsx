@@ -476,11 +476,14 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo),
       })
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao guardar')
+      const registo = await r.json().catch(() => ({}))
       // Gravação da conversa: fica nas gravações do consultor ou nas chamadas do
       // investidor, transcrita e analisada (SOP 2 / SOP 4).
       if (comAudio && audio) {
         const fd = new FormData()
         fd.append('audio', audio)
+        // Liga a gravação ao contacto acabado de registar (resumo na linha cronológica).
+        if (registo?.interacao_id) fd.append('interacao_id', registo.interacao_id)
         fd.append('data_chamada', String(quando || '').slice(0, 10) || emDias(0))
         if (tipo === 'consultor') fd.append('titulo', notas.trim().slice(0, 80) || `Contacto ${fmtDia(String(quando || '').slice(0, 10) || emDias(0))}`)
         else fd.append('tipo_chamada', finalidade === 'follow_up' ? 'follow_up' : 'cold_call')
@@ -670,13 +673,18 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
   const { proximo, rotulo, tipo_sugerido: tipoSugerido } = d
   const etiqueta = proximo?.assuntos?.some(a => a.imovel_id) ? 'Follow-up' : TIPOS[proximo?.tipo] || rotulo
   const historico = Array.isArray(d.historico) ? d.historico : []
-  // Calls gravadas do investidor, ligadas ao contacto do mesmo dia (uma call por contacto).
+  // Calls gravadas do investidor ligadas ao contacto: 1.º pela ligação exacta
+  // (interacao_id, gravação carregada com o contacto); 2.º, nas antigas, pelo dia.
   const chamadaDe = (() => {
     const gs = Array.isArray(chamadas.data) ? chamadas.data.filter(g => !g.sem_audio) : []
     const usadas = new Set(), mapa = new Map()
+    const ids = new Set(historico.map(h => h.id))
+    for (const g of gs) {
+      if (g.interacao_id && ids.has(g.interacao_id) && !mapa.has(g.interacao_id)) { usadas.add(g.id); mapa.set(g.interacao_id, g) }
+    }
     for (const h of historico) {
-      if (canalDe(h) === 'Nota') continue
-      const g = gs.find(x => !usadas.has(x.id) && diaLocal(x.data_chamada) === diaLocal(h.quando))
+      if (canalDe(h) === 'Nota' || mapa.has(h.id)) continue
+      const g = gs.find(x => !usadas.has(x.id) && !x.interacao_id && diaLocal(x.data_chamada) === diaLocal(h.quando))
       if (g) { usadas.add(g.id); mapa.set(h.id, g) }
     }
     return mapa

@@ -1,0 +1,9 @@
+@@ -24,7 +24,7 @@
+  * Gémeo Node em src/db/autopreenchimento.js — o código é o mesmo, só mudam os
+  * imports. Portar qualquer alteração para os dois.
+  */
+-import { enfileirarIA, jsonDaResposta } from "./filaIA.js"
++import { enfileirarIA, jsonDaResposta, compactarTranscricao } from "./filaIA.js"
+ import { withAuditUser } from "./audit.ts"
+ import { registarContactoPessoa, agendarContactoPessoa, definirTipoContacto } from "./contactoPessoa.ts"
+ import { prepararCall } from "./preparacaoCall.ts"

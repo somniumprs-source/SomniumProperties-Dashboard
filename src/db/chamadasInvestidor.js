@@ -148,6 +148,7 @@ export async function ensureInvestidorGravacoesTable(pool) {
     CREATE INDEX IF NOT EXISTS idx_inv_gravacoes_investidor ON investidor_gravacoes(investidor_id);
     CREATE INDEX IF NOT EXISTS idx_inv_gravacoes_estado ON investidor_gravacoes(estado);
     CREATE INDEX IF NOT EXISTS idx_inv_gravacoes_data ON investidor_gravacoes(data_chamada);
+    ALTER TABLE investidor_gravacoes ADD COLUMN IF NOT EXISTS interacao_id TEXT;
     CREATE TABLE IF NOT EXISTS investidor_chamadas_sinteses (
       id TEXT PRIMARY KEY,
       desde TEXT NOT NULL,
