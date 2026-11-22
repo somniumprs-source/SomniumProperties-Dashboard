@@ -69,7 +69,7 @@ export function generateChamadasInvestidoresPDF(rel, sintese) {
     ['Chamadas registadas', `${t.chamadas} (${t.cold_call} Cold Call · ${t.follow_up} Follow-up)`],
     ['Chamadas analisadas', `${t.analisadas}${t.por_processar ? ` · ${t.por_processar} ainda em processamento` : ''}`],
     ['Nota SOP média', `${fmtNota(rel.nota_media.global)} (Cold Call ${fmtNota(rel.nota_media.cold_call)} · Follow-up ${fmtNota(rel.nota_media.follow_up)})`],
-    ['Taxa de contacto', fmtPct(c.taxa_contacto)],
+    ['Taxa de contacto', `${fmtPct(c.taxa_contacto)} (${t.nao_atendidas ?? 0} não atendidas de ${t.chamadas})`],
     ['Chamada 1 para Discovery', `${fmtPct(c.taxa_cold_entrevista)} (${c.cold_entrevista} de ${c.cold_atendidas} atendidas)`],
     ['Recontacto para Discovery', `${fmtPct(c.taxa_follow_entrevista)} (${c.follow_entrevista} de ${c.follow_atendidas} atendidas)`],
     ['Sem interesse / não elegível', String(c.sem_interesse)],

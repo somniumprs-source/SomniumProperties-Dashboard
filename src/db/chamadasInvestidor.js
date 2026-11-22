@@ -381,6 +381,26 @@ export async function relatorioChamadasInvestidores(pool, { desde, ate }) {
      ORDER BY g.data_chamada DESC, g.created_at DESC`,
     [desde, ate],
   )
+  // Chamadas registadas na ficha como "Sem sucesso" não têm áudio: contam como
+  // tentativas não atendidas (salvo se já houver gravação do mesmo dia).
+  const { rows: semAudio } = await pool.query(
+    `SELECT x.id, x.data_hora, x.investidor_id, x.finalidade, x.notas, i.nome AS investidor_nome, i.status AS investidor_status
+     FROM investidor_interacoes x LEFT JOIN investidores i ON i.id = x.investidor_id
+     WHERE x.canal = 'Chamada' AND x.resultado = 'Sem sucesso'
+       AND substr(x.data_hora, 1, 10) BETWEEN $1 AND $2
+       AND NOT EXISTS (SELECT 1 FROM investidor_gravacoes g WHERE g.investidor_id = x.investidor_id
+                       AND substr(g.data_chamada, 1, 10) = substr(x.data_hora, 1, 10))`,
+    [desde, ate],
+  )
+  for (const x of semAudio) {
+    rows.push({
+      id: `int-${x.id}`, data_chamada: String(x.data_hora).slice(0, 10), investidor_id: x.investidor_id,
+      investidor_nome: x.investidor_nome, investidor_status: x.investidor_status,
+      tipo_chamada: x.finalidade === 'cold_call' ? 'cold_call' : 'follow_up', estado: 'sem_audio',
+      resultado: 'nao_atendeu', proximo_passo: null, nota_sop: null, analise: null, transcricao: null, sem_audio: true,
+    })
+  }
+  rows.sort((a, b) => String(b.data_chamada).localeCompare(String(a.data_chamada)))
   const efectivo = (g, campo) => g[campo] ?? g.analise?.[`sugestao_${campo}`] ?? null
   const analisadas = rows.filter(g => g.analise && g.nota_sop != null)
 
@@ -426,6 +446,8 @@ export async function relatorioChamadasInvestidores(pool, { desde, ate }) {
       analisadas: analisadas.length,
       por_processar: rows.filter(g => ['pendente', 'a_transcrever', 'transcrito', 'aguarda_analise', 'a_analisar'].includes(g.estado)).length,
       sem_registo_manual: rows.filter(g => !g.resultado && !g.proximo_passo).length,
+      nao_atendidas: rows.filter(g => efectivo(g, 'resultado') === 'nao_atendeu').length,
+      sem_audio: semAudio.length,
     },
     nota_media: {
       global: media(analisadas.map(g => g.nota_sop)),
@@ -455,7 +477,7 @@ export async function relatorioChamadasInvestidores(pool, { desde, ate }) {
       id: g.id, data_chamada: g.data_chamada, investidor_id: g.investidor_id, investidor_nome: g.investidor_nome,
       tipo_chamada: g.tipo_chamada, realizada_por: g.realizada_por, estado: g.estado, nota_sop: g.nota_sop,
       resultado: efectivo(g, 'resultado'), proximo_passo: efectivo(g, 'proximo_passo'), temperatura: efectivo(g, 'temperatura'),
-      registo_manual: !!(g.resultado || g.proximo_passo), resumo: g.analise?.resumo || null,
+      registo_manual: !!(g.resultado || g.proximo_passo), sem_audio: !!g.sem_audio, resumo: g.analise?.resumo || null,
     })),
   }
 }
