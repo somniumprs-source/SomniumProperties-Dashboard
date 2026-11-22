@@ -17,7 +17,7 @@
  */
 import { useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Phone, RefreshCw, Check, X, Mic, Upload, Plus, Pencil, Trash2, MessageCircle, Mail, Users, StickyNote } from 'lucide-react'
+import { Phone, RefreshCw, Check, X, Mic, Upload, Plus, Pencil, Trash2, MessageCircle, Mail, Users, StickyNote, FileText, Loader2 } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { confirmar } from '../ui/ConfirmDialog.jsx'
@@ -84,7 +84,58 @@ function dataDe(v) {
 
 // Um registo da linha cronológica em árvore. Fechado mostra só título e data;
 // ao clicar abre o detalhe, com a nota editável (o campo só aparece no lápis).
-function RegistoArvore({ h, lado, tipo, rota, pessoaId, opcoes, onPedirOpcoes, onSaved }) {
+// Dia local (YYYY-MM-DD) de um timestamp, para ligar o contacto à gravação da call.
+function diaLocal(v) {
+  if (!v) return null
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(v))) return String(v)
+  const d = new Date(v)
+  if (isNaN(d)) return String(v).slice(0, 10)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+const ESTADO_CHAMADA = {
+  pendente: 'Gravação à espera de transcrição', a_transcrever: 'A transcrever a gravação…', transcrito: 'Transcrita, à espera de análise',
+  aguarda_analise: 'À espera de análise', a_analisar: 'A analisar a call…', erro: 'Falhou o processamento da gravação',
+}
+
+// Resumo da call gravada (transcrição + análise SOP 23) dentro do registo da linha cronológica.
+function ResumoChamada({ g }) {
+  const [aPdf, setAPdf] = useState(false)
+  const a = g.analise || null
+  async function abrirPdf() {
+    setAPdf(true)
+    try {
+      const r = await apiFetch(`/api/crm/chamadas-investidores/${g.id}/relatorio-pdf`)
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Falha ao gerar o PDF')
+      const url = URL.createObjectURL(await r.blob())
+      window.open(url, '_blank')
+      setTimeout(() => URL.revokeObjectURL(url), 60000)
+    } catch (e) { alert(e.message) } finally { setAPdf(false) }
+  }
+  if (!a) {
+    const txt = ESTADO_CHAMADA[g.estado]
+    return txt ? <p className="text-ink-muted italic border-t border-line pt-1.5">{txt}</p> : null
+  }
+  const lista = (t, xs) => Array.isArray(xs) && xs.length > 0 && (
+    <div><p className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted">{t}</p>
+      <ul className="list-disc pl-4 text-ink">{xs.map((x, i) => <li key={i}>{typeof x === 'string' ? x : (x.objeccao || x.texto || x.frase || JSON.stringify(x))}</li>)}</ul></div>
+  )
+  return (
+    <div className="grid gap-1.5 border-t border-line pt-1.5">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-accent-ink">Resumo da call</p>
+      {a.resumo && <p className="text-ink whitespace-pre-line break-words">{a.resumo}</p>}
+      {lista('Objeções', a.objeccoes)}
+      {a.proximo_passo && <p className="text-ink"><span className="font-semibold">Próximo passo: </span>{a.proximo_passo}</p>}
+      <div className="flex justify-end">
+        <button type="button" onClick={abrirPdf} disabled={aPdf} className="inline-flex items-center gap-1 text-ink-muted hover:text-ink">
+          {aPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />} Relatório completo (PDF)
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function RegistoArvore({ h, lado, tipo, rota, pessoaId, opcoes, onPedirOpcoes, onSaved, chamada }) {
   const [aberto, setAberto] = useState(false)
   const [editar, setEditar] = useState(false)
   const [form, setForm] = useState(null)
@@ -224,6 +275,7 @@ function RegistoArvore({ h, lado, tipo, rota, pessoaId, opcoes, onPedirOpcoes, o
             ) : (
               <>
                 {h.notas && <p className="text-ink  whitespace-pre-line break-words min-w-0">{limpaNota(h.notas)}</p>}
+                {chamada && <ResumoChamada g={chamada} />}
                 {erro && <p className="text-danger">{erro}</p>}
                 <div className="flex justify-end gap-3">
                   <button type="button" onClick={abrirEdicao} disabled={saving} className="inline-flex items-center gap-1 text-ink-muted hover:text-warning">
@@ -596,6 +648,14 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
       return r.ok ? r.json() : null
     },
   })
+  const chamadas = useQuery({
+    queryKey: ['chamadas-investidor', pessoaId],
+    enabled: tipo === 'investidor',
+    queryFn: async () => {
+      const r = await apiFetch(`/api/crm/investidores/${pessoaId}/chamadas`)
+      return r.ok ? r.json() : []
+    },
+  })
   const todos = useQuery({
     queryKey: ['lookup-imoveis'],
     enabled: !!modo || precisaOpcoes,
@@ -610,6 +670,17 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
   const { proximo, rotulo, tipo_sugerido: tipoSugerido } = d
   const etiqueta = proximo?.assuntos?.some(a => a.imovel_id) ? 'Follow-up' : TIPOS[proximo?.tipo] || rotulo
   const historico = Array.isArray(d.historico) ? d.historico : []
+  // Calls gravadas do investidor, ligadas ao contacto do mesmo dia (uma call por contacto).
+  const chamadaDe = (() => {
+    const gs = Array.isArray(chamadas.data) ? chamadas.data.filter(g => !g.sem_audio) : []
+    const usadas = new Set(), mapa = new Map()
+    for (const h of historico) {
+      if (canalDe(h) === 'Nota') continue
+      const g = gs.find(x => !usadas.has(x.id) && diaLocal(x.data_chamada) === diaLocal(h.quando))
+      if (g) { usadas.add(g.id); mapa.set(h.id, g) }
+    }
+    return mapa
+  })()
   // Imóveis da pessoa primeiro; a seguir todos os outros (pode falar-se de um imóvel que não é dela).
   const proprios = (imoveis || []).map(i => ({ id: i.id, nome: i.nome }))
   const idsProprios = new Set(proprios.map(i => i.id))
@@ -619,6 +690,7 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
 
   const nota = !proximo ? (notaAntiga || '').trim() : ''
   async function guardado() {
+    if (tipo === 'investidor') chamadas.refetch()
     if (nota && modo === 'agendar') {
       await apiFetch(`/api/crm/${ROTA[tipo]}/${pessoaId}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ proxima_acao: null }),
@@ -705,7 +777,7 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
           <ol className="relative grid gap-2.5 py-1 before:absolute before:top-0 before:bottom-0 before:w-0.5 before:rounded before:bg-line  before:left-[17px] sm:before:left-1/2 sm:before:-translate-x-1/2">
             {(verTodos ? historico : historico.slice(0, MOSTRAR)).map((h, i) => (
               <RegistoArvore key={h.id} h={h} lado={i % 2 === 0 ? 'dir' : 'esq'} tipo={tipo} rota={ROTA[tipo]} pessoaId={pessoaId}
-                opcoes={opcoes} onPedirOpcoes={() => setPrecisaOpcoes(true)} onSaved={() => { query.refetch(); onUpdate?.() }} />
+                opcoes={opcoes} chamada={chamadaDe.get(h.id)} onPedirOpcoes={() => setPrecisaOpcoes(true)} onSaved={() => { query.refetch(); onUpdate?.() }} />
             ))}
           </ol>
           {historico.length > MOSTRAR && (
