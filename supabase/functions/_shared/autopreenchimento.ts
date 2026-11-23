@@ -447,7 +447,7 @@ export async function aplicarRespostaExtracao(pool, pedido, texto) {
   // Novos dados => a preparação das próximas calls fica desatualizada e é refeita.
   const { rows } = await pool.query(
     `SELECT id FROM tarefas WHERE origem_tipo = 'investidor' AND origem_id = $1 AND origem_campo = 'proximo_contacto'
-       AND status NOT IN ('Concluída', 'Concluida') AND COALESCE(arquivada, false) = false`, [ctx.investidor_id])
+       AND COALESCE(arquivada, false) = false`, [ctx.investidor_id])
   for (const t of rows) await prepararCall(pool, t.id, { gerar: false }).catch(() => {})
   return res
 }
@@ -529,7 +529,7 @@ export async function aplicarRegistoCall(pool, gravacaoId) {
   const proxTipo = entrevista ? 'discovery_call' : 'follow_up'
   const { rows: [aberta] } = await pool.query(
     `SELECT id, COALESCE(inicio, data_limite) AS quando FROM tarefas WHERE origem_tipo = 'investidor' AND origem_id = $1 AND origem_campo = 'proximo_contacto'
-       AND status NOT IN ('Concluída', 'Concluida') AND COALESCE(arquivada, false) = false ORDER BY created_at DESC LIMIT 1`, [invId])
+       AND COALESCE(arquivada, false) = false ORDER BY created_at DESC LIMIT 1`, [invId])
   const diaAberta = dia(aberta?.quando)
   const limiteEstaCall = dataCall ? somaDias(dataCall, 1) : null
   if (aberta && diaAberta && limiteEstaCall && diaAberta > limiteEstaCall) {

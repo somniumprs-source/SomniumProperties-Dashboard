@@ -47,7 +47,7 @@ export async function carregarDadosEntrada(query, id) {
            UNION ALL
            SELECT t.inicio, t.data_limite FROM contacto_assuntos a JOIN tarefas t ON t.id = a.origem_id
             WHERE a.origem = 'tarefa' AND a.imovel_id = $1 AND t.origem_campo = 'proximo_contacto'
-              AND t.status <> 'Concluída' AND COALESCE(t.arquivada, false) = false`, [id]),
+              AND COALESCE(t.arquivada, false) = false`, [id]),
     query(`SELECT 1 FROM negocios n JOIN projeto_fases pf ON pf.negocio_id = n.id
             WHERE n.imovel_id = $1 AND n.deleted_at IS NULL AND n.categoria = 'Wholesaling'
               AND pf.fase_key = 'cpcv_cedencia' AND pf.estado = 'concluida' LIMIT 1`, [id]),

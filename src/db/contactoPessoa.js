@@ -18,6 +18,10 @@ import { randomUUID } from 'crypto'
 
 const CAMPO = 'proximo_contacto'
 const ABERTA = "status NOT IN ('Concluída', 'Concluida') AND COALESCE(arquivada, false) = false"
+// Contacto marcado (proximo_contacto): por fazer até se registar o resultado.
+// Concluir a tarefa na Agenda não o fecha; registar (Feito ou Sem sucesso) tira-a
+// de proximo_contacto.
+const PENDENTE = "COALESCE(arquivada, false) = false"
 export const CANAIS_CONTACTO = ['Chamada', 'WhatsApp', 'Email', 'Reunião']
 export const RESULTADOS_CONTACTO = ['Feito', 'Sem sucesso']
 
@@ -85,7 +89,7 @@ async function carregarPessoa(pool, tipo, id) {
 async function tarefaAberta(pool, tipo, id) {
   const { rows: [t] } = await pool.query(
     `SELECT id, inicio, fim, data_limite, funcionario, categoria FROM tarefas
-     WHERE origem_tipo = $1 AND origem_id = $2 AND origem_campo = $3 AND ${ABERTA}
+     WHERE origem_tipo = $1 AND origem_id = $2 AND origem_campo = $3 AND ${PENDENTE}
      ORDER BY created_at DESC LIMIT 1`,
     [tipo, id, CAMPO]
   )
@@ -349,6 +353,7 @@ async function registarContactoPessoaTx(pool, tipo, id, {
   if (t) await pool.query("UPDATE tarefas SET status = 'Concluída', updated_at = NOW() WHERE id = $1", [t.id])
   // O contacto feito fica na agenda: a tarefa marcada passa a ser a dele (e sai
   // de 'proximo_contacto', já fechada); sem tarefa marcada, cria-se uma concluída.
+  if (semSucesso && t) await pool.query('UPDATE tarefas SET origem_campo = $1 WHERE id = $2', [`tentativa:${interacaoId}`, t.id])
   if (!semSucesso) {
     if (t) await pool.query('UPDATE tarefas SET origem_campo = $1 WHERE id = $2', [`contacto:${interacaoId}`, t.id])
     await sincronizarTarefaFeita(pool, p, interacaoId, { user })
@@ -579,7 +584,7 @@ export function instanteLisboa(dia, hhmm) {
 export async function espelharTarefaContacto(pool, tarefaId) {
   const { rows: [t] } = await pool.query(
     `SELECT id, origem_tipo, origem_id, inicio, data_limite FROM tarefas
-     WHERE id = $1 AND origem_campo = $2 AND ${ABERTA}`,
+     WHERE id = $1 AND origem_campo = $2 AND ${PENDENTE}`,
     [tarefaId, CAMPO]
   )
   const cfg = t && PESSOAS[t.origem_tipo]

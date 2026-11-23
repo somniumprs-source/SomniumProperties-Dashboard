@@ -602,7 +602,7 @@ async function agendarPelaCadencia(pool, consultorId, classe, params, user) {
   if (!dias) return null
   const { rows: [aberta] } = await pool.query(
     `SELECT id FROM tarefas WHERE origem_tipo = 'consultor' AND origem_id = $1 AND origem_campo = 'proximo_contacto'
-        AND status NOT IN ('Concluída', 'Concluida') AND COALESCE(arquivada, false) = false LIMIT 1`, [consultorId])
+        AND COALESCE(arquivada, false) = false LIMIT 1`, [consultorId])
   if (aberta) return null
   return agendarContactoPessoa(pool, 'consultor', consultorId, { data: diasDepois(dias), user })
 }

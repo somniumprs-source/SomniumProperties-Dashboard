@@ -481,6 +481,23 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
   const [reunioes, setReunioes] = useState([])
   // Preenchimento automático (calls e reuniões): sugestões pendentes e marca "preenchido por IA".
   const ia = useCamposIA(type === 'Investidores' ? id : null)
+  // «Seguinte»: próximo investidor com contacto marcado (de hoje em diante, por hora),
+  // para passar de chamada em chamada sem abrir a Agenda.
+  const [filaContactos, setFilaContactos] = useState([])
+  useEffect(() => {
+    if (type !== 'Investidores') return
+    let vivo = true
+    apiFetchJson('/api/crm/investidores-fila-contactos')
+      .then(r => { if (vivo) setFilaContactos(Array.isArray(r) ? r : []) })
+      .catch(() => {})
+    return () => { vivo = false }
+  }, [type, id])
+  const seguinteId = useMemo(() => {
+    if (type !== 'Investidores' || !filaContactos.length) return null
+    const i = filaContactos.findIndex(f => String(f.id) === String(id))
+    const prox = i >= 0 ? filaContactos[i + 1] : filaContactos[0]
+    return prox && String(prox.id) !== String(id) ? prox.id : null
+  }, [type, id, filaContactos])
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
@@ -727,6 +744,11 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
           <h2 className="font-display text-xl font-medium text-ink truncate">{data.nome ?? data.movimento}</h2>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+          {seguinteId && !editing && onNavigate && (
+            <Button size="sm" onClick={() => onNavigate('Investidores', seguinteId)} title="Abrir o próximo contacto marcado">
+              Seguinte →
+            </Button>
+          )}
           <Button variant="secondary" size="sm" icon={linkCopied ? Check : Link2} onClick={copyLink} title="Copiar link partilhável">
             {linkCopied ? 'Copiado' : 'Link'}
           </Button>

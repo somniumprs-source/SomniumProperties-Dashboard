@@ -1222,7 +1222,7 @@ router.get('/consultores/enriched', async (req, res) => {
       pool.query("SELECT consultor_id, data_hora, direcao FROM consultor_interacoes WHERE canal IS DISTINCT FROM 'Nota' ORDER BY data_hora DESC"),
       pool.query('SELECT consultor_id, MIN(data) AS primeiro_followup, MAX(data) AS ultimo_followup FROM consultor_followups GROUP BY consultor_id'),
       // Hora do contacto marcado: ordena os cartões do Kanban dentro do mesmo dia.
-      pool.query("SELECT DISTINCT ON (origem_id) origem_id, inicio FROM tarefas WHERE origem_tipo = 'consultor' AND origem_campo = 'proximo_contacto' AND status NOT IN ('Concluída', 'Concluida') AND COALESCE(arquivada, false) = false ORDER BY origem_id, created_at DESC"),
+      pool.query("SELECT DISTINCT ON (origem_id) origem_id, inicio FROM tarefas WHERE origem_tipo = 'consultor' AND origem_campo = 'proximo_contacto' AND COALESCE(arquivada, false) = false ORDER BY origem_id, created_at DESC"),
     ])
     const consultores = resConsultores.rows
     const imoveis = resImoveis.rows
@@ -2597,7 +2597,7 @@ async function prepararProximaCall(investidorId) {
   try {
     const { rows } = await pool.query(
       `SELECT id FROM tarefas WHERE origem_tipo = 'investidor' AND origem_id = $1 AND origem_campo = 'proximo_contacto'
-         AND status NOT IN ('Concluída', 'Concluida') AND COALESCE(arquivada, false) = false`, [investidorId])
+         AND COALESCE(arquivada, false) = false`, [investidorId])
     for (const t of rows) await prepararCall(pool, t.id, { gerar: true })
   } catch (e) { console.error('[preparacao]', e.message) }
 }
@@ -2682,6 +2682,19 @@ router.get('/investidores/:id/preparacoes', semPortalInvestidor, async (req, res
 // Calls agendadas deste investidor para ligar à gravação (últimos 14 dias até amanhã).
 router.get('/investidores/:id/calls-para-gravacao', semPortalInvestidor, async (req, res) => {
   try { res.json(await callsParaGravacao(pool, req.params.id)) } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Fila de contactos marcados com investidores, de hoje em diante, por hora:
+// alimenta o botão «Seguinte» da ficha (port de crm/index.ts).
+router.get('/investidores-fila-contactos', semPortalInvestidor, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM (
+      SELECT DISTINCT ON (origem_id) origem_id AS id, COALESCE(inicio, data_limite) AS quando
+      FROM tarefas WHERE origem_tipo = 'investidor' AND origem_campo = 'proximo_contacto' AND COALESCE(arquivada, false) = false
+        AND COALESCE(data_limite, LEFT(inicio, 10)) >= (NOW() AT TIME ZONE 'Europe/Lisbon')::date::text
+      ORDER BY origem_id, created_at DESC) f ORDER BY quando, id`)
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 router.get('/investidores/:id/tipo-chamada-sugerido', semPortalInvestidor, async (req, res) => {
