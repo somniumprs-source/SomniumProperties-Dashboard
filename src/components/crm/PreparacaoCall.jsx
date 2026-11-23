@@ -120,6 +120,9 @@ export function PreparacaoDocumento({ prep, onAtualizar, compacto = false }) {
       <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-line">
         <span className="font-serif text-lg text-[#C9A84C]">{h.hora || 'A confirmar'}</span>
         <span className="font-serif text-lg text-ink">{h.nome}</span>
+        {h.telemovel
+          ? <a href={`tel:${String(h.telemovel).replace(/\s/g, '')}`} className="text-sm font-medium text-[#C9A84C] hover:underline">{h.telemovel}</a>
+          : <span className="text-xs text-ink-muted">sem telemóvel</span>}
         <span className="text-xs text-ink-muted">{fmtData(h.dia)}{h.responsavel ? ` · ${h.responsavel}` : ''}</span>
         <div className="ml-auto flex items-center gap-2">
           <TipoBadge tipo={prep.tipo_final} />

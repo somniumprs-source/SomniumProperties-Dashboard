@@ -457,7 +457,7 @@ export function montarSecoesBase(ctx, cls, tipoFinal) {
   const emFalta = CAMPOS_FORMS.filter(([k]) => vazio(inv[k])).map(([, l]) => l)
   return {
     cabecalho: {
-      investidor_id: inv.id, nome: inv.nome, dia: q.dia, hora: q.hora,
+      investidor_id: inv.id, nome: inv.nome, telemovel: inv.telemovel || null, dia: q.dia, hora: q.hora,
       tipo: tipoFinal, tipo_label: TIPO_CALL_LABEL[tipoFinal] || tipoFinal, lead_quente: cls.lead_quente,
       tipo_calculado: cls.tipo, motivo: cls.motivo,
       classe: inv.classificacao || null, pontuacao: inv.pontuacao ?? null, status: inv.status || null,
@@ -795,6 +795,11 @@ async function comEstadoIA(pool, p) {
     if (p.estado === 'a_gerar' && est?.estado === 'erro') return { ...p, estado: 'erro', erro: est.erro || 'A IA falhou' }
   }
   if (!p.conteudo_md && p.secoes_base) p.conteudo_md = renderMarkdown(p.secoes_base, null)
+  const cab = p.secoes_base?.cabecalho
+  if (cab?.investidor_id && cab.telemovel === undefined) {
+    const { rows: [i] } = await pool.query('SELECT telemovel FROM investidores WHERE id = $1', [cab.investidor_id]).catch(() => ({ rows: [] }))
+    cab.telemovel = i?.telemovel || null
+  }
   return p
 }
 
