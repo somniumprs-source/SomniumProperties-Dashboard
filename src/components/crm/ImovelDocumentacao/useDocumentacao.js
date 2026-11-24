@@ -32,8 +32,11 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
   // Documentos vêm de duas fontes: ficheiros locais (coluna fotos) e a subpasta
   // "Documentos" do Google Drive do imóvel. Ambos aparecem na lista e podem ser
   // analisados por IA (os do Drive são descarregados de forma autenticada no backend).
-  const load = useCallback(async () => {
-    setLoading(true)
+  // { silencioso: true } relê sem pôr o módulo em esqueleto de carregamento:
+  // depois de um upload, trocar a lista pelo esqueleto encolhia a página e o
+  // navegador saltava para o topo da ficha (parecia que fechava e reabria).
+  const load = useCallback(async ({ silencioso = false } = {}) => {
+    if (!silencioso) setLoading(true)
     try {
       const [imRes, drvRes] = await Promise.all([
         apiFetch(`/api/crm/imoveis/${imovelId}`),
@@ -73,8 +76,12 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
   // O segundo argumento opcional { slot } liga o ficheiro a um item da checklist
   // canónica de documentação (ver checklist.config.js).
   const analisarRef = useRef(null)
-  const upload = useCallback(async (files, opts = {}) => {
-    if (!files?.length) return
+  const upload = useCallback(async (fileList, opts = {}) => {
+    // Cópia imediata: o input limpa o FileList (value = '') logo a seguir à
+    // chamada, e depois do primeiro await files.length já valia 0, o que
+    // impedia a leitura automática dos documentos acabados de carregar.
+    const files = Array.from(fileList || [])
+    if (!files.length) return
     setUploading(true)
     setUploadErro(null)
     try {
@@ -92,7 +99,7 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
           ...prev.filter(d => d.source === 'drive'),
         ])
       }
-      await load()
+      await load({ silencioso: true })
       if (SLOTS_LEITURA_AUTO.includes(opts.slot) && Array.isArray(data.fotos)) {
         // Os acabados de carregar: os mais recentes do slot (o nome pode mudar no servidor).
         const novos = data.fotos.filter(x => x?.slot === opts.slot)
@@ -159,7 +166,7 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
         const locais = data.fotos.filter(isDoc).map(f => ({ ...f, source: 'local' }))
         setDocs(prev => [...locais, ...prev.filter(d => d.source === 'drive')])
       } else {
-        await load()
+        await load({ silencioso: true })
       }
       setAnalises(prev => prev.filter(a => a.fotoId !== fotoId))
     } catch (e) { console.error('Erro a remover documento:', e) }
