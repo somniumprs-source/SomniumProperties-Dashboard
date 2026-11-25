@@ -98,6 +98,7 @@ export function ComercialDashboard({ data: d, comKpis, alertas, periodo, onPerio
         </Bloco>
         <Bloco titulo="Atividade no período" nota={notaPeriodo} acao={seletor}>
           <Numeros>
+            <Indicador id="G51" value={fmtNum(at?.coldCalls?.valor)} delta={at?.coldCalls?.delta} tone="indigo" />
             <Indicador id="G15" value={fmtNum(at?.discoveryCalls?.valor)} delta={at?.discoveryCalls?.delta} tone="indigo" />
             <Indicador id="G16" value={fmtNum(at?.followUpCalls?.valor)} delta={at?.followUpCalls?.delta} tone="indigo" />
             <Indicador id="G17" value={fmtNum(at?.novosInvestidores)} delta={at?.deltas?.novosInvestidores} />

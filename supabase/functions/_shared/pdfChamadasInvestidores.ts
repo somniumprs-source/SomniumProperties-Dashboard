@@ -27,7 +27,7 @@ const PW = 595.28
 const PH = 841.89
 const CW = PW - ML * 2
 
-const TIPO_LABEL = { cold_call: 'Cold Call', follow_up: 'Follow-up' }
+const TIPO_LABEL = { cold_call: 'Cold Call', follow_up: 'Follow-up', discovery: 'Discovery' }
 const RESULTADO_LABEL = { atendeu: 'Atendeu', nao_atendeu: 'Não atendeu', recusou: 'Recusou', numero_errado: 'Número errado' }
 const PROXIMO_LABEL = { entrevista_marcada: 'Discovery/apresentação marcada', follow_up_agendado: 'Follow-up agendado', enviar_forms: 'Enviar Forms', sem_interesse: 'Sem interesse', nao_elegivel: 'Não elegível' }
 

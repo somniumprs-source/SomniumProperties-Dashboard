@@ -1552,6 +1552,8 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
     for (const n of negPeriodo) { const iid = Array.isArray(n.imovel) ? n.imovel[0] : null; const o = imovelOrigem[iid] || "Não registado"; lucroFonteMap[o] = (lucroFonteMap[o] || 0) + lucroDe(n); }
     const lucroPorFonte = Object.entries(lucroFonteMap).map(([origem, lucro]: any) => ({ origem, lucro: round2(lucro) })).filter((x: any) => x.lucro > 0).sort((a: any, b: any) => b.lucro - a.lucro).slice(0, 5);
 
+    const coldCalls = iiRows.filter((r: any) => r.finalidade === "cold_call" && inP(r.data_hora, start, end)).length;
+    const coldPrev = iiRows.filter((r: any) => r.finalidade === "cold_call" && inP(r.data_hora, prevStart, prevEnd)).length;
     const discoveryCalls = iiRows.filter((r: any) => r.finalidade === "discovery" && inP(r.data_hora, start, end)).length;
     const followUpCalls = iiRows.filter((r: any) => r.finalidade === "follow_up" && inP(r.data_hora, start, end)).length;
     const discoveryPrev = iiRows.filter((r: any) => r.finalidade === "discovery" && inP(r.data_hora, prevStart, prevEnd)).length;
@@ -1603,6 +1605,7 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
       },
       pipelinePonderado,
       atividade: {
+        coldCalls: { valor: coldCalls, delta: pctDelta(coldCalls, coldPrev) },
         discoveryCalls: { valor: discoveryCalls, delta: pctDelta(discoveryCalls, discoveryPrev) },
         followUpCalls: { valor: followUpCalls, delta: pctDelta(followUpCalls, followUpPrev) },
         novosInvestidores: invNovos,

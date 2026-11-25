@@ -399,7 +399,7 @@ export async function relatorioChamadasInvestidores(pool, { desde, ate }) {
     rows.push({
       id: `int-${x.id}`, data_chamada: String(x.data_hora).slice(0, 10), investidor_id: x.investidor_id,
       investidor_nome: x.investidor_nome, investidor_status: x.investidor_status,
-      tipo_chamada: x.finalidade === 'cold_call' ? 'cold_call' : 'follow_up', estado: 'sem_audio',
+      tipo_chamada: TIPOS_CHAMADA_INV.includes(x.finalidade) ? x.finalidade : 'follow_up', estado: 'sem_audio',
       resultado: 'nao_atendeu', proximo_passo: null, nota_sop: null, analise: null, transcricao: null, sem_audio: true,
     })
   }
