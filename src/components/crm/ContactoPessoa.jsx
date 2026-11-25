@@ -38,7 +38,7 @@ const CANAL = { chamada: 'Chamada', whatsapp: 'WhatsApp', email: 'Email', 'reuni
 const canalDe = h => (h.antigo || !h.canal ? 'Follow-up' : CANAL[String(h.canal).toLowerCase()] || h.canal)
 const COR = { Chamada: '#C9A84C', WhatsApp: '#16A34A', Email: '#2563EB', 'Reunião': '#7C3AED', Nota: '#8A857A', 'Follow-up': '#B08A2E' }
 const ICONE = { Chamada: Phone, WhatsApp: MessageCircle, Email: Mail, 'Reunião': Users, Nota: StickyNote, 'Follow-up': RefreshCw }
-const FINALIDADE = { follow_up: 'Follow Up', discovery: 'Discovery' }
+const FINALIDADE = { cold_call: 'Cold Call', follow_up: 'Follow Up', discovery: 'Discovery' }
 const COM_FINALIDADE = ['consultor', 'investidor'] // espelho de src/db/contactoPessoa.js
 // Instante → valor de <input type="datetime-local"> na hora local.
 const paraLocal = v => {
@@ -67,6 +67,7 @@ function tituloBase(h) {
   if (imoveis.length && FINALIDADE[h.finalidade] && (canal === 'Chamada' || canal === 'Follow-up')) return `${FINALIDADE[h.finalidade]} · ${imoveis.join(', ')}`
   if (imoveis.length) return `${canal === 'Chamada' || canal === 'Follow-up' ? 'Call' : canal} ${imoveis.join(', ')}`
   if (h.finalidade === 'discovery') return 'Discovery'
+  if (h.finalidade === 'cold_call') return 'Cold Call'
   return canal === 'Chamada' || canal === 'Follow-up' ? 'Follow Up' : canal
 }
 
@@ -245,6 +246,7 @@ function RegistoArvore({ h, lado, tipo, rota, pessoaId, opcoes, onPedirOpcoes, o
                   {!eNota && !h.antigo && COM_FINALIDADE.includes(tipo) && (
                     <label className="text-[11px] text-ink-muted">Finalidade
                       <select value={form.finalidade} onChange={e => set('finalidade', e.target.value)} className={inputClass}>
+                        <option value="cold_call">Cold Call</option>
                         <option value="follow_up">Follow Up</option>
                         <option value="discovery">Discovery</option>
                       </select>
@@ -413,7 +415,7 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
   const [assuntos, setAssuntos] = useState(marcados)
   const [quando, setQuando] = useState(agoraLocal())
   const [canal, setCanal] = useState('Chamada')
-  const [finalidade, setFinalidade] = useState(semContacto || proximo?.tipo === 'discovery_call' ? 'discovery' : 'follow_up')
+  const [finalidade, setFinalidade] = useState(semContacto ? 'cold_call' : proximo?.tipo === 'discovery_call' ? 'discovery' : 'follow_up')
   // Quem tomou a iniciativa: mede a resposta em 24 h nos dois sentidos (G27).
   const [direcao, setDirecao] = useState('Enviado')
   // Tipo do contacto a marcar (no agendar, ou o seguinte ao registar).
@@ -486,7 +488,7 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
         if (registo?.interacao_id) fd.append('interacao_id', registo.interacao_id)
         fd.append('data_chamada', String(quando || '').slice(0, 10) || emDias(0))
         if (tipo === 'consultor') fd.append('titulo', notas.trim().slice(0, 80) || `Contacto ${fmtDia(String(quando || '').slice(0, 10) || emDias(0))}`)
-        else fd.append('tipo_chamada', finalidade === 'follow_up' ? 'follow_up' : 'cold_call')
+        else fd.append('tipo_chamada', finalidade)
         const url = tipo === 'consultor' ? `/api/crm/consultores/${pessoaId}/gravacoes` : `/api/crm/investidores/${pessoaId}/chamadas`
         const ru = await apiFetch(url, { method: 'POST', body: fd }).catch(() => null)
         if (!ru?.ok) toast(`O contacto ficou registado, mas a gravação não foi carregada. Tenta carregá-la de novo nas ${tipo === 'consultor' ? 'gravações' : 'chamadas'}.`, 'error')
@@ -523,8 +525,9 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
             {COM_FINALIDADE.includes(tipo) && (
               <label className="text-[11px] text-ink-muted">Finalidade
                 <select value={finalidade} onChange={e => setFinalidade(e.target.value)} className={inputClass}>
-                  <option value="discovery">Discovery</option>
+                  <option value="cold_call">Cold Call</option>
                   <option value="follow_up">Follow Up</option>
+                  <option value="discovery">Discovery</option>
                 </select>
               </label>
             )}

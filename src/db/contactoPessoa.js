@@ -183,7 +183,7 @@ async function sincronizarTarefaFeita(pool, p, interacaoId, { criar = true, user
   }
   if (!t && !criar) return null
   const imoveis = (await assuntosDe(pool, cfg.origem, [interacaoId])).filter(a => a.imovel_id)
-  const tipoContacto = x.finalidade === 'discovery' ? 'discovery_call' : 'follow_up'
+  const tipoContacto = x.finalidade === 'discovery' ? 'discovery_call' : x.finalidade === 'cold_call' ? 'cold_call' : 'follow_up'
   const titulo = `${TIPOS_CONTACTO[tipoContacto]} — ${p.nome || 'Sem nome'}${imoveis.length ? ` (${imoveis.map(a => a.imovel_nome || 'Imóvel').join(', ')})` : ''}`
   const categoria = cfg.categorias[tipoContacto]
   const ini = new Date(x.data_hora)
@@ -343,7 +343,7 @@ async function registarContactoPessoaTx(pool, tipo, id, {
   const agora = new Date().toISOString()
   const cols = ['id', cfg.fk, 'data_hora', 'canal', 'direcao', 'notas', 'resultado', 'proxima_data', 'autor', 'created_at', 'updated_at']
   const vals = [interacaoId, id, feitoEm, canal, direcao, (notas || '').trim() || null, resultado, proximo?.data || null, user?.nome || user?.email || null, agora, agora]
-  if (COM_FINALIDADE.includes(tipo)) { cols.push('finalidade'); vals.push(finalidade === 'discovery' ? 'discovery' : 'follow_up') }
+  if (COM_FINALIDADE.includes(tipo)) { cols.push('finalidade'); vals.push(['discovery', 'cold_call'].includes(finalidade) ? finalidade : 'follow_up') }
   await pool.query(`INSERT INTO ${cfg.interacoes} (${cols.join(', ')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(', ')})`, vals)
 
   if (idsTratados.length) {
@@ -433,7 +433,7 @@ async function editarContactoTx(pool, tipo, id, hid, campos = {}) {
   if (quando) { vals.push(quando); sets.push(`data_hora = $${vals.length}`) }
   if (tem('canal')) { vals.push(campos.canal); sets.push(`canal = $${vals.length}`) }
   if (tem('finalidade') && COM_FINALIDADE.includes(tipo)) {
-    vals.push(campos.finalidade === 'discovery' ? 'discovery' : 'follow_up'); sets.push(`finalidade = $${vals.length}`)
+    vals.push(['discovery', 'cold_call'].includes(campos.finalidade) ? campos.finalidade : 'follow_up'); sets.push(`finalidade = $${vals.length}`)
   }
   // O imóvel único das interações antigas passa para os assuntos.
   if (imoveis && tipo === 'consultor') sets.push('imovel_id = NULL')
