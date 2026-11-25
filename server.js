@@ -787,7 +787,7 @@ import { alertasConservacao } from './src/db/consentimentos.js'
 import { alertasDocumentosEmpresa } from './src/constants/documentosEmpresa.js'
 import { juntarResponsavel, donosDasRegioes } from './src/db/responsavelRegiao.js'
 import { alertasDeDespesas } from './src/constants/regrasDespesas.js'
-import { normalizarEstadoTarefa, faltaNaTarefa, tarefaConcluida, tarefaAtrasada } from './src/constants/regrasTarefas.js'
+import { normalizarEstadoTarefa, faltaNaTarefa, tarefaConcluida, tarefaAtrasada, faltaRegistoInvestidor } from './src/constants/regrasTarefas.js'
 import http from 'node:http'
 const cache = new TTLCache(60000) // 60s default TTL
 app.post('/api/cache/clear', (_req, res) => { cache.clear(); res.json({ ok: true }) })
@@ -4414,6 +4414,8 @@ app.put('/api/tarefas/:id', async (req, res) => {
     const final = { ...atual, ...Object.fromEntries(Object.entries({ status, inicio, funcionario }).filter(([, v]) => v !== undefined)) }
     const falta = faltaNaTarefa(final)
     if (falta) return res.status(400).json({ error: falta })
+    const semRegisto = await faltaRegistoInvestidor(pgPool, atual, { ...final, categoria: categoria ?? atual.categoria })
+    if (semRegisto) return res.status(400).json({ error: semRegisto })
     const now = new Date().toISOString()
     const horas = (tempo_horas != null && tempo_horas !== '')
       ? Number(tempo_horas)

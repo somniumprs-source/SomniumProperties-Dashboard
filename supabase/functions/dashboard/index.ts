@@ -13,7 +13,7 @@ import { alertasConservacao } from "../_shared/consentimentos.ts";
 import { alertasDocumentosEmpresa } from "../_shared/documentosEmpresa.ts";
 import { juntarResponsavel, donosDasRegioes } from "../_shared/responsavelRegiao.ts";
 import { alertasDeDespesas } from "../_shared/regrasDespesas.ts";
-import { normalizarEstadoTarefa, faltaNaTarefa, tarefaConcluida, tarefaAtrasada } from "../_shared/regrasTarefas.ts";
+import { normalizarEstadoTarefa, faltaNaTarefa, tarefaConcluida, tarefaAtrasada, faltaRegistoInvestidor } from "../_shared/regrasTarefas.ts";
 import { auditMiddleware } from "../_shared/audit.ts";
 import {
   getNegócios as _getNegócios,
@@ -3278,6 +3278,8 @@ app.put("/tarefas/:id", async (c: any) => {
     const final = { ...atual, ...Object.fromEntries(Object.entries({ status, inicio, funcionario }).filter(([, v]) => v !== undefined)) };
     const falta = faltaNaTarefa(final);
     if (falta) return c.json({ error: falta }, 400);
+    const semRegisto = await faltaRegistoInvestidor(pool, atual, { ...final, categoria: categoria ?? atual.categoria });
+    if (semRegisto) return c.json({ error: semRegisto }, 400);
     const now = new Date().toISOString();
     const horas = tempo_horas != null && tempo_horas !== ""
       ? Number(tempo_horas)
