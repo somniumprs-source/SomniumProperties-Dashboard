@@ -403,7 +403,7 @@ function OportunidadesEditor({ itens, setItens }) {
 // modo: 'agendar' (marcar ou mudar o contacto), 'feito' (o contacto marcado),
 // 'novo' (contacto fora do marcado: não o fecha nem lhe mexe nos assuntos) ou 'sem_sucesso'.
 // pessoa: { nome, regiao } — para ligar ao consultor as oportunidades registadas.
-function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSugerido, opcoes, onCancel, onDone }) {
+function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSugerido, opcoes, semContacto, onCancel, onDone }) {
   const toast = useToast()
   const feito = modo === 'feito' || modo === 'novo'
   const marcados = modo === 'novo' ? [] : proximo?.assuntos || []
@@ -413,7 +413,7 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
   const [assuntos, setAssuntos] = useState(marcados)
   const [quando, setQuando] = useState(agoraLocal())
   const [canal, setCanal] = useState('Chamada')
-  const [finalidade, setFinalidade] = useState(proximo?.tipo === 'discovery_call' ? 'discovery' : 'follow_up')
+  const [finalidade, setFinalidade] = useState(semContacto || proximo?.tipo === 'discovery_call' ? 'discovery' : 'follow_up')
   // Quem tomou a iniciativa: mede a resposta em 24 h nos dois sentidos (G27).
   const [direcao, setDirecao] = useState('Enviado')
   // Tipo do contacto a marcar (no agendar, ou o seguinte ao registar).
@@ -771,6 +771,7 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
       {modo === 'nota' && <NotaForm rota={ROTA[tipo]} pessoaId={pessoaId} onCancel={() => setModo(null)} onDone={guardado} />}
       {modo && modo !== 'nota' && (
         <ContactoForm key={modo} tipo={tipo} pessoaId={pessoaId} pessoa={{ nome: d.pessoa?.nome, regiao }} modo={modo} rotulo={rotulo} tipoSugerido={tipoSugerido} opcoes={opcoes}
+          semContacto={!historico.some(h => canalDe(h) !== 'Nota' && h.autor !== 'Envio automático')}
           proximo={proximo || (nota && modo === 'agendar' ? { assuntos: [{ texto: nota }] } : null)}
           onCancel={() => setModo(null)} onDone={guardado} />
       )}
