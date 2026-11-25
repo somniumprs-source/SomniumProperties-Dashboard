@@ -1359,7 +1359,7 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
       getNegócios({ regiao }).catch(() => [] as any[]),
       getDespesas({ regiao }).catch(() => [] as any[]),
       pool.query(`SELECT consultor_id, canal, direcao, data_hora FROM consultor_interacoes WHERE canal IS DISTINCT FROM 'Nota' ORDER BY consultor_id, data_hora`).catch(() => ({ rows: [] as any[] })),
-      pool.query(`SELECT finalidade, canal, data_hora FROM investidor_interacoes WHERE canal IS DISTINCT FROM 'Nota'`).catch(() => ({ rows: [] as any[] })),
+      pool.query(`SELECT finalidade, canal, data_hora, resultado FROM investidor_interacoes WHERE canal IS DISTINCT FROM 'Nota'`).catch(() => ({ rows: [] as any[] })),
       pool.query(`SELECT negocio_id, capital FROM projeto_investidores WHERE capital > 0`).catch(() => ({ rows: [] as any[] })),
       pool.query(`SELECT negocio_id, nome, estado, ordem, data_fim_prevista, data_fim_real FROM projeto_fases ORDER BY ordem`).catch(() => ({ rows: [] as any[] })),
       pool.query(`SELECT id FROM negocios WHERE deleted_at IS NULL AND analise_final IS NOT NULL`).catch(() => ({ rows: [] as any[] })),
@@ -1552,6 +1552,19 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
     for (const n of negPeriodo) { const iid = Array.isArray(n.imovel) ? n.imovel[0] : null; const o = imovelOrigem[iid] || "Não registado"; lucroFonteMap[o] = (lucroFonteMap[o] || 0) + lucroDe(n); }
     const lucroPorFonte = Object.entries(lucroFonteMap).map(([origem, lucro]: any) => ({ origem, lucro: round2(lucro) })).filter((x: any) => x.lucro > 0).sort((a: any, b: any) => b.lucro - a.lucro).slice(0, 5);
 
+    // G55: hora (Lisboa) com maior taxa de atendimento das chamadas no período.
+    // Só conta chamadas com hora registada (as de 00:00 UTC vêm sem hora) e horas com 3+ chamadas.
+    const porHora: Record<number, { t: number; a: number }> = {};
+    for (const r of iiRows as any[]) {
+      if (r.canal !== "Chamada" || !inP(r.data_hora, start, end)) continue;
+      const s = String(r.data_hora || "");
+      if (s.length <= 10 || /T00:00(:00(\.000)?)?Z?$/.test(s)) continue;
+      const d = new Date(s); if (isNaN(d.getTime())) continue;
+      const h = Number(new Intl.DateTimeFormat("pt-PT", { hour: "2-digit", hourCycle: "h23", timeZone: "Europe/Lisbon" }).format(d));
+      porHora[h] ??= { t: 0, a: 0 }; porHora[h].t++; if (r.resultado === "Feito") porHora[h].a++;
+    }
+    const horas = Object.entries(porHora).map(([h, v]) => ({ hora: Number(h), total: v.t, atendidas: v.a, taxa: Math.round(v.a / v.t * 100) }));
+    const melhorHora = horas.filter(x => x.total >= 3).sort((a, b) => b.taxa - a.taxa || b.total - a.total)[0] || null;
     const coldCalls = iiRows.filter((r: any) => r.finalidade === "cold_call" && inP(r.data_hora, start, end)).length;
     const coldPrev = iiRows.filter((r: any) => r.finalidade === "cold_call" && inP(r.data_hora, prevStart, prevEnd)).length;
     const discoveryCalls = iiRows.filter((r: any) => r.finalidade === "discovery" && inP(r.data_hora, start, end)).length;
@@ -1605,6 +1618,7 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
       },
       pipelinePonderado,
       atividade: {
+        melhorHoraAtendimento: melhorHora ? { ...melhorHora, porHora: horas.sort((a, b) => a.hora - b.hora) } : null,
         coldCalls: { valor: coldCalls, delta: pctDelta(coldCalls, coldPrev) },
         discoveryCalls: { valor: discoveryCalls, delta: pctDelta(discoveryCalls, discoveryPrev) },
         followUpCalls: { valor: followUpCalls, delta: pctDelta(followUpCalls, followUpPrev) },
