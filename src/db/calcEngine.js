@@ -446,7 +446,10 @@ export function calcCAEP(inputs, caepConfig) {
   const { total: impostoNegocio } = calcIRC(Math.max(lucroBruto, 0), DERRAMA_MUNICIPAL_PERC)
   const lucroBase = baseDistribuicao === 'liquido' ? round2(lucroBruto - impostoNegocio) : lucroBruto
   const quotaSomnium = round2(lucroBase * percSomnium / 100)
-  const lucroInvestidores = round2(lucroBase - quotaSomnium)
+  // Valores sempre disponíveis em bruto e líquido (após IRC + derrama) para o quadro.
+  const quotaSomniumBruto = round2(lucroBruto * percSomnium / 100)
+  const impostoSomnium = calcIRC(Math.max(quotaSomniumBruto, 0), DERRAMA_MUNICIPAL_PERC).total
+  const lucroInvestidoresBruto = round2(lucroBruto - quotaSomniumBruto)
 
   // Distribuição proporcional ao capital investido (não por % manual)
   const capitalTotal = investidores.reduce((s, inv) => s + (parseFloat(inv.capital) || 0), 0)
@@ -456,14 +459,12 @@ export function calcCAEP(inputs, caepConfig) {
     const capital = parseFloat(inv.capital) || 0
     // Percentagem calculada automaticamente com base no capital
     const perc = capitalTotal > 0 ? round2((capital / capitalTotal) * 100) : 0
-    const lucro = capitalTotal > 0 ? round2(lucroInvestidores * capital / capitalTotal) : 0
+    // Quinhão sempre em bruto (antes dos 20,25%) e em líquido (depois), seja qual for a base:
+    // com a taxa única, repartir antes ou depois do imposto dá o mesmo resultado ao investidor.
+    const lucro = capitalTotal > 0 ? round2(lucroInvestidoresBruto * capital / capitalTotal) : 0
     const tipo = inv.tipo || 'particular'
 
-    // Base líquida: o imposto já saiu antes da repartição. Base bruta: 20,25% sobre o quinhão.
-    const impostoNegocioQuinhao = baseDistribuicao === 'liquido'
-      ? 0
-      : calcIRC(Math.max(lucro, 0), DERRAMA_MUNICIPAL_PERC).total
-    const impostos = impostoNegocioQuinhao
+    const impostos = calcIRC(Math.max(lucro, 0), DERRAMA_MUNICIPAL_PERC).total
 
     const lucroLiq = round2(lucro - impostos)
     // Convenção do codebase (alinhada com calcAnalise):
@@ -481,7 +482,6 @@ export function calcCAEP(inputs, caepConfig) {
       tipo,
       lucro_bruto: lucro,
       impostos,
-      imposto_negocio: impostoNegocioQuinhao,
       lucro_liquido: lucroLiq,
       roi,
       cash_on_cash: cashOnCash,
@@ -508,7 +508,11 @@ export function calcCAEP(inputs, caepConfig) {
     investidores: detalhes,
     lucro_base: lucroBase,
     lucro_bruto_negocio: lucroBruto,
-    imposto_negocio: baseDistribuicao === 'liquido' ? impostoNegocio : 0,
+    imposto_negocio: impostoNegocio,
+    lucro_liquido_negocio: round2(lucroBruto - impostoNegocio),
+    quota_somnium_bruto: quotaSomniumBruto,
+    quota_somnium_imposto: impostoSomnium,
+    quota_somnium_liquido: round2(quotaSomniumBruto - impostoSomnium),
     taxa_imposto: round2((IRC_TAXA * 100) + DERRAMA_MUNICIPAL_PERC),
     mediacao,
     quota_somnium_total: round2(quotaSomnium + (mediacao ? mediacao.quota_somnium : 0)),

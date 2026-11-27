@@ -181,11 +181,9 @@ export function CAEPParcerias({ analise, onUpdate }) {
                   // Quinhão do investidor sempre nas três linhas: a base de distribuição
                   // só decide de que lucro do negócio sai o pool, não o que se mostra.
                   <div className="bg-surface rounded p-2">
-                    <div className="flex justify-between"><span className="text-ink-muted">{config.base_distribuicao === 'bruto' ? 'Quinhão do lucro bruto' : 'Quinhão do lucro líquido'}</span><span className="num">{EUR(result.lucro_bruto)}</span></div>
-                    {config.base_distribuicao === 'bruto' && (
-                      <div className="flex justify-between"><span className="text-ink-muted">IRC + derrama (20,25%)</span><span className="num text-ink-muted">−{EUR(result.imposto_negocio ?? result.impostos)}</span></div>
-                    )}
-                    <div className="flex justify-between font-semibold"><span className="text-ink-muted">Líquido para o investidor</span>
+                    <div className="flex justify-between"><span className="text-ink-muted">Lucro bruto</span><span className="num">{EUR(result.lucro_bruto)}</span></div>
+                    <div className="flex justify-between"><span className="text-ink-muted">IRC + derrama (20,25%)</span><span className="num text-ink-muted">−{EUR(result.impostos)}</span></div>
+                    <div className="flex justify-between font-semibold"><span className="text-ink-muted">Lucro líquido</span>
                       <span className={`num ${result.lucro_liquido >= 0 ? 'text-success' : 'text-danger'}`}>{EUR(result.lucro_liquido)}</span>
                     </div>
                     <p className="text-ink-muted mt-1">ROI: {PCT(result.roi)} · CoC: {PCT(result.cash_on_cash)} · RA: {PCT(result.retorno_anualizado)}</p>
@@ -204,30 +202,48 @@ export function CAEPParcerias({ analise, onUpdate }) {
         </button>
       )}
 
-      {/* Resumo CAEP */}
-      {caepResult && caepResult.quota_somnium !== undefined && (
-        <div className="rounded-xl border border-warning/30 bg-warning/10 p-4">
-          <p className="text-xs font-semibold text-warning uppercase tracking-wide mb-2">Distribuição</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-            <div>
-              <span className="text-ink-muted">{config.base_distribuicao === 'bruto' ? 'Lucro bruto' : 'Lucro líquido'} a distribuir</span>
-              <p className="num font-semibold text-ink">{EUR(caepResult.lucro_base)}</p>
-            </div>
-            <div>
-              <span className="text-ink-muted">Quota Somnium ({PCT(caepResult.perc_somnium)})</span>
-              <p className="num font-semibold text-ink">{EUR(caepResult.quota_somnium)}</p>
-            </div>
-            <div>
-              <span className="text-ink-muted">Investidores ({PCT(100 - caepResult.perc_somnium)})</span>
-              <p className="num font-semibold text-ink">{EUR((caepResult.lucro_base || 0) - (caepResult.quota_somnium || 0))}</p>
-            </div>
-            <div>
-              <span className="text-ink-muted">Capital Total</span>
-              <p className="num font-semibold text-ink">{EUR(caepResult.capital_total)}</p>
-            </div>
+      {/* Quadro de distribuição — sempre em bruto e em líquido após IRC + derrama (20,25%) */}
+      {caepResult && caepResult.quota_somnium_bruto !== undefined && (() => {
+        const invBruto = (caepResult.investidores || []).reduce((t, i) => t + (i.lucro_bruto || 0), 0)
+        const invImp = (caepResult.investidores || []).reduce((t, i) => t + (i.impostos || 0), 0)
+        const invLiq = (caepResult.investidores || []).reduce((t, i) => t + (i.lucro_liquido || 0), 0)
+        const linhas = [
+          { nome: `Somnium (${PCT(caepResult.perc_somnium)})`, bruto: caepResult.quota_somnium_bruto, imp: caepResult.quota_somnium_imposto, liq: caepResult.quota_somnium_liquido },
+          { nome: `Investidores (${PCT(100 - caepResult.perc_somnium)})`, bruto: invBruto, imp: invImp, liq: invLiq },
+        ]
+        return (
+          <div className="rounded-xl border border-warning/30 bg-warning/10 p-4">
+            <p className="text-xs font-semibold text-warning uppercase tracking-wide mb-2">Distribuição</p>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-ink-muted">
+                  <th className="text-left font-normal pb-1"></th>
+                  <th className="text-right font-normal pb-1">Lucro bruto</th>
+                  <th className="text-right font-normal pb-1">IRC + derrama (20,25%)</th>
+                  <th className="text-right font-normal pb-1">Lucro líquido</th>
+                </tr>
+              </thead>
+              <tbody>
+                {linhas.map(l => (
+                  <tr key={l.nome}>
+                    <td className="py-1 text-ink-muted">{l.nome}</td>
+                    <td className="py-1 text-right num text-ink">{EUR(l.bruto)}</td>
+                    <td className="py-1 text-right num text-ink-muted">−{EUR(l.imp)}</td>
+                    <td className="py-1 text-right num font-semibold text-ink">{EUR(l.liq)}</td>
+                  </tr>
+                ))}
+                <tr className="border-t border-warning/30 font-semibold">
+                  <td className="pt-1 text-ink">Total do negócio</td>
+                  <td className="pt-1 text-right num text-ink">{EUR(caepResult.lucro_bruto_negocio)}</td>
+                  <td className="pt-1 text-right num text-ink-muted">−{EUR(caepResult.imposto_negocio)}</td>
+                  <td className="pt-1 text-right num text-ink">{EUR(caepResult.lucro_liquido_negocio)}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p className="text-xs text-ink-muted mt-2">Capital total: <span className="num">{EUR(caepResult.capital_total)}</span></p>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ── Mediação própria ────────────────────────────────── */}
       <div className="rounded-xl border border-line p-4 space-y-4">

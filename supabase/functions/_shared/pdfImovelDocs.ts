@@ -3299,13 +3299,13 @@ function renderRelatorioCaep(b, im, an) {
 
     b.header('DISTRIBUIÇÃO DO LUCRO')
     b.colTable(
-      [['#', 25], ['Parte', 95], ['Tipo', 70], ['%', 30], ['Lucro', 65], ['Imposto', 55], ['Líquido', 60], ['ROI', 50]],
+      [['#', 25], ['Parte', 95], ['Tipo', 65], ['%', 30], ['Lucro bruto', 65], ['IRC + derrama', 60], ['Lucro líquido', 65], ['ROI', 45]],
       [
-        { _values: ['S', 'Somnium Properties', 'Gestor', `${parsed.perc_somnium}%`, EUR(parsed.quota_somnium), '—', EUR(parsed.quota_somnium), '—'] },
+        { _values: ['S', 'Somnium Properties', 'Gestor', `${parsed.perc_somnium}%`, EUR(parsed.quota_somnium_bruto ?? parsed.quota_somnium), parsed.quota_somnium_imposto != null ? EUR(parsed.quota_somnium_imposto) : '—', EUR(parsed.quota_somnium_liquido ?? parsed.quota_somnium), '—'] },
         ...parsed.investidores.map((inv, i) => ({
           _values: [`#${i + 1}`, inv.nome || `Inv. ${i + 1}`, inv.tipo === 'empresa' ? 'Empresa' : 'Particular', `${inv.perc_lucro || 0}%`, EUR(inv.lucro_bruto), EUR(inv.impostos), EUR(inv.lucro_liquido), inv.roi ? `${inv.roi}%` : '—']
         })),
-        { _values: ['', 'Total distribuído', '', '', '', '', EUR((parsed.investidores.reduce((s, inv) => s + (inv.lucro_liquido || 0), 0)) + parsed.quota_somnium), ''], _total: true },
+        { _values: ['', 'Total do negócio', '', '', EUR(parsed.lucro_bruto_negocio ?? 0), EUR(parsed.imposto_negocio ?? 0), EUR(parsed.lucro_liquido_negocio ?? ((parsed.investidores.reduce((s, inv) => s + (inv.lucro_liquido || 0), 0)) + parsed.quota_somnium)), ''], _total: true },
       ]
     )
   }
