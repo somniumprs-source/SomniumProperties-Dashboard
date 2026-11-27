@@ -95,17 +95,11 @@ export function CAEPParcerias({ analise, onUpdate }) {
 
   return (
     <div className="space-y-6">
-      {/* Aviso fiscal — caminho CAEP precisa de validação contabilística */}
-      <div className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-amber-900">
-        <p className="font-semibold mb-1">⚠ Cálculo fiscal CAEP — validação pendente</p>
-        <p>
-          A tributação do investidor pode estar sobrestimada (cenário conservador): com base
-          <strong> Líquido</strong>, a SPV já paga IRC + retenção de dividendos (28%), e cada investidor leva
-          mais 28% (particular) ou novo IRC (empresa) sobre o seu quinhão. Em estrutura
-          "CAEP em participação" puro, essa segunda camada pode não se aplicar.
-          Validar com contabilista antes de comprometer números com investidores.
-        </p>
-      </div>
+      {/* Nota fiscal — um único nível de imposto */}
+      <p className="text-xs text-ink-muted">
+        Imposto considerado: IRC de 19% + derrama municipal de 1,25% (Gaia), ou seja 20,25% sobre o lucro, uma única vez.
+        Com base <strong className="text-ink-muted">Líquido</strong> o imposto sai antes da repartição; com base <strong className="text-ink-muted">Bruto</strong> cada parte paga-o sobre o seu quinhão.
+      </p>
 
       {/* Configuração */}
       <div className="rounded-xl border border-line p-4">
@@ -187,7 +181,7 @@ export function CAEPParcerias({ analise, onUpdate }) {
                   // só decide de que lucro do negócio sai o pool, não o que se mostra.
                   <div className="bg-surface rounded p-2">
                     <div className="flex justify-between"><span className="text-ink-muted">{config.base_distribuicao === 'bruto' ? 'Quinhão do lucro bruto' : 'Quinhão do lucro líquido'}</span><span className="num">{EUR(result.lucro_bruto)}</span></div>
-                    <div className="flex justify-between"><span className="text-ink-muted">Impostos do investidor</span><span className="num text-ink-muted">−{EUR(result.impostos)}</span></div>
+                    <div className="flex justify-between"><span className="text-ink-muted">{config.base_distribuicao === 'bruto' ? 'Impostos (20,25%)' : 'Impostos (já pagos no negócio)'}</span><span className="num text-ink-muted">−{EUR(result.impostos)}</span></div>
                     <div className="flex justify-between font-semibold"><span className="text-ink-muted">Líquido para o investidor</span>
                       <span className={`num ${result.lucro_liquido >= 0 ? 'text-success' : 'text-danger'}`}>{EUR(result.lucro_liquido)}</span>
                     </div>
