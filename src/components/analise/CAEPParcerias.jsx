@@ -182,20 +182,18 @@ export function CAEPParcerias({ analise, onUpdate }) {
                     <option value="empresa">Empresa</option>
                   </select>
                 </div>
-                {result && (() => {
-                  const isBruto = config.base_distribuicao === 'bruto'
-                  const label = isBruto ? 'Lucro Bruto' : 'Lucro Líq.'
-                  const valor = isBruto ? result.lucro_bruto : result.lucro_liquido
-                  return (
-                    <div className="bg-surface rounded p-2">
-                      <p className="text-ink-muted">{label}</p>
-                      <p className={`num font-semibold ${valor >= 0 ? 'text-success' : 'text-danger'}`}>
-                        {EUR(valor)}
-                      </p>
-                      <p className="text-ink-muted mt-1">ROI: {PCT(result.roi)} · CoC: {PCT(result.cash_on_cash)} · RA: {PCT(result.retorno_anualizado)}</p>
+                {result && (
+                  // Quinhão do investidor sempre nas três linhas: a base de distribuição
+                  // só decide de que lucro do negócio sai o pool, não o que se mostra.
+                  <div className="bg-surface rounded p-2">
+                    <div className="flex justify-between"><span className="text-ink-muted">{config.base_distribuicao === 'bruto' ? 'Quinhão do lucro bruto' : 'Quinhão do lucro líquido'}</span><span className="num">{EUR(result.lucro_bruto)}</span></div>
+                    <div className="flex justify-between"><span className="text-ink-muted">Impostos do investidor</span><span className="num text-ink-muted">−{EUR(result.impostos)}</span></div>
+                    <div className="flex justify-between font-semibold"><span className="text-ink-muted">Líquido para o investidor</span>
+                      <span className={`num ${result.lucro_liquido >= 0 ? 'text-success' : 'text-danger'}`}>{EUR(result.lucro_liquido)}</span>
                     </div>
-                  )
-                })()}
+                    <p className="text-ink-muted mt-1">ROI: {PCT(result.roi)} · CoC: {PCT(result.cash_on_cash)} · RA: {PCT(result.retorno_anualizado)}</p>
+                  </div>
+                )}
               </div>
             </div>
           )
@@ -213,10 +211,18 @@ export function CAEPParcerias({ analise, onUpdate }) {
       {caepResult && caepResult.quota_somnium !== undefined && (
         <div className="rounded-xl border border-warning/30 bg-warning/10 p-4">
           <p className="text-xs font-semibold text-warning uppercase tracking-wide mb-2">Distribuição</p>
-          <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
             <div>
-              <span className="text-ink-muted">Quota Somnium</span>
+              <span className="text-ink-muted">{config.base_distribuicao === 'bruto' ? 'Lucro bruto' : 'Lucro líquido'} a distribuir</span>
+              <p className="num font-semibold text-ink">{EUR(caepResult.lucro_base)}</p>
+            </div>
+            <div>
+              <span className="text-ink-muted">Quota Somnium ({PCT(caepResult.perc_somnium)})</span>
               <p className="num font-semibold text-ink">{EUR(caepResult.quota_somnium)}</p>
+            </div>
+            <div>
+              <span className="text-ink-muted">Investidores ({PCT(100 - caepResult.perc_somnium)})</span>
+              <p className="num font-semibold text-ink">{EUR((caepResult.lucro_base || 0) - (caepResult.quota_somnium || 0))}</p>
             </div>
             <div>
               <span className="text-ink-muted">Capital Total</span>

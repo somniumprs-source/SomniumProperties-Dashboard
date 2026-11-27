@@ -436,7 +436,9 @@ export function calcCAEP(inputs, caepConfig) {
   if (!caepConfig) return null
 
   const base = calcAnalise(inputs)
-  const percSomnium = parseFloat(caepConfig.perc_somnium) || 40
+  // 0% é um valor válido (tudo para os investidores) — só cai no default 40 quando vazio.
+  const percRaw = parseFloat(caepConfig.perc_somnium)
+  const percSomnium = Number.isFinite(percRaw) ? percRaw : 40
   const baseDistribuicao = caepConfig.base_distribuicao || 'liquido'
   const investidores = caepConfig.investidores || []
 
