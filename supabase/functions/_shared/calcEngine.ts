@@ -432,10 +432,8 @@ export function calcStressTests(inputs: any): any {
 //   base 'liquido' → os 20,25% saem antes da repartição; o quinhão já vem líquido.
 // O resultado líquido do investidor é o mesmo nas duas bases; muda só onde o imposto é pago.
 // Independente do regime_fiscal da calculadora (que serve as outras estruturas).
-// Prazo: o objetivo é investir sempre 12 meses ou mais. Se houver divisão de lucros
-// antes dos 12 meses, o quinhão líquido de cada investidor paga ainda o seu imposto:
-// IRS 28% (particular) ou IRC 19% + derrama 1,25% da empresa investidora.
-const CAEP_PRAZO_MINIMO_MESES = 12
+// O que cada investidor faz depois com o seu quinhão (IRS, IRC da própria empresa,
+// distribuição antes ou depois de 12 meses) é opção dele e não entra no cálculo.
 export function calcCAEP(inputs: any, caepConfig: any): any {
   if (!caepConfig) return null
 
@@ -455,7 +453,6 @@ export function calcCAEP(inputs: any, caepConfig: any): any {
   // Distribuição proporcional ao capital investido (não por % manual)
   const capitalTotal = investidores.reduce((s: number, inv: any) => s + (parseFloat(inv.capital) || 0), 0)
   const meses = Math.max(parseInt(inputs.meses) || 6, 1)
-  const antesDoPrazo = meses < CAEP_PRAZO_MINIMO_MESES
 
   const detalhes = investidores.map((inv: any) => {
     const capital = parseFloat(inv.capital) || 0
@@ -468,14 +465,7 @@ export function calcCAEP(inputs: any, caepConfig: any): any {
     const impostoNegocioQuinhao = baseDistribuicao === 'liquido'
       ? 0
       : calcIRC(Math.max(lucro, 0), DERRAMA_MUNICIPAL_PERC).total
-    // Divisão antes dos 12 meses: imposto próprio do investidor sobre o que recebe.
-    const recebido = Math.max(lucro - impostoNegocioQuinhao, 0)
-    const impostoInvestidor = antesDoPrazo
-      ? (tipo === 'empresa'
-          ? calcIRC(recebido, DERRAMA_MUNICIPAL_PERC).total
-          : round2(recebido * DIVIDENDOS_RETENCAO))
-      : 0
-    const impostos = round2(impostoNegocioQuinhao + impostoInvestidor)
+    const impostos = impostoNegocioQuinhao
 
     const lucroLiq = round2(lucro - impostos)
     // Convenção do codebase (alinhada com calcAnalise):
@@ -494,7 +484,6 @@ export function calcCAEP(inputs: any, caepConfig: any): any {
       lucro_bruto: lucro,
       impostos,
       imposto_negocio: impostoNegocioQuinhao,
-      imposto_investidor: impostoInvestidor,
       lucro_liquido: lucroLiq,
       roi,
       cash_on_cash: cashOnCash,
@@ -523,8 +512,6 @@ export function calcCAEP(inputs: any, caepConfig: any): any {
     lucro_bruto_negocio: lucroBruto,
     imposto_negocio: baseDistribuicao === 'liquido' ? impostoNegocio : 0,
     taxa_imposto: round2((IRC_TAXA * 100) + DERRAMA_MUNICIPAL_PERC),
-    meses,
-    antes_do_prazo: antesDoPrazo,
     mediacao,
     quota_somnium_total: round2(quotaSomnium + (mediacao ? mediacao.quota_somnium : 0)),
   }

@@ -99,13 +99,8 @@ export function CAEPParcerias({ analise, onUpdate }) {
       <p className="text-xs text-ink-muted">
         Imposto considerado: IRC de 19% + derrama municipal de 1,25% (Gaia), ou seja 20,25% sobre o lucro, uma única vez.
         Com base <strong className="text-ink-muted">Líquido</strong> o imposto sai antes da repartição; com base <strong className="text-ink-muted">Bruto</strong> cada parte paga-o sobre o seu quinhão.
-        {' '}O objetivo é investir sempre 12 meses ou mais; se os lucros forem divididos antes disso, cada investidor paga ainda o seu imposto (IRS de 28% se for particular, IRC da sua empresa se for empresa).
+        {' '}A tributação pessoal de cada investidor (IRS ou IRC da sua empresa) é opção dele e não entra nestes valores.
       </p>
-      {caepResult?.antes_do_prazo && (
-        <div className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-amber-900">
-          Prazo de {caepResult.meses} meses, abaixo dos 12: a divisão de lucros antes do prazo soma o imposto de cada investidor ao valor abaixo.
-        </div>
-      )}
 
       {/* Configuração */}
       <div className="rounded-xl border border-line p-4">
@@ -189,9 +184,6 @@ export function CAEPParcerias({ analise, onUpdate }) {
                     <div className="flex justify-between"><span className="text-ink-muted">{config.base_distribuicao === 'bruto' ? 'Quinhão do lucro bruto' : 'Quinhão do lucro líquido'}</span><span className="num">{EUR(result.lucro_bruto)}</span></div>
                     {config.base_distribuicao === 'bruto' && (
                       <div className="flex justify-between"><span className="text-ink-muted">IRC + derrama (20,25%)</span><span className="num text-ink-muted">−{EUR(result.imposto_negocio ?? result.impostos)}</span></div>
-                    )}
-                    {result.imposto_investidor > 0 && (
-                      <div className="flex justify-between"><span className="text-ink-muted">{result.tipo === 'empresa' ? 'IRC da empresa (antes de 12 meses)' : 'IRS 28% (antes de 12 meses)'}</span><span className="num text-ink-muted">−{EUR(result.imposto_investidor)}</span></div>
                     )}
                     <div className="flex justify-between font-semibold"><span className="text-ink-muted">Líquido para o investidor</span>
                       <span className={`num ${result.lucro_liquido >= 0 ? 'text-success' : 'text-danger'}`}>{EUR(result.lucro_liquido)}</span>
