@@ -157,14 +157,15 @@ export async function propagarParaImovel(imovelId: string, calculados: any, inpu
         // verdade — respeita a base líquido/bruto e a % configurada na ficha CAEP).
         // Fallback simples (lucroBruto × split%) só quando ainda não há CAEP configurado.
         // Prioridade do split: perc_somnium da ficha CAEP > comissao_pct já guardado > default 40
-        const split = Number(caepResult?.perc_somnium) || parseFloat(neg.comissao_pct) || 40;
+        const percCaep = Number(caepResult?.perc_somnium);
+        const split = caepResult && Number.isFinite(percCaep) ? percCaep : (parseFloat(neg.comissao_pct) || 40);
         const quotaSomnium = caepResult
           ? caepResult.quota_somnium
           : Math.round(lucroBruto * (split / 100) * 100) / 100;
         lucroEstimado = quotaSomnium;
         await pool.query("UPDATE negocios SET quota_somnium = $1 WHERE id = $2", [quotaSomnium, neg.id]);
         // Sincroniza comissao_pct no negocio quando vem do perc_somnium da análise
-        if (Number(caepResult?.perc_somnium) && parseFloat(neg.comissao_pct) !== split) {
+        if (caepResult && Number.isFinite(percCaep) && parseFloat(neg.comissao_pct) !== split) {
           await pool.query("UPDATE negocios SET comissao_pct = $1 WHERE id = $2", [split, neg.id]);
         }
       } else {

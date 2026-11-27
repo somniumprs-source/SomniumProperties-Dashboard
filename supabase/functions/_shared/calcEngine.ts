@@ -425,30 +425,37 @@ export function calcStressTests(inputs: any): any {
 
 // ── CAEP (Parcerias) ─────────────────────────────────────────
 
-// TODO(fiscal): O caminho fiscal CAEP precisa de validação contabilística.
-// Risco identificado de dupla tributação quando base_distribuicao === 'liquido':
-//   1. SPV paga IRC + derrama (calcAnalise: regime 'Empresa')
-//   2. SPV aplica retenção de dividendos 28% (calcAnalise: percDividendos = 100 default)
-//   3. CAEP redistribui esse líquido por investidores
-//   4. calcCAEP aplica novamente 28% (particular) ou IRC (empresa) por investidor
-// Em estrutura "CAEP em participação" puro (Art. 26 CIVA, Cat. E IRS), as etapas 2 e 4
-// não deveriam coexistir. Reunir com contabilista para definir caminho correcto.
-// Por agora mantém-se o cálculo conservador (mais imposto); investidor é avisado na UI.
+// Fiscalidade CAEP — um único nível de imposto: IRC 19% (taxa normal, empresa com
+// faturação acima de 100k) + derrama municipal 1,25% (Gaia) = 20,25% sobre o lucro.
+// Sem retenção de dividendos nem segundo imposto no investidor.
+//   base 'bruto'   → reparte-se o lucro bruto; cada parte paga os 20,25% sobre o seu quinhão.
+//   base 'liquido' → os 20,25% saem antes da repartição; o quinhão já vem líquido.
+// O resultado líquido do investidor é o mesmo nas duas bases; muda só onde o imposto é pago.
+// Independente do regime_fiscal da calculadora (que serve as outras estruturas).
+// Prazo: o objetivo é investir sempre 12 meses ou mais. Se houver divisão de lucros
+// antes dos 12 meses, o quinhão líquido de cada investidor paga ainda o seu imposto:
+// IRS 28% (particular) ou IRC 19% + derrama 1,25% da empresa investidora.
+const CAEP_PRAZO_MINIMO_MESES = 12
 export function calcCAEP(inputs: any, caepConfig: any): any {
   if (!caepConfig) return null
 
   const base = calcAnalise(inputs)
-  const percSomnium = parseFloat(caepConfig.perc_somnium) || 40
+  // 0% é um valor válido (tudo para os investidores) — só cai no default 40 quando vazio.
+  const percRaw = parseFloat(caepConfig.perc_somnium)
+  const percSomnium = Number.isFinite(percRaw) ? percRaw : 40
   const baseDistribuicao = caepConfig.base_distribuicao || 'liquido'
   const investidores = caepConfig.investidores || []
 
-  const lucroBase = baseDistribuicao === 'liquido' ? base.lucro_liquido : base.lucro_bruto
+  const lucroBruto = base.lucro_bruto
+  const { total: impostoNegocio } = calcIRC(Math.max(lucroBruto, 0), DERRAMA_MUNICIPAL_PERC)
+  const lucroBase = baseDistribuicao === 'liquido' ? round2(lucroBruto - impostoNegocio) : lucroBruto
   const quotaSomnium = round2(lucroBase * percSomnium / 100)
   const lucroInvestidores = round2(lucroBase - quotaSomnium)
 
   // Distribuição proporcional ao capital investido (não por % manual)
   const capitalTotal = investidores.reduce((s: number, inv: any) => s + (parseFloat(inv.capital) || 0), 0)
   const meses = Math.max(parseInt(inputs.meses) || 6, 1)
+  const antesDoPrazo = meses < CAEP_PRAZO_MINIMO_MESES
 
   const detalhes = investidores.map((inv: any) => {
     const capital = parseFloat(inv.capital) || 0
@@ -457,13 +464,18 @@ export function calcCAEP(inputs: any, caepConfig: any): any {
     const lucro = capitalTotal > 0 ? round2(lucroInvestidores * capital / capitalTotal) : 0
     const tipo = inv.tipo || 'particular'
 
-    let impostos = 0
-    if (tipo === 'empresa') {
-      const { total } = calcIRC(Math.max(lucro, 0), DERRAMA_MUNICIPAL_PERC)
-      impostos = total
-    } else {
-      impostos = round2(Math.max(lucro, 0) * DIVIDENDOS_RETENCAO)
-    }
+    // Base líquida: o imposto já saiu antes da repartição. Base bruta: 20,25% sobre o quinhão.
+    const impostoNegocioQuinhao = baseDistribuicao === 'liquido'
+      ? 0
+      : calcIRC(Math.max(lucro, 0), DERRAMA_MUNICIPAL_PERC).total
+    // Divisão antes dos 12 meses: imposto próprio do investidor sobre o que recebe.
+    const recebido = Math.max(lucro - impostoNegocioQuinhao, 0)
+    const impostoInvestidor = antesDoPrazo
+      ? (tipo === 'empresa'
+          ? calcIRC(recebido, DERRAMA_MUNICIPAL_PERC).total
+          : round2(recebido * DIVIDENDOS_RETENCAO))
+      : 0
+    const impostos = round2(impostoNegocioQuinhao + impostoInvestidor)
 
     const lucroLiq = round2(lucro - impostos)
     // Convenção do codebase (alinhada com calcAnalise):
@@ -481,6 +493,8 @@ export function calcCAEP(inputs: any, caepConfig: any): any {
       tipo,
       lucro_bruto: lucro,
       impostos,
+      imposto_negocio: impostoNegocioQuinhao,
+      imposto_investidor: impostoInvestidor,
       lucro_liquido: lucroLiq,
       roi,
       cash_on_cash: cashOnCash,
@@ -506,6 +520,11 @@ export function calcCAEP(inputs: any, caepConfig: any): any {
     capital_total: capitalTotal,
     investidores: detalhes,
     lucro_base: lucroBase,
+    lucro_bruto_negocio: lucroBruto,
+    imposto_negocio: baseDistribuicao === 'liquido' ? impostoNegocio : 0,
+    taxa_imposto: round2((IRC_TAXA * 100) + DERRAMA_MUNICIPAL_PERC),
+    meses,
+    antes_do_prazo: antesDoPrazo,
     mediacao,
     quota_somnium_total: round2(quotaSomnium + (mediacao ? mediacao.quota_somnium : 0)),
   }
